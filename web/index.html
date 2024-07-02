@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Color Game Lobby</title>
+	<style>
+		body {
+			font-family: Arial, sans-serif;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			height: 100vh;
+			margin: 0;
+			background-color: #f0f0f0;
+		}
+
+		.container {
+			background-color: white;
+			padding: 20px;
+			border-radius: 5px;
+			box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+			max-width: 600px;
+			width: 100%;
+		}
+
+		#playerList,
+		#leaderboard {
+			margin-top: 20px;
+		}
+
+		button {
+			margin-top: 10px;
+		}
+
+		.player-item {
+			display: flex;
+			flex-direction: column;
+			margin-bottom: 15px;
+		}
+
+		.player-info {
+			display: flex;
+			justify-content: space-between;
+			margin-bottom: 5px;
+		}
+
+		.progress-bar {
+			height: 20px;
+			background-color: #e0e0e0;
+			border-radius: 10px;
+			overflow: hidden;
+		}
+
+		.progress {
+			height: 100%;
+			background-color: #4CAF50;
+			transition: width 0.5s ease-in-out;
+		}
+
+		#colorButtons {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 10px;
+			margin-top: 20px;
+		}
+
+		.color-button {
+			width: 100px;
+			height: 100px;
+			border: none;
+			border-radius: 5px;
+			cursor: pointer;
+		}
+
+		#gameState,
+		#timer,
+		#roundResult {
+			font-weight: bold;
+			margin-top: 20px;
+		}
+	</style>
+</head>
+
+<body>
+	<div class="container">
+		<h1>Color Game Lobby</h1>
+		<div id="joinForm">
+			<input type="text" id="playerName" placeholder="Enter your name">
+			<button onclick="joinLobby()">Join Lobby</button>
+		</div>
+		<div id="lobbyInfo" style="display: none;">
+			<div id="gameState"></div>
+			<div id="timer"></div>
+			<h2>Your Total Score: <span id="yourScore">0</span></h2>
+			<div id="roundResult"></div>
+			<div id="colorButtons"></div>
+			<div id="leaderboard" style="display: none;"></div>
+		</div>
+	</div>
+
+	<script>
+		let socket = new WebSocket('ws://192.168.43.46:8765');
+		let playerName = '';
+		let roundStartTime;
+		let roundDuration;
+		let timerInterval;
+
+		socket.onmessage = function (event) {
+			const data = JSON.parse(event.data);
+			if (data.action === 'game_state') {
+				handleGameState(data);
+			} else if (data.action === 'color_result') {
+				handleColorResult(data);
+			}
+		};
+
+		function joinLobby() {
+			playerName = document.getElementById('playerName').value;
+			if (playerName) {
+				socket.send(JSON.stringify({action: 'join', name: playerName}));
+				document.getElementById('joinForm').style.display = 'none';
+				document.getElementById('lobbyInfo').style.display = 'block';
+			}
+		}
+
+		function handleGameState(data) {
+			document.getElementById('gameState').textContent = `Current Phase: ${data.state.charAt(0).toUpperCase() + data.state.slice(1)}`;
+			updateYourScore(data.score);
+
+			if (data.state === 'question') {
+				roundStartTime = data.roundStartTime * 1000;  // convert to milliseconds
+				roundDuration = data.roundDuration * 1000;  // convert to milliseconds
+				createColorButtons(data.colors);
+				document.getElementById('colorButtons').style.display = 'flex';
+				document.getElementById('leaderboard').style.display = 'none';
+				document.getElementById('roundResult').textContent = '';
+				startTimer();
+			} else if (data.state === 'score') {
+				document.getElementById('colorButtons').style.display = 'none';
+				updateLeaderboard(data.leaderboard);
+				document.getElementById('leaderboard').style.display = 'block';
+				stopTimer();
+			}
+		}
+
+		function updateYourScore(score) {
+			document.getElementById('yourScore').textContent = score;
+		}
+
+		function createColorButtons(colors) {
+			const colorButtons = document.getElementById('colorButtons');
+			colorButtons.innerHTML = '';
+			colors.forEach(color => {
+				const button = document.createElement('button');
+				button.className = 'color-button';
+				button.style.backgroundColor = color.rgb;
+				button.onclick = () => selectColor(color.name);
+				button.title = color.name;
+				colorButtons.appendChild(button);
+			});
+		}
+
+		function selectColor(colorName) {
+			socket.send(JSON.stringify({action: 'select_color', color: colorName}));
+			document.getElementById('colorButtons').style.display = 'none';
+		}
+
+		function handleColorResult(data) {
+			updateYourScore(data.totalScore);
+			const resultText = data.correct ?
+				`Correct! You earned ${data.score} points this round.` :
+				`Wrong color. You earned 0 points this round.`;
+			document.getElementById('roundResult').textContent = resultText;
+			stopTimer();
+		}
+
+		function updateLeaderboard(players) {
+			const leaderboard = document.getElementById('leaderboard');
+			leaderboard.innerHTML = '<h2>Leaderboard</h2>';
+			players.sort((a, b) => b.score - a.score);
+			const maxScore = players[0].score;
+
+			players.forEach((player, index) => {
+				const playerItem = document.createElement('div');
+				playerItem.className = 'player-item';
+
+				const playerInfo = document.createElement('div');
+				playerInfo.className = 'player-info';
+				playerInfo.innerHTML = `<span>${index + 1}. ${player.name}</span><span>${player.score} points</span>`;
+
+				const progressBar = document.createElement('div');
+				progressBar.className = 'progress-bar';
+
+				const progress = document.createElement('div');
+				progress.className = 'progress';
+				const width = (player.score / maxScore) * 100;
+				progress.style.width = `${width}%`;
+
+				progressBar.appendChild(progress);
+				playerItem.appendChild(playerInfo);
+				playerItem.appendChild(progressBar);
+				leaderboard.appendChild(playerItem);
+			});
+		}
+
+		function startTimer() {
+			stopTimer();  // Clear any existing timer
+			timerInterval = setInterval(updateTimer, 10);  // Update every 10ms
+		}
+
+		function stopTimer() {
+			clearInterval(timerInterval);
+			document.getElementById('timer').textContent = '';
+		}
+
+		function updateTimer() {
+			const now = Date.now();
+			const timeElapsed = now - roundStartTime;
+			const timeRemaining = roundDuration - timeElapsed;
+
+			if (timeRemaining <= 0) {
+				stopTimer();
+				document.getElementById('timer').textContent = 'Time\'s up!';
+				document.getElementById('colorButtons').style.display = 'none';
+			} else {
+				const secondsRemaining = (timeRemaining / 1000).toFixed(2);
+				document.getElementById('timer').textContent = `Time remaining: ${secondsRemaining}s`;
+			}
+		}
+
+		// Reconnect logic
+		socket.onclose = function (event) {
+			console.log('WebSocket connection closed. Attempting to reconnect...');
+			setTimeout(function () {
+				socket = new WebSocket('ws://localhost:8765');
+				if (playerName) {
+					socket.onopen = function () {
+						socket.send(JSON.stringify({action: 'join', name: playerName}));
+					};
+				}
+			}, 3000);
+		};
+	</script>
+</body>
+
+</html>
