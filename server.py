@@ -172,6 +172,7 @@ async def handle_client(websocket, path):
                         "score": score,
                         "totalScore": player.score
                     }))
+                    await broadcast_player_answered(player.name)
                     await broadcast_answer_count()
                     if lobby.all_players_answered():
                         print(
@@ -218,6 +219,15 @@ async def broadcast_answer_count():
             }))
 
 
+async def broadcast_player_answered(player_name):
+    for player in lobby.players.values():
+        if player.websocket:
+            await player.websocket.send(json.dumps({
+                "action": "player_answered",
+                "playerName": player_name
+            }))
+
+
 async def handle_admin_input():
     while True:
         command = await aioconsole.ainput("Enter 'toggle' or 'toggle color1,color2,...' to switch game state: ")
@@ -231,10 +241,8 @@ async def handle_admin_input():
 
             print(f"Game state changed to: {new_state}")
             if new_state == "question":
-                print(f"Correct color(s) for this round: {
-                      ', '.join(lobby.correct_colors)}")
-                print(f"All colors for this round: {
-                      ', '.join(c['name'] for c in lobby.round_colors)}")
+                print(f"Correct color(s) for this round: {', '.join(lobby.correct_colors)}")
+                print(f"All colors for this round: {', '.join(c['name'] for c in lobby.round_colors)}")
             await broadcast_game_state()
             await broadcast_answer_count()
 

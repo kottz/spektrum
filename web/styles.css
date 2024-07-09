@@ -1,0 +1,132 @@
+body {
+    font-family: Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    background-color: #1c2333;
+    color: white;
+}
+
+.container {
+    background-color: rgba(255, 255, 255, 0.05);
+    padding: 20px;
+    border-radius: 15px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    max-width: 600px;
+    width: 100%;
+}
+
+#playerList,
+#leaderboard {
+    margin-top: 20px;
+}
+
+button {
+    margin-top: 10px;
+    background-color: #3357FF;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+button:hover {
+    background-color: #1a3cc7;
+}
+
+.player-item {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 15px;
+}
+
+.player-info {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+}
+
+.progress-bar {
+    height: 20px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.progress {
+    height: 100%;
+    background-color: #33FF57;
+    transition: width 0.5s ease-in-out;
+}
+
+#colorButtons {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.color-button {
+    width: 80px;
+    height: 80px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.color-button:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
+}
+
+#gameState,
+#timer,
+#roundResult {
+    font-weight: bold;
+    margin-top: 20px;
+}
+
+input[type="text"] {
+    padding: 10px;
+    border: none;
+    border-radius: 5px;
+    margin-right: 10px;
+}
+
+#answerStatusContainer {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+#answerCounter {
+    flex-shrink: 0;
+    margin-right: 10px;
+}
+
+#answeredPlayersContainer {
+    flex-grow: 1;
+    overflow-x: auto;
+    white-space: nowrap;
+    padding: 5px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 5px;
+}
+
+#answeredPlayers {
+    display: inline-flex;
+}
+
+.answered-player {
+    background-color: #3357FF;
+    color: white;
+    padding: 5px 10px;
+    margin-right: 5px;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
