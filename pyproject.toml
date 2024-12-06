@@ -1,0 +1,12 @@
+[project]
+name = "spektrum"
+version = "0.1.0"
+description = "A color music quiz game"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aioconsole>=0.8.1",
+    "python-dotenv>=1.0.1",
+    "requests>=2.32.3",
+    "websockets>=14.1",
+]
