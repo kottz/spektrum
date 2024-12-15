@@ -48,6 +48,13 @@ struct ColorDef {
     rgb: String,
 }
 
+#[derive(Serialize)]
+struct PlayerAnsweredMsg {
+    action: String,
+    playerName: String,
+    correct: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Song {
     id: u32,
@@ -715,12 +722,6 @@ struct UpdateAnswerCount {
     totalPlayers: usize,
 }
 
-#[derive(Serialize)]
-struct PlayerAnsweredMsg {
-    action: String,
-    playerName: String,
-}
-
 async fn ws_handler(
     ws: WebSocketUpgrade,
     State(state): State<AppState>,
@@ -779,7 +780,7 @@ async fn handle_ws(mut socket: WebSocket, state: AppState) {
                                     let json_msg = serde_json::to_string(&response).unwrap();
                                     tx.send(json_msg).ok();
 
-                                    broadcast_player_answered(&state, name).await;
+                                    broadcast_player_answered(&state, name, correct).await;
                                     broadcast_answer_count(&state).await;
 
                                     if all_answered {
@@ -908,10 +909,11 @@ async fn broadcast_answer_count(state: &AppState) {
     }
 }
 
-async fn broadcast_player_answered(state: &AppState, player_name: &str) {
+async fn broadcast_player_answered(state: &AppState, player_name: &str, is_correct: bool) {
     let msg = PlayerAnsweredMsg {
-        action: "player_answered".into(),
+        action: "player_answered".to_string(),
         playerName: player_name.to_string(),
+        correct: is_correct,
     };
     let json_msg = serde_json::to_string(&msg).unwrap();
 

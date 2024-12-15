@@ -18,7 +18,7 @@ socket.onmessage = function(event) {
     } else if (data.action === 'update_answer_count') {
         updateAnswerStatus(data.answeredCount, data.totalPlayers);
     } else if (data.action === 'player_answered') {
-        handlePlayerAnswer(data.playerName);
+        handlePlayerAnswer(data.playerName, data.correct);
     }
 };
 
@@ -145,17 +145,24 @@ function updateAnswerStatus(answeredCount, totalPlayers) {
     const answeredPlayersElement = document.getElementById('answeredPlayers');
     answeredPlayersElement.innerHTML = '';
 
-    answeredPlayers.forEach(player => {
+    answeredPlayers.forEach(p => {
         const playerSpan = document.createElement('span');
         playerSpan.className = 'answered-player';
-        playerSpan.textContent = player;
+
+        if (p.correct) {
+            playerSpan.style.backgroundColor = '#35cf0e';
+        } else {
+            playerSpan.style.backgroundColor = '#cf0e22';
+        }
+        playerSpan.textContent = p.playerName;
+
         answeredPlayersElement.appendChild(playerSpan);
     });
 }
 
-function handlePlayerAnswer(playerName) {
+function handlePlayerAnswer(playerName, correct) {
     if (!answeredPlayers.includes(playerName)) {
-        answeredPlayers.push(playerName);
+        answeredPlayers.push({ playerName, correct });
         updateAnswerStatus(answeredPlayers.length, totalPlayers);
     }
 }
