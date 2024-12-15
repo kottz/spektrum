@@ -7,6 +7,7 @@ use axum::{
     Router,
 };
 use axum_server::tls_rustls::RustlsConfig;
+use axum_server::Server;
 use base64::Engine;
 use clap::Parser;
 use csv::ReaderBuilder;
@@ -174,10 +175,15 @@ impl GameLobby {
         self.players.remove(name);
     }
 
-    fn get_player_list(&self) -> Vec<(String, i32)> {
+    fn get_player_list(&self) -> Vec<serde_json::Value> {
         self.players
             .values()
-            .map(|p| (p.name.clone(), p.score))
+            .map(|p| {
+                serde_json::json!({
+                    "name": p.name,
+                    "score": p.score,
+                })
+            })
             .collect()
     }
 
@@ -679,6 +685,12 @@ struct ColorResult {
 }
 
 #[derive(Serialize)]
+struct LeaderboardEntry {
+    name: String,
+    score: i32,
+}
+
+#[derive(Serialize)]
 struct GameStateMsg {
     action: String,
     state: String,
@@ -686,10 +698,9 @@ struct GameStateMsg {
     #[serde(skip_serializing_if = "Option::is_none")]
     colors: Option<Vec<ColorDef>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    leaderboard: Option<Vec<(String, i32)>>,
+    leaderboard: Option<Vec<LeaderboardEntry>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    roundStartTime: Option<u128>,
-    roundDuration: u64,
+    roundTimeLeft: Option<u64>,
     hasAnswered: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     answer: Option<String>,
@@ -800,6 +811,20 @@ async fn handle_ws(mut socket: WebSocket, state: AppState) {
     }
 }
 
+fn calc_time_left(lobby: &GameLobby) -> u64 {
+    if let Some(start) = lobby.round_start_time {
+        let elapsed_ms = start.elapsed().as_millis() as u64;
+        let total_ms = lobby.round_duration * 1000;
+        if elapsed_ms >= total_ms {
+            0
+        } else {
+            total_ms - elapsed_ms
+        }
+    } else {
+        0
+    }
+}
+
 async fn send_game_state(state: &AppState, player_name: &str) {
     let (msg, tx) = {
         let lobby = state.lobby.lock().unwrap();
@@ -807,9 +832,32 @@ async fn send_game_state(state: &AppState, player_name: &str) {
             Some(p) => p,
             None => return,
         };
-        let (answered, total) = lobby.get_answer_count();
+
+        let (answered_count, total) = lobby.get_answer_count();
+        // Build a leaderboard if we are in "score" state
+        let lb = if lobby.state == "score" {
+            Some(
+                lobby
+                    .players
+                    .values()
+                    .map(|p| LeaderboardEntry {
+                        name: p.name.clone(),
+                        score: p.score,
+                    })
+                    .collect(),
+            )
+        } else {
+            None
+        };
+
+        let round_time_left = if lobby.state == "question" {
+            Some(calc_time_left(&lobby))
+        } else {
+            None
+        };
+
         let gm = GameStateMsg {
-            action: "game_state".into(),
+            action: "game_state".to_string(),
             state: lobby.state.clone(),
             score: player.score,
             colors: if lobby.state == "question" {
@@ -817,21 +865,18 @@ async fn send_game_state(state: &AppState, player_name: &str) {
             } else {
                 None
             },
-            leaderboard: if lobby.state == "score" {
-                Some(lobby.get_player_list())
-            } else {
-                None
-            },
-            roundStartTime: lobby.round_start_time.map(|t| t.elapsed().as_millis()),
-            roundDuration: lobby.round_duration,
+            leaderboard: lb,
+            roundTimeLeft: round_time_left,
             hasAnswered: player.has_answered,
             answer: player.answer.clone(),
-            answeredCount: answered,
+            answeredCount: answered_count,
             totalPlayers: total,
         };
+
         let json_msg = serde_json::to_string(&gm).unwrap();
         (json_msg, player.tx.clone())
     };
+
     let _ = tx.send(msg);
 }
 
@@ -881,6 +926,7 @@ async fn admin_input_loop(state: AppState) {
     while let Ok(line_opt) = lines.next_line().await {
         if let Some(line) = line_opt {
             let trimmed = line.trim().to_string();
+            println!("Admin input: {}", trimmed);
             if trimmed.to_lowercase().starts_with("toggle") {
                 let mut specified_colors: Option<Vec<String>> = None;
                 if let Some((_cmd, rest)) = trimmed.split_once(' ') {
@@ -993,32 +1039,50 @@ async fn main() {
         spotify: spotify_controller,
     };
 
-    let cert_path = PathBuf::from("./cert.pem");
-    let key_path = PathBuf::from("./key.pem");
-    let tls_config = match RustlsConfig::from_pem_file(cert_path, key_path).await {
-        Ok(c) => c,
-        Err(e) => {
-            println!("Failed to load TLS config: {:?}", e);
-            std::process::exit(1);
-        }
-    };
+    // HTTPS version
+    // let cert_path = PathBuf::from("./cert.pem");
+    // let key_path = PathBuf::from("./key.pem");
+    // let tls_config = match RustlsConfig::from_pem_file(cert_path, key_path).await {
+    //     Ok(c) => c,
+    //     Err(e) => {
+    //         println!("Failed to load TLS config: {:?}", e);
+    //         std::process::exit(1);
+    //     }
+    // };
 
+    // let app = Router::new()
+    //     .route("/ws", any(ws_handler))
+    //     .fallback_service(ServeDir::new("./assets").append_index_html_on_directories(true))
+    //     .with_state(state.clone());
+    //
+    // let addr = SocketAddr::from(([0, 0, 0, 0], args.port));
+    // println!("WebSocket server started on {}", addr);
+    //
+    // let mut server = axum_server::bind_rustls(addr, tls_config);
+    // // Enable HTTP/2
+    // server.http_builder().http2().enable_connect_protocol();
+
+    // Build the router
     let app = Router::new()
         .route("/ws", any(ws_handler))
         .fallback_service(ServeDir::new("./assets").append_index_html_on_directories(true))
         .with_state(state.clone());
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], args.port));
-    println!("WebSocket server started on {}", addr);
-
-    let mut server = axum_server::bind_rustls(addr, tls_config);
-    // Enable HTTP/2
-    server.http_builder().http2().enable_connect_protocol();
-
-    // Admin input
     tokio::spawn(async move {
         admin_input_loop(state).await;
     });
+    // Instead of binding with TLS config, just bind a normal SocketAddr
+    let addr = SocketAddr::from(([0, 0, 0, 0], 8765));
+    println!("Starting server on http://{}", addr);
+    Server::bind(addr)
+        .serve(app.into_make_service())
+        .await
+        .unwrap();
+    // // Plain HTTP server
+    // let server = axum::Server::bind(&addr).serve(app.into_make_service());
+    //
+    // server.await.unwrap();
+    // Admin input
 
-    server.serve(app.into_make_service()).await.unwrap();
+    //server.serve(app.into_make_service()).await.unwrap();
 }

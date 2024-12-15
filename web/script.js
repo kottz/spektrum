@@ -32,30 +32,68 @@ function joinLobby() {
 }
 
 function handleGameState(data) {
-    document.getElementById('gameState').textContent = `Current Phase: ${data.state.charAt(0).toUpperCase() + data.state.slice(1)}`;
+    document.getElementById('gameState').textContent =
+        `Current Phase: ${data.state.charAt(0).toUpperCase() + data.state.slice(1)}`;
     updateYourScore(data.score);
 
     if (data.state === 'question') {
-        roundStartTime = data.roundStartTime * 1000;  // convert to milliseconds
-        roundDuration = data.roundDuration * 1000;  // convert to milliseconds
         hasAnswered = data.hasAnswered;
         playerAnswer = data.answer;
         colors = data.colors;
-        answeredPlayers = [];  // Reset answered players for new round
+        answeredPlayers = [];
         totalPlayers = data.totalPlayers;
+
         createColorButtons(colors);
         document.getElementById('colorButtons').style.display = 'grid';
         document.getElementById('leaderboard').style.display = 'none';
         document.getElementById('roundResult').textContent = '';
         document.getElementById('answerStatusContainer').style.display = 'flex';
         updateAnswerStatus(data.answeredCount, data.totalPlayers);
-        startTimer();
+
+        let timeLeftMs = data.roundTimeLeft || 0; // fallback if undefined
+        startTimer(timeLeftMs);
+
     } else if (data.state === 'score') {
         document.getElementById('colorButtons').style.display = 'none';
         updateLeaderboard(data.leaderboard);
         document.getElementById('leaderboard').style.display = 'block';
         document.getElementById('answerStatusContainer').style.display = 'none';
         stopTimer();
+    }
+}
+
+function startTimer(timeLeftMs) {
+    stopTimer();
+    timerInterval = setInterval(() => {
+        timeLeftMs -= 10;
+        if (timeLeftMs <= 0) {
+            stopTimer();
+            document.getElementById('timer').textContent = "Time's up!";
+            document.getElementById('colorButtons').style.display = 'none';
+        } else {
+            const secondsRemaining = (timeLeftMs / 1000).toFixed(2);
+            document.getElementById('timer').textContent = `Time remaining: ${secondsRemaining}s`;
+        }
+    }, 10);
+}
+
+function stopTimer() {
+    clearInterval(timerInterval);
+    document.getElementById('timer').textContent = '';
+}
+
+function updateTimer() {
+    const now = Date.now();
+    const timeElapsed = now - roundStartTime;
+    const timeRemaining = roundDuration - timeElapsed;
+
+    if (timeRemaining <= 0) {
+        stopTimer();
+        document.getElementById('timer').textContent = 'Time\'s up!';
+        document.getElementById('colorButtons').style.display = 'none';
+    } else {
+        const secondsRemaining = (timeRemaining / 1000).toFixed(2);
+        document.getElementById('timer').textContent = `Time remaining: ${secondsRemaining}s`;
     }
 }
 
@@ -151,30 +189,6 @@ function updateLeaderboard(players) {
     });
 }
 
-function startTimer() {
-    stopTimer();  // Clear any existing timer
-    timerInterval = setInterval(updateTimer, 10);  // Update every 10ms
-}
-
-function stopTimer() {
-    clearInterval(timerInterval);
-    document.getElementById('timer').textContent = '';
-}
-
-function updateTimer() {
-    const now = Date.now();
-    const timeElapsed = now - roundStartTime;
-    const timeRemaining = roundDuration - timeElapsed;
-
-    if (timeRemaining <= 0) {
-        stopTimer();
-        document.getElementById('timer').textContent = 'Time\'s up!';
-        document.getElementById('colorButtons').style.display = 'none';
-    } else {
-        const secondsRemaining = (timeRemaining / 1000).toFixed(2);
-        document.getElementById('timer').textContent = `Time remaining: ${secondsRemaining}s`;
-    }
-}
 
 // Reconnect logic
 socket.onclose = function(event) {
