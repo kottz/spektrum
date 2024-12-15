@@ -1,4 +1,4 @@
-let socket = new WebSocket('ws://192.168.43.46:8765');
+let socket = new WebSocket('ws://192.168.1.155:8765/ws');
 let playerName = '';
 let roundStartTime;
 let roundDuration;
@@ -9,7 +9,7 @@ let colors = [];
 let answeredPlayers = [];
 let totalPlayers = 0;
 
-socket.onmessage = function (event) {
+socket.onmessage = function(event) {
     const data = JSON.parse(event.data);
     if (data.action === 'game_state') {
         handleGameState(data);
@@ -25,7 +25,7 @@ socket.onmessage = function (event) {
 function joinLobby() {
     playerName = document.getElementById('playerName').value;
     if (playerName) {
-        socket.send(JSON.stringify({action: 'join', name: playerName}));
+        socket.send(JSON.stringify({ action: 'join', name: playerName }));
         document.getElementById('joinForm').style.display = 'none';
         document.getElementById('lobbyInfo').style.display = 'block';
     }
@@ -84,7 +84,7 @@ function createColorButtons(colors) {
 
 function selectColor(colorName) {
     if (!hasAnswered) {
-        socket.send(JSON.stringify({action: 'select_color', color: colorName}));
+        socket.send(JSON.stringify({ action: 'select_color', color: colorName }));
         hasAnswered = true;
         playerAnswer = colorName;
         createColorButtons(colors);  // Redraw buttons to show selection
@@ -103,10 +103,10 @@ function handleColorResult(data) {
 function updateAnswerStatus(answeredCount, totalPlayers) {
     const counterElement = document.getElementById('answerCounter');
     counterElement.textContent = `${answeredCount}/${totalPlayers}`;
-    
+
     const answeredPlayersElement = document.getElementById('answeredPlayers');
     answeredPlayersElement.innerHTML = '';
-    
+
     answeredPlayers.forEach(player => {
         const playerSpan = document.createElement('span');
         playerSpan.className = 'answered-player';
@@ -177,13 +177,13 @@ function updateTimer() {
 }
 
 // Reconnect logic
-socket.onclose = function (event) {
+socket.onclose = function(event) {
     console.log('WebSocket connection closed. Attempting to reconnect...');
-    setTimeout(function () {
-        socket = new WebSocket('ws://192.168.43.46:8765');
+    setTimeout(function() {
+        socket = new WebSocket('ws://192.168.1.155:8765/ws');
         if (playerName) {
-            socket.onopen = function () {
-                socket.send(JSON.stringify({action: 'join', name: playerName}));
+            socket.onopen = function() {
+                socket.send(JSON.stringify({ action: 'join', name: playerName }));
             };
         }
     }, 3000);
