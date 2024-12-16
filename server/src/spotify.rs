@@ -3,6 +3,7 @@ use base64::Engine;
 use reqwest::Client;
 use serde_json::Value;
 use std::time::{Duration, SystemTime};
+use tracing::{error, info, warn};
 
 #[derive(Clone)]
 pub struct SpotifyController {
@@ -58,13 +59,13 @@ impl SpotifyController {
         {
             Ok(resp) => resp,
             Err(_) => {
-                println!("Failed to send token request.");
+                error!("Failed to send token request.");
                 return false;
             }
         };
 
         if !res.status().is_success() {
-            println!(
+            error!(
                 "Failed to get Spotify access token. Status: {}",
                 res.status()
             );
@@ -74,7 +75,7 @@ impl SpotifyController {
         let data: Value = match res.json().await {
             Ok(d) => d,
             Err(_) => {
-                println!("Failed to parse Spotify token response JSON.");
+                error!("Failed to parse Spotify token response JSON.");
                 return false;
             }
         };
@@ -82,7 +83,7 @@ impl SpotifyController {
         let access_token = match data.get("access_token").and_then(|v| v.as_str()) {
             Some(t) => t.to_string(),
             None => {
-                println!("No access_token field in Spotify token response.");
+                error!("No access_token field in Spotify token response.");
                 return false;
             }
         };
@@ -121,13 +122,13 @@ impl SpotifyController {
             .ok()?;
 
         if !res.status().is_success() {
-            println!("Error retrieving devices from Spotify: {}", res.status());
+            error!("Error retrieving devices from Spotify: {}", res.status());
             return None;
         }
         let data: Value = res.json().await.ok()?;
         let devices = data.get("devices")?.as_array()?;
         if devices.is_empty() {
-            println!("No devices found. Please open Spotify on a device.");
+            warn!("No devices found. Please open Spotify on a device.");
             return None;
         }
         let active_device = devices.iter().find(|dev| {
@@ -145,14 +146,14 @@ impl SpotifyController {
         let active_device = match self.get_active_device().await {
             Some(d) => d,
             None => {
-                println!("No active Spotify device found. Cannot play track.");
+                warn!("No active Spotify device found. Cannot play track.");
                 return false;
             }
         };
         let device_id = match active_device.get("id").and_then(|v| v.as_str()) {
             Some(id) => id,
             None => {
-                println!("No device id in active device info.");
+                error!("No device id in active device info.");
                 return false;
             }
         };
@@ -176,7 +177,7 @@ impl SpotifyController {
             Err(_) => return false,
         };
         if ![204, 202].contains(&resp.status().as_u16()) {
-            println!(
+            error!(
                 "Failed to play track on Spotify. Status code: {}",
                 resp.status()
             );
@@ -192,7 +193,7 @@ impl SpotifyController {
         let active_device = match self.get_active_device().await {
             Some(d) => d,
             None => {
-                println!("No active device to pause.");
+                warn!("No active device to pause.");
                 return false;
             }
         };

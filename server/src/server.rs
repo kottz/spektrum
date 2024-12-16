@@ -7,6 +7,7 @@ use tokio::{
     io::{self, AsyncBufReadExt, BufReader},
     sync::mpsc,
 };
+use tracing::{debug, info, warn};
 
 use crate::{
     game::GameLobby,
@@ -38,7 +39,7 @@ async fn handle_ws(mut socket: WebSocket, state: AppState) {
                                 {
                                     let mut lobby = state.lobby.lock().unwrap();
                                     lobby.add_player(&name, tx.clone());
-                                    println!("Player {} joined the lobby", name);
+                                    info!("Player {} joined the lobby", name);
                                     player_name = Some(name.clone());
                                 }
                                 send_game_state(&state, &name).await;
@@ -73,7 +74,7 @@ async fn handle_ws(mut socket: WebSocket, state: AppState) {
                                     broadcast_answer_count(&state).await;
 
                                     if all_answered {
-                                        println!("All players answered.");
+                                        info!("All players answered.");
                                     }
                                 }
                             }
@@ -89,7 +90,7 @@ async fn handle_ws(mut socket: WebSocket, state: AppState) {
                 if let Some(name) = player_name.clone() {
                     let mut lobby = state.lobby.lock().unwrap();
                     lobby.remove_player(&name);
-                    println!("Player {} left the lobby", name);
+                    info!("Player {} left the lobby", name);
                 }
                 broadcast_game_state(&state).await;
                 broadcast_answer_count(&state).await;
@@ -104,7 +105,7 @@ pub async fn admin_input_loop(state: AppState) {
     while let Ok(line_opt) = lines.next_line().await {
         if let Some(line) = line_opt {
             let trimmed = line.trim().to_string();
-            println!("Admin input: {}", trimmed);
+            info!("Admin input: {}", trimmed);
 
             if trimmed.to_lowercase().starts_with("toggle") {
                 let mut specified_colors: Option<Vec<String>> = None;
@@ -119,10 +120,10 @@ pub async fn admin_input_loop(state: AppState) {
                 let (new_state, current_song_uri) = {
                     let mut lobby = state.lobby.lock().unwrap();
                     let new_state = lobby.toggle_state(specified_colors.clone());
-                    println!("Game state changed to: {}", new_state);
+                    info!("Game state changed to: {}", new_state);
                     if new_state == "question" {
-                        println!("Correct color(s): {}", lobby.correct_colors.join(", "));
-                        println!(
+                        debug!("Correct color(s): {}", lobby.correct_colors.join(", "));
+                        debug!(
                             "All colors this round: {}",
                             lobby
                                 .round_colors
@@ -132,7 +133,7 @@ pub async fn admin_input_loop(state: AppState) {
                                 .join(", ")
                         );
                         if let Some(song) = &lobby.current_song {
-                            println!(
+                            debug!(
                                 "Selected track: {} by {} - {}",
                                 song.song_name, song.artist, song.uri
                             );
@@ -148,7 +149,7 @@ pub async fn admin_input_loop(state: AppState) {
                             let mut ctrl = spotify.lock().unwrap().clone();
                             let success = ctrl.play_track(&uri).await;
                             if !success {
-                                println!("Could not start playback. Check Spotify setup.");
+                                warn!("Could not start playback. Check Spotify setup.");
                             }
                         }
                     }

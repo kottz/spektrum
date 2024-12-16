@@ -6,6 +6,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tower_http::services::ServeDir;
+use tracing::{debug, error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod game; // GameLobby + Player
@@ -49,7 +50,7 @@ async fn main() {
 
     let songs = models::load_songs_from_csv(&args.songs_csv);
     let lobby = GameLobby::new(args.lobby.clone(), songs);
-    println!("Created lobby: {}", args.lobby);
+    info!("Created lobby: {}", args.lobby);
 
     let spotify_controller = if !args.no_spotify {
         match SpotifyController::new().await {
@@ -57,7 +58,7 @@ async fn main() {
                 let mut c2 = ctrl.clone();
                 match c2.get_active_device().await {
                     None => {
-                        println!("No active Spotify device found at startup.");
+                        error!("No active Spotify device found at startup.");
                         std::process::exit(1);
                     }
                     Some(dev) => {
@@ -65,18 +66,18 @@ async fn main() {
                             .get("name")
                             .and_then(|v| v.as_str())
                             .unwrap_or("Unknown Device");
-                        println!("Found active Spotify device: {}", device_name);
+                        info!("Found active Spotify device: {}", device_name);
                     }
                 }
                 Some(Arc::new(Mutex::new(ctrl)))
             }
             None => {
-                println!("Spotify integration failed to initialize. Exiting.");
+                error!("Spotify integration failed to initialize. Exiting.");
                 std::process::exit(1);
             }
         }
     } else {
-        println!("Spotify integration disabled. Running without playback.");
+        info!("Spotify integration disabled. Running without playback.");
         None
     };
 
@@ -95,7 +96,7 @@ async fn main() {
     });
 
     let addr = SocketAddr::from(([0, 0, 0, 0], args.port));
-    println!("Starting server on http://{}", addr);
+    info!("Starting server on http://{}", addr);
     Server::bind(addr)
         .serve(app.into_make_service())
         .await

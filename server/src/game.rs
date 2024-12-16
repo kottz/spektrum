@@ -1,9 +1,10 @@
+use rand::seq::SliceRandom;
 use std::{
     collections::{HashMap, HashSet},
     time::{Duration, Instant},
 };
-use rand::seq::SliceRandom;
 use tokio::sync::mpsc;
+use tracing::{info, warn};
 
 use crate::models::{ColorDef, Song};
 
@@ -46,19 +47,58 @@ pub struct GameLobby {
 impl GameLobby {
     pub fn new(name: String, songs: Vec<Song>) -> Self {
         let all_colors = vec![
-            ColorDef { name: "Red".into(),    rgb: "#FF0000".into() },
-            ColorDef { name: "Green".into(),  rgb: "#00FF00".into() },
-            ColorDef { name: "Blue".into(),   rgb: "#0000FF".into() },
-            ColorDef { name: "Yellow".into(), rgb: "#FFFF00".into() },
-            ColorDef { name: "Purple".into(), rgb: "#800080".into() },
-            ColorDef { name: "Gold".into(),   rgb: "#FFD700".into() },
-            ColorDef { name: "Silver".into(), rgb: "#C0C0C0".into() },
-            ColorDef { name: "Pink".into(),   rgb: "#FFC0CB".into() },
-            ColorDef { name: "Black".into(),  rgb: "#000000".into() },
-            ColorDef { name: "White".into(),  rgb: "#FFFFFF".into() },
-            ColorDef { name: "Brown".into(),  rgb: "#3D251E".into() },
-            ColorDef { name: "Orange".into(), rgb: "#FFA500".into() },
-            ColorDef { name: "Gray".into(),   rgb: "#808080".into() },
+            ColorDef {
+                name: "Red".into(),
+                rgb: "#FF0000".into(),
+            },
+            ColorDef {
+                name: "Green".into(),
+                rgb: "#00FF00".into(),
+            },
+            ColorDef {
+                name: "Blue".into(),
+                rgb: "#0000FF".into(),
+            },
+            ColorDef {
+                name: "Yellow".into(),
+                rgb: "#FFFF00".into(),
+            },
+            ColorDef {
+                name: "Purple".into(),
+                rgb: "#800080".into(),
+            },
+            ColorDef {
+                name: "Gold".into(),
+                rgb: "#FFD700".into(),
+            },
+            ColorDef {
+                name: "Silver".into(),
+                rgb: "#C0C0C0".into(),
+            },
+            ColorDef {
+                name: "Pink".into(),
+                rgb: "#FFC0CB".into(),
+            },
+            ColorDef {
+                name: "Black".into(),
+                rgb: "#000000".into(),
+            },
+            ColorDef {
+                name: "White".into(),
+                rgb: "#FFFFFF".into(),
+            },
+            ColorDef {
+                name: "Brown".into(),
+                rgb: "#3D251E".into(),
+            },
+            ColorDef {
+                name: "Orange".into(),
+                rgb: "#FFA500".into(),
+            },
+            ColorDef {
+                name: "Gray".into(),
+                rgb: "#808080".into(),
+            },
         ];
 
         Self {
@@ -140,7 +180,11 @@ impl GameLobby {
         };
 
         if player.has_answered {
-            let already_correct = player.answer.as_ref().map(|ans| self.correct_colors.contains(ans)).unwrap_or(false);
+            let already_correct = player
+                .answer
+                .as_ref()
+                .map(|ans| self.correct_colors.contains(ans))
+                .unwrap_or(false);
             return (already_correct, player.score);
         }
 
@@ -181,17 +225,28 @@ impl GameLobby {
                 }
             }
             if chosen_correct_colors.is_empty() {
-                println!("No valid specified colors found.");
+                warn!("No valid specified colors found.");
                 return false;
             }
             self.round_colors.extend(chosen_correct_colors.clone());
-            self.correct_colors = chosen_correct_colors.iter().map(|c| c.name.clone()).collect();
+            self.correct_colors = chosen_correct_colors
+                .iter()
+                .map(|c| c.name.clone())
+                .collect();
 
             let mut excluded = std::collections::HashSet::new();
-            if self.correct_colors.iter().any(|cc| ["Yellow", "Gold", "Orange"].contains(&cc.as_str())) {
+            if self
+                .correct_colors
+                .iter()
+                .any(|cc| ["Yellow", "Gold", "Orange"].contains(&cc.as_str()))
+            {
                 excluded.extend(["Yellow", "Gold", "Orange"]);
             }
-            if self.correct_colors.iter().any(|cc| ["Silver", "Gray"].contains(&cc.as_str())) {
+            if self
+                .correct_colors
+                .iter()
+                .any(|cc| ["Silver", "Gray"].contains(&cc.as_str()))
+            {
                 excluded.extend(["Silver", "Gray"]);
             }
 
@@ -225,7 +280,7 @@ impl GameLobby {
                 .cloned()
                 .collect();
             if available_songs.is_empty() {
-                println!("No more songs available. The game ends here.");
+                info!("No more songs available. The game ends here.");
                 return false;
             }
             let idx = rand::random::<usize>() % available_songs.len();
@@ -240,7 +295,7 @@ impl GameLobby {
                 {
                     chosen_correct_colors.push(cd.clone());
                 } else {
-                    println!("Color {} not found in all_colors list.", c_name);
+                    warn!("Color {} not found in all_colors list.", c_name);
                 }
             }
             if chosen_correct_colors.is_empty() {
@@ -249,13 +304,22 @@ impl GameLobby {
 
             self.current_song = Some(chosen_song.clone());
             self.round_colors.extend(chosen_correct_colors.clone());
-            self.correct_colors = chosen_correct_colors.iter().map(|c| c.name.clone()).collect();
+            self.correct_colors = chosen_correct_colors
+                .iter()
+                .map(|c| c.name.clone())
+                .collect();
 
             let mut excluded = std::collections::HashSet::new();
-            if chosen_correct_colors.iter().any(|cc| ["Yellow", "Gold", "Orange"].contains(&cc.name.as_str())) {
+            if chosen_correct_colors
+                .iter()
+                .any(|cc| ["Yellow", "Gold", "Orange"].contains(&cc.name.as_str()))
+            {
                 excluded.extend(["Yellow", "Gold", "Orange"]);
             }
-            if chosen_correct_colors.iter().any(|cc| ["Silver", "Gray"].contains(&cc.name.as_str())) {
+            if chosen_correct_colors
+                .iter()
+                .any(|cc| ["Silver", "Gray"].contains(&cc.name.as_str()))
+            {
                 excluded.extend(["Silver", "Gray"]);
             }
 
