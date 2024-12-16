@@ -9,6 +9,7 @@ let playerAnswer = null;
 let colors = [];
 let answeredPlayers = [];
 let totalPlayers = 0;
+let isAdmin = false;
 // const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 // const wsUrl = `${wsProtocol}//${window.location.host}/ws?lobby=${lobbyId}`;
 // socket = new WebSocket(wsUrl);
@@ -23,7 +24,7 @@ async function createLobby() {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                name: lobbyName || null // Send null if no name provided
+                name: lobbyName || null,
             }),
         });
 
@@ -32,7 +33,8 @@ async function createLobby() {
         }
 
         const lobby = await response.json();
-        showJoinForm(lobby.id, lobby.name || 'Unnamed Lobby');
+        isAdmin = true;  // Set admin status
+        showAdminView(lobby);  // Show admin interface instead of player join
     } catch (error) {
         console.error('Error creating lobby:', error);
         alert('Failed to create lobby. Please try again.');
@@ -71,6 +73,7 @@ function connectToLobby(lobbyId) {
 function setupWebSocketHandlers() {
     socket.onmessage = function(event) {
         const data = JSON.parse(event.data);
+        console.log('Received message:', data);
         switch (data.action) {
             case 'game_state':
                 handleGameState(data);
@@ -79,10 +82,15 @@ function setupWebSocketHandlers() {
                 handleColorResult(data);
                 break;
             case 'update_answer_count':
-                updateAnswerStatus(data.answered_count, data.total_players);
+                updateAnswerStatus(data.answeredCount, data.totalPlayers);
                 break;
             case 'player_answered':
-                handlePlayerAnswer(data.player_name, data.correct);
+                handlePlayerAnswer(data.playerName, data.correct);
+                break;
+            case 'state_updated':
+                // We don't need to do anything here because the state update
+                // will be followed by a game_state message that contains
+                // all the necessary information
                 break;
             case 'error':
                 handleError(data.message);
@@ -137,6 +145,40 @@ function leaveLobby() {
     initializeApp(); // Refresh lobby list
 }
 
+function showAdminView(lobby) {
+    document.getElementById('lobbySelection').style.display = 'none';
+    document.getElementById('joinForm').style.display = 'none';
+
+    // Show admin interface
+    document.getElementById('lobbyInfo').style.display = 'block';
+    document.getElementById('adminControls').style.display = 'block';  // New element
+    document.getElementById('currentLobbyName').textContent = lobby.name || 'Unnamed Lobby';
+
+    // Connect to WebSocket as admin
+    connectToLobbyAsAdmin(lobby.id);
+}
+
+function connectToLobbyAsAdmin(lobbyId) {
+    if (socket) {
+        socket.close();
+    }
+
+    currentLobbyId = lobbyId;
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProtocol}//${window.location.host}/ws?lobby=${lobbyId}&role=admin`;
+    socket = new WebSocket(wsUrl);
+
+    setupWebSocketHandlers();
+}
+
+function toggleRound() {
+    if (socket && isAdmin) {
+        socket.send(JSON.stringify({
+            action: 'toggle_state'
+        }));
+    }
+}
+
 function resetGameState() {
     hasAnswered = false;
     playerAnswer = null;
@@ -160,18 +202,17 @@ function handleGameState(data) {
         playerAnswer = data.answer;
         colors = data.colors;
         answeredPlayers = [];
-        totalPlayers = data.total_players;
+        totalPlayers = data.totalPlayers;
 
         createColorButtons(colors);
         document.getElementById('colorButtons').style.display = 'grid';
         document.getElementById('leaderboard').style.display = 'none';
         document.getElementById('roundResult').textContent = '';
         document.getElementById('answerStatusContainer').style.display = 'flex';
-        updateAnswerStatus(data.answered_count, data.total_players);
+        updateAnswerStatus(data.answeredCount, data.totalPlayers);
 
-        let timeLeftMs = data.round_time_left || 0;
+        let timeLeftMs = data.roundTimeLeft * 1000 || 0;
         startTimer(timeLeftMs);
-
     } else if (data.state === 'score') {
         document.getElementById('colorButtons').style.display = 'none';
         updateLeaderboard(data.leaderboard);
@@ -229,12 +270,13 @@ function selectColor(colorName) {
         socket.send(JSON.stringify({ action: 'select_color', color: colorName }));
         hasAnswered = true;
         playerAnswer = colorName;
+        stopTimer();
         createColorButtons(colors);  // Redraw buttons to show selection
     }
 }
 
 function handleColorResult(data) {
-    updateYourScore(data.total_score);
+    updateYourScore(data.totalScore);
     const resultText = data.correct ?
         `Correct! You earned ${data.score} points this round.` :
         `Wrong color. You earned 0 points this round.`;
@@ -328,7 +370,7 @@ function updateLobbyList(lobbies) {
         lobbyElement.innerHTML = `
             <div class="lobby-info">
                 <span>${lobby.name || 'Unnamed Lobby'}</span>
-                <span>${lobby.player_count} players</span>
+                <span>${lobby.playerCount} players</span>
             </div>
             <button onclick="showJoinForm('${lobby.id}', '${lobby.name || 'Unnamed Lobby'}')">
                 Join

@@ -101,19 +101,19 @@ pub async fn ws_handler(
     ws: WebSocketUpgrade,
     State(state): State<Arc<ServerState>>,
     Query(params): Query<HashMap<String, String>>,
-) -> axum::response::Response {
-    let lobby_id = match params.get("lobby").and_then(|id| Uuid::parse_str(id).ok()) {
-        Some(id) => id,
-        None => return (axum::http::StatusCode::BAD_REQUEST, "Invalid lobby ID").into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let lobby_id = params
+        .get("lobby")
+        .and_then(|id| Uuid::parse_str(id).ok())
+        .ok_or_else(|| GameError::LobbyNotFound("Invalid lobby ID".to_string()))?;
 
-    match state.game_manager.get_lobby(lobby_id).await {
-        Ok(handle) => ws.on_upgrade(move |socket| handle_socket(socket, handle)),
-        Err(_) => (axum::http::StatusCode::NOT_FOUND, "Lobby not found").into_response(),
-    }
+    let is_admin = params.get("role").map_or(false, |role| role == "admin");
+    let handle = state.game_manager.get_lobby(lobby_id).await?;
+
+    Ok(ws.on_upgrade(move |socket| handle_socket(socket, handle, is_admin)))
 }
 
-async fn handle_socket(socket: WebSocket, handle: GameHandle) {
+async fn handle_socket(socket: WebSocket, handle: GameHandle, is_admin: bool) {
     let (mut ws_tx, mut ws_rx) = socket.split();
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
     let mut player_name: Option<String> = None;
@@ -127,22 +127,36 @@ async fn handle_socket(socket: WebSocket, handle: GameHandle) {
         }
     });
 
+    // Handle incoming WebSocket messages
     while let Some(Ok(Message::Text(text))) = ws_rx.next().await {
         if let Ok(msg) = serde_json::from_str::<ClientMessage>(&text) {
             match msg {
-                ClientMessage::Join { name } => {
+                // Admin-only actions
+                ClientMessage::ToggleState { specified_colors } if is_admin => {
+                    if let Ok(new_state) = handle.toggle_state(specified_colors).await {
+                        let response = ServerMessage::StateUpdated { state: new_state };
+                        send_message(&tx, &response);
+                    }
+                }
+
+                // Player-only actions
+                ClientMessage::Join { name } if !is_admin => {
                     match handle.add_player(name.clone(), tx.clone()).await {
                         Ok(()) => {
                             player_name = Some(name);
                             send_initial_state(&handle, &tx).await;
                         }
                         Err(e) => {
-                            send_error(&tx, &format!("Failed to join: {}", e));
+                            let error_msg = ServerMessage::Error {
+                                message: format!("Failed to join: {}", e),
+                            };
+                            send_message(&tx, &error_msg);
                             break;
                         }
                     }
                 }
-                ClientMessage::SelectColor { color } => {
+
+                ClientMessage::SelectColor { color } if !is_admin => {
                     if let Some(name) = &player_name {
                         if let Ok((correct, score)) = handle.answer_color(name.clone(), color).await
                         {
@@ -155,20 +169,50 @@ async fn handle_socket(socket: WebSocket, handle: GameHandle) {
                         }
                     }
                 }
-                ClientMessage::CreateLobby { name } => {
-                    send_error(&tx, "Cannot create lobby through WebSocket connection");
+
+                // Admin connection doesn't need a player name
+                ClientMessage::Join { name } if is_admin => {
+                    player_name = Some("Admin".to_string());
+                    send_initial_state(&handle, &tx).await;
                 }
-                ClientMessage::UpdateLobbyName { name } => {
-                    if let Err(e) = handle.update_name(name).await {
-                        send_error(&tx, &format!("Failed to update lobby name: {}", e));
-                    }
+
+                // Invalid actions for role
+                ClientMessage::ToggleState { .. } if !is_admin => {
+                    send_message(
+                        &tx,
+                        &ServerMessage::Error {
+                            message: "Only admins can toggle game state".to_string(),
+                        },
+                    );
+                }
+
+                ClientMessage::SelectColor { .. } if is_admin => {
+                    send_message(
+                        &tx,
+                        &ServerMessage::Error {
+                            message: "Admins cannot participate in the game".to_string(),
+                        },
+                    );
+                }
+
+                // Common actions or invalid messages
+                _ => {
+                    send_message(
+                        &tx,
+                        &ServerMessage::Error {
+                            message: "Invalid action for current role".to_string(),
+                        },
+                    );
                 }
             }
         }
     }
 
+    // Cleanup when connection ends
     if let Some(name) = player_name {
-        handle.remove_player(name).await.ok();
+        if !is_admin {
+            handle.remove_player(name).await.ok();
+        }
     }
     forward_task.abort();
 }

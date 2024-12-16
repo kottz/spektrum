@@ -1,3 +1,4 @@
+use crate::game::GameState;
 use csv::ReaderBuilder;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -45,6 +46,10 @@ pub enum ClientMessage {
     CreateLobby { name: Option<String> },
     #[serde(rename = "update_lobby_name")]
     UpdateLobbyName { name: String },
+    #[serde(rename = "toggle_state")]
+    ToggleState {
+        specified_colors: Option<Vec<String>>,
+    },
 }
 
 #[derive(Debug, Serialize)]
@@ -64,6 +69,8 @@ pub enum ServerMessage {
     LobbyCreated(LobbyInfo),
     #[serde(rename = "lobby_updated")]
     LobbyUpdated(LobbyInfo),
+    #[serde(rename = "state_updated")]
+    StateUpdated { state: GameState },
 }
 
 #[derive(Debug, Serialize)]

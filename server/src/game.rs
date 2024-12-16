@@ -1,4 +1,5 @@
 use rand::seq::SliceRandom;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 use tokio::sync::{mpsc, oneshot};
@@ -7,7 +8,7 @@ use uuid::Uuid;
 
 use crate::models::{ColorDef, Song};
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum GameState {
     Score,
     Question,
