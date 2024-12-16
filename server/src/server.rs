@@ -9,7 +9,7 @@ use tokio::{
 use tracing::{debug, info, warn};
 
 use crate::{
-    game::GameLobby,
+    game::{GameError, GameLobby, GameResult, GameState},
     models::{
         ClientMessage, ColorResult, GameStateMsg, LeaderboardEntry, PlayerAnsweredMsg,
         UpdateAnswerCount,
@@ -50,11 +50,15 @@ async fn handle_ws(mut socket: WebSocket, state: AppState) {
                                 if let Some(color_name) = &msg.color {
                                     let (correct, new_score, total_score, all_answered) = {
                                         let mut lobby = state.lobby.lock().unwrap();
-                                        if lobby.state == "question" {
-                                            let (correct, new_score) = lobby.check_answer(name, color_name);
-                                            let total_score = lobby.players[name].score;
-                                            let all_answered = lobby.all_players_answered();
-                                            (correct, new_score, total_score, all_answered)
+                                        if lobby.state == GameState::Question {
+                                            match lobby.check_answer(name, color_name) {
+                                                Ok((correct, new_score)) => {
+                                                    let total_score = lobby.players[name].score;
+                                                    let all_answered = lobby.all_players_answered();
+                                                    (correct, new_score, total_score, all_answered)
+                                                }
+                                                Err(_) => (false, 0, lobby.players[name].score, false)
+                                            }
                                         } else {
                                             (false, 0, lobby.players[name].score, false)
                                         }
@@ -116,51 +120,69 @@ pub async fn admin_input_loop(state: AppState) {
                     }
                 }
 
-                let (new_state, current_song_uri) = {
+                // First, get the new state and song URI
+                let (new_state, song_uri) = {
                     let mut lobby = state.lobby.lock().unwrap();
                     let new_state = lobby.toggle_state(specified_colors.clone());
-                    info!("Game state changed to: {}", new_state);
-                    if new_state == "question" {
-                        debug!("Correct color(s): {}", lobby.correct_colors.join(", "));
-                        debug!(
-                            "All colors this round: {}",
-                            lobby
-                                .round_colors
-                                .iter()
-                                .map(|c| c.name.clone())
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        );
-                        if let Some(song) = &lobby.current_song {
-                            debug!(
-                                "Selected track: {} by {} - {}",
-                                song.song_name, song.artist, song.uri
-                            );
-                        }
-                    }
                     let song_uri = lobby.current_song.as_ref().map(|s| s.uri.clone());
                     (new_state, song_uri)
                 };
 
-                if new_state == "question" {
-                    if let Some(spotify) = &state.spotify {
-                        if let Some(uri) = current_song_uri {
-                            let mut ctrl = spotify.lock().unwrap().clone();
-                            let success = ctrl.play_track(&uri).await;
-                            if !success {
-                                warn!("Could not start playback. Check Spotify setup.");
+                match new_state {
+                    Ok(new_state) => {
+                        info!("Game state changed to: {:?}", new_state);
+
+                        // Debug logging
+                        {
+                            let lobby = state.lobby.lock().unwrap();
+                            match new_state {
+                                GameState::Question => {
+                                    debug!("Correct color(s): {}", lobby.correct_colors.join(", "));
+                                    debug!(
+                                        "All colors this round: {}",
+                                        lobby
+                                            .round_colors
+                                            .iter()
+                                            .map(|c| c.name.clone())
+                                            .collect::<Vec<_>>()
+                                            .join(", ")
+                                    );
+                                    if let Some(song) = &lobby.current_song {
+                                        debug!(
+                                            "Selected track: {} by {} - {}",
+                                            song.song_name, song.artist, song.uri
+                                        );
+                                    }
+                                }
+                                _ => {}
                             }
                         }
-                    }
-                } else if new_state == "score" {
-                    if let Some(spotify) = &state.spotify {
-                        let mut ctrl = spotify.lock().unwrap().clone();
-                        let _ = ctrl.pause().await;
-                    }
-                }
 
-                broadcast_game_state(&state).await;
-                broadcast_answer_count(&state).await;
+                        // Handle Spotify
+                        match new_state {
+                            GameState::Question => {
+                                if let Some(spotify) = &state.spotify {
+                                    if let Some(uri) = song_uri {
+                                        let mut ctrl = spotify.lock().unwrap().clone();
+                                        if !ctrl.play_track(&uri).await {
+                                            warn!("Could not start playback. Check Spotify setup.");
+                                        }
+                                    }
+                                }
+                            }
+                            GameState::Score => {
+                                if let Some(spotify) = &state.spotify {
+                                    let mut ctrl = spotify.lock().unwrap().clone();
+                                    let _ = ctrl.pause().await;
+                                }
+                            }
+                        }
+
+                        broadcast_game_state(&state).await;
+                        broadcast_answer_count(&state).await;
+                    }
+                    Err(e) => warn!("Failed to toggle game state: {:?}", e),
+                }
             }
         } else {
             break; // EOF
@@ -188,7 +210,7 @@ async fn send_game_state(state: &AppState, player_name: &str) {
 
         let (answered_count, total) = lobby.get_answer_count();
 
-        let lb = if lobby.state == "score" {
+        let lb = if lobby.state == GameState::Score {
             Some(
                 lobby
                     .players
@@ -203,7 +225,7 @@ async fn send_game_state(state: &AppState, player_name: &str) {
             None
         };
 
-        let round_time_left = if lobby.state == "question" {
+        let round_time_left = if lobby.state == GameState::Question {
             Some(calc_time_left(&lobby))
         } else {
             None
@@ -211,9 +233,9 @@ async fn send_game_state(state: &AppState, player_name: &str) {
 
         let gm = GameStateMsg {
             action: "game_state".to_string(),
-            state: lobby.state.clone(),
+            state: game_state_to_string(&lobby.state),
             score: player.score,
-            colors: if lobby.state == "question" {
+            colors: if lobby.state == GameState::Question {
                 Some(lobby.round_colors.clone())
             } else {
                 None
@@ -229,6 +251,13 @@ async fn send_game_state(state: &AppState, player_name: &str) {
         (json_msg, player.tx.clone())
     };
     let _ = tx.send(msg);
+}
+
+fn game_state_to_string(state: &GameState) -> String {
+    match state {
+        GameState::Score => "score".to_string(),
+        GameState::Question => "question".to_string(),
+    }
 }
 
 async fn broadcast_game_state(state: &AppState) {

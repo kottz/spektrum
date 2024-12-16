@@ -91,8 +91,9 @@ async fn main() {
         .fallback_service(ServeDir::new("./assets").append_index_html_on_directories(true))
         .with_state(state.clone());
 
+    let admin_state = state.clone();
     tokio::spawn(async move {
-        admin_input_loop(state).await;
+        admin_input_loop(admin_state).await;
     });
 
     let addr = SocketAddr::from(([0, 0, 0, 0], args.port));
