@@ -3,7 +3,26 @@ use base64::Engine;
 use reqwest::Client;
 use serde_json::Value;
 use std::time::{Duration, SystemTime};
+use thiserror::Error;
 use tracing::{error, warn};
+
+#[derive(Error, Debug)]
+pub enum SpotifyError {
+    #[error("Environment variable not found")]
+    EnvVarNotFound(#[from] std::env::VarError),
+    #[error("Failed to get access token")]
+    TokenError,
+    #[error("Failed to send request: {0}")]
+    RequestError(#[from] reqwest::Error),
+    #[error("No active device found")]
+    NoActiveDevice,
+    #[error("Invalid device info")]
+    InvalidDeviceInfo,
+    #[error("API request failed with status: {0}")]
+    ApiError(u16),
+}
+
+pub type SpotifyResult<T> = Result<T, SpotifyError>;
 
 #[derive(Clone)]
 pub struct SpotifyController {
@@ -16,10 +35,10 @@ pub struct SpotifyController {
 }
 
 impl SpotifyController {
-    pub async fn new() -> Option<Self> {
-        let client_id = std::env::var("SPOTIFY_CLIENT_ID").ok()?;
-        let client_secret = std::env::var("SPOTIFY_CLIENT_SECRET").ok()?;
-        let refresh_token = std::env::var("SPOTIFY_REFRESH_TOKEN").ok()?;
+    pub async fn new() -> SpotifyResult<Self> {
+        let client_id = std::env::var("SPOTIFY_CLIENT_ID")?;
+        let client_secret = std::env::var("SPOTIFY_CLIENT_SECRET")?;
+        let refresh_token = std::env::var("SPOTIFY_REFRESH_TOKEN")?;
 
         let mut ctrl = Self {
             client: Client::new(),
@@ -29,64 +48,52 @@ impl SpotifyController {
             token: None,
             token_expiry: None,
         };
-        if !ctrl.get_access_token().await {
-            return None;
-        }
-        Some(ctrl)
+        ctrl.get_access_token().await?;
+        Ok(ctrl)
     }
 
-    pub async fn get_access_token(&mut self) -> bool {
+    pub async fn get_access_token(&mut self) -> SpotifyResult<()> {
         if let Some(expiry) = self.token_expiry {
-            if let Ok(remaining) = expiry.duration_since(SystemTime::now()) {
-                if remaining > Duration::from_secs(0) {
-                    return true;
-                }
+            if expiry
+                .duration_since(SystemTime::now())
+                .ok()
+                .map_or(false, |d| d > Duration::from_secs(0))
+            {
+                return Ok(());
             }
         }
+
         let auth = STANDARD.encode(format!("{}:{}", self.client_id, self.client_secret));
         let params = [
             ("grant_type", "refresh_token"),
             ("refresh_token", &self.refresh_token),
         ];
 
-        let res = match self
+        let res = self
             .client
             .post("https://accounts.spotify.com/api/token")
             .header("Authorization", format!("Basic {}", auth))
             .form(&params)
             .send()
             .await
-        {
-            Ok(resp) => resp,
-            Err(_) => {
-                error!("Failed to send token request.");
-                return false;
-            }
-        };
+            .map_err(SpotifyError::from)?;
 
         if !res.status().is_success() {
             error!(
                 "Failed to get Spotify access token. Status: {}",
                 res.status()
             );
-            return false;
+            return Err(SpotifyError::TokenError);
         }
 
-        let data: Value = match res.json().await {
-            Ok(d) => d,
-            Err(_) => {
-                error!("Failed to parse Spotify token response JSON.");
-                return false;
-            }
-        };
+        let data: Value = res.json().await.map_err(SpotifyError::from)?;
 
-        let access_token = match data.get("access_token").and_then(|v| v.as_str()) {
-            Some(t) => t.to_string(),
-            None => {
-                error!("No access_token field in Spotify token response.");
-                return false;
-            }
-        };
+        let access_token = data
+            .get("access_token")
+            .and_then(|v| v.as_str())
+            .ok_or(SpotifyError::TokenError)?
+            .to_string();
+
         let expires_in = data
             .get("expires_in")
             .and_then(|v| v.as_u64())
@@ -94,119 +101,100 @@ impl SpotifyController {
 
         self.token = Some(access_token);
         self.token_expiry = Some(SystemTime::now() + Duration::from_secs(expires_in));
-        true
+        Ok(())
     }
 
-    async fn _check_token(&mut self) -> bool {
+    async fn ensure_token(&mut self) -> SpotifyResult<String> {
         if let Some(expiry) = self.token_expiry {
-            if let Ok(remaining) = expiry.duration_since(SystemTime::now()) {
-                if remaining > Duration::from_secs(0) {
-                    return true;
-                }
+            if expiry
+                .duration_since(SystemTime::now())
+                .ok()
+                .map_or(false, |d| d > Duration::from_secs(0))
+            {
+                return Ok(self.token.clone().unwrap_or_default());
             }
         }
-        self.get_access_token().await
+        self.get_access_token().await?;
+        Ok(self.token.clone().unwrap_or_default())
     }
 
-    pub async fn get_active_device(&mut self) -> Option<Value> {
-        if !self._check_token().await {
-            return None;
-        }
-        let token = self.token.clone()?;
+    pub async fn get_active_device(&mut self) -> SpotifyResult<Value> {
+        let token = self.ensure_token().await?;
+
         let res = self
             .client
             .get("https://api.spotify.com/v1/me/player/devices")
             .header("Authorization", format!("Bearer {}", token))
             .send()
             .await
-            .ok()?;
+            .map_err(SpotifyError::from)?;
 
         if !res.status().is_success() {
-            error!("Error retrieving devices from Spotify: {}", res.status());
-            return None;
+            return Err(SpotifyError::ApiError(res.status().as_u16()));
         }
-        let data: Value = res.json().await.ok()?;
-        let devices = data.get("devices")?.as_array()?;
+
+        let data: Value = res.json().await.map_err(SpotifyError::from)?;
+        let devices = data
+            .get("devices")
+            .and_then(|v| v.as_array())
+            .ok_or(SpotifyError::InvalidDeviceInfo)?;
+
         if devices.is_empty() {
             warn!("No devices found. Please open Spotify on a device.");
-            return None;
+            return Err(SpotifyError::NoActiveDevice);
         }
-        let active_device = devices.iter().find(|dev| {
-            dev.get("is_active")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false)
-        });
-        active_device.cloned()
+
+        devices
+            .iter()
+            .find(|dev| {
+                dev.get("is_active")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
+            })
+            .cloned()
+            .ok_or(SpotifyError::NoActiveDevice)
     }
 
-    pub async fn play_track(&mut self, track_uri: &str) -> bool {
-        if !self._check_token().await {
-            return false;
-        }
-        let active_device = match self.get_active_device().await {
-            Some(d) => d,
-            None => {
-                warn!("No active Spotify device found. Cannot play track.");
-                return false;
-            }
-        };
-        let device_id = match active_device.get("id").and_then(|v| v.as_str()) {
-            Some(id) => id,
-            None => {
-                error!("No device id in active device info.");
-                return false;
-            }
-        };
+    pub async fn play_track(&mut self, track_uri: &str) -> SpotifyResult<()> {
+        let active_device = self.get_active_device().await?;
+        let device_id = active_device
+            .get("id")
+            .and_then(|v| v.as_str())
+            .ok_or(SpotifyError::InvalidDeviceInfo)?;
 
-        let token = self.token.clone().unwrap_or_default();
+        let token = self.ensure_token().await?;
         let url = format!(
             "https://api.spotify.com/v1/me/player/play?device_id={}",
             device_id
         );
         let body = serde_json::json!({ "uris": [track_uri] });
 
-        let resp = match self
+        let resp = self
             .client
             .put(&url)
             .header("Authorization", format!("Bearer {}", token))
             .json(&body)
             .send()
             .await
-        {
-            Ok(r) => r,
-            Err(_) => return false,
-        };
-        if ![204, 202].contains(&resp.status().as_u16()) {
-            error!(
-                "Failed to play track on Spotify. Status code: {}",
-                resp.status()
-            );
-            return false;
+            .map_err(SpotifyError::from)?;
+
+        let status = resp.status().as_u16();
+        if ![204, 202].contains(&status) {
+            return Err(SpotifyError::ApiError(status));
         }
-        true
+        Ok(())
     }
 
-    pub async fn pause(&mut self) -> bool {
-        if !self._check_token().await {
-            return false;
-        }
+    pub async fn pause(&mut self) -> SpotifyResult<()> {
+        let active_device = self.get_active_device().await?;
+        let device_id = active_device
+            .get("id")
+            .and_then(|v| v.as_str())
+            .ok_or(SpotifyError::InvalidDeviceInfo)?;
 
-        let active_device = match self.get_active_device().await {
-            Some(d) => d,
-            None => {
-                warn!("No active device to pause.");
-                return false;
-            }
-        };
+        let token = self.ensure_token().await?;
 
-        let device_id = match active_device.get("id").and_then(|v| v.as_str()) {
-            Some(id) => id,
-            None => return false,
-        };
-
-        let token = self.token.clone().unwrap_or_default();
-
-        let resp = match self
+        let resp = self
             .client
             .put("https://api.spotify.com/v1/me/player/pause")
             .header("Authorization", format!("Bearer {}", token))
@@ -215,21 +203,12 @@ impl SpotifyController {
             .json(&serde_json::json!({}))
             .send()
             .await
-        {
-            Ok(r) => r,
-            Err(e) => {
-                error!("Failed to send pause request: {}", e);
-                return false;
-            }
-        };
+            .map_err(SpotifyError::from)?;
 
         let status = resp.status().as_u16();
-        let success = [200, 202, 204].contains(&status);
-
-        if !success {
-            error!("Failed to pause. Status code: {}", status);
+        if ![200, 202, 204].contains(&status) {
+            return Err(SpotifyError::ApiError(status));
         }
-
-        success
+        Ok(())
     }
 }

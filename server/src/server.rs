@@ -164,8 +164,8 @@ pub async fn admin_input_loop(state: AppState) {
                                 if let Some(spotify) = &state.spotify {
                                     if let Some(uri) = song_uri {
                                         let mut ctrl = spotify.lock().unwrap().clone();
-                                        if !ctrl.play_track(&uri).await {
-                                            warn!("Could not start playback. Check Spotify setup.");
+                                        if let Err(e) = ctrl.play_track(&uri).await {
+                                            warn!("Could not start playback: {:?}", e);
                                         }
                                     }
                                 }
@@ -173,7 +173,9 @@ pub async fn admin_input_loop(state: AppState) {
                             GameState::Score => {
                                 if let Some(spotify) = &state.spotify {
                                     let mut ctrl = spotify.lock().unwrap().clone();
-                                    let _ = ctrl.pause().await;
+                                    if let Err(e) = ctrl.pause().await {
+                                        warn!("Could not pause playback: {:?}", e);
+                                    }
                                 }
                             }
                         }

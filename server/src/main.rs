@@ -9,14 +9,14 @@ use tower_http::services::ServeDir;
 use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-mod game; // GameLobby + Player
-mod models; // Shared structs/data, CSV loader
+mod game;
+mod models;
 mod server;
-mod spotify; // SpotifyController // WS + admin console logic
+mod spotify;
 
 use crate::game::GameLobby;
 use crate::server::{admin_input_loop, ws_handler};
-use crate::spotify::SpotifyController;
+use crate::spotify::{SpotifyController, SpotifyError};
 
 #[derive(Parser, Debug)]
 pub struct Args {
@@ -54,25 +54,29 @@ async fn main() {
 
     let spotify_controller = if !args.no_spotify {
         match SpotifyController::new().await {
-            Some(ctrl) => {
+            Ok(ctrl) => {
                 let mut c2 = ctrl.clone();
                 match c2.get_active_device().await {
-                    None => {
-                        error!("No active Spotify device found at startup.");
-                        std::process::exit(1);
-                    }
-                    Some(dev) => {
+                    Ok(dev) => {
                         let device_name = dev
                             .get("name")
                             .and_then(|v| v.as_str())
                             .unwrap_or("Unknown Device");
                         info!("Found active Spotify device: {}", device_name);
+                        Some(Arc::new(Mutex::new(ctrl)))
+                    }
+                    Err(SpotifyError::NoActiveDevice) => {
+                        error!("No active Spotify device found at startup.");
+                        std::process::exit(1);
+                    }
+                    Err(e) => {
+                        error!("Failed to get active device: {}. Exiting.", e);
+                        std::process::exit(1);
                     }
                 }
-                Some(Arc::new(Mutex::new(ctrl)))
             }
-            None => {
-                error!("Spotify integration failed to initialize. Exiting.");
+            Err(e) => {
+                error!("Spotify integration failed to initialize: {}. Exiting.", e);
                 std::process::exit(1);
             }
         }
