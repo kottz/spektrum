@@ -195,7 +195,6 @@ async fn handle_socket(socket: WebSocket, handle: GameHandle, is_admin: bool) {
                     );
                 }
 
-                // Common actions or invalid messages
                 _ => {
                     send_message(
                         &tx,
@@ -208,7 +207,6 @@ async fn handle_socket(socket: WebSocket, handle: GameHandle, is_admin: bool) {
         }
     }
 
-    // Cleanup when connection ends
     if let Some(name) = player_name {
         if !is_admin {
             handle.remove_player(name).await.ok();
@@ -257,20 +255,26 @@ async fn handle_spotify_state(
     state: &GameState,
     current_song: Option<Song>,
 ) {
-    if let Some(spotify) = spotify {
-        let mut ctrl = spotify.lock().await.clone();
+    if let Some(spotify) = spotify.clone() {
         match state {
             GameState::Question => {
                 if let Some(song) = current_song {
-                    if let Err(e) = ctrl.play_track(&song.uri).await {
-                        warn!("Could not start playback: {:?}", e);
-                    }
+                    let song_uri = song.uri.clone();
+                    tokio::spawn(async move {
+                        let mut ctrl = spotify.lock().await.clone();
+                        if let Err(e) = ctrl.play_track(&song_uri).await {
+                            warn!("Could not start playback: {:?}", e);
+                        }
+                    });
                 }
             }
             GameState::Score => {
-                if let Err(e) = ctrl.pause().await {
-                    warn!("Could not pause playback: {:?}", e);
-                }
+                tokio::spawn(async move {
+                    let mut ctrl = spotify.lock().await.clone();
+                    if let Err(e) = ctrl.pause().await {
+                        warn!("Could not pause playback: {:?}", e);
+                    }
+                });
             }
         }
     }
