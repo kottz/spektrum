@@ -1,7 +1,6 @@
 use csv::ReaderBuilder;
 use serde::{Deserialize, Serialize};
 
-
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct ColorDef {
     pub name: String,
@@ -27,7 +26,8 @@ pub struct ClientMessage {
 #[derive(Serialize)]
 pub struct PlayerAnsweredMsg {
     pub action: String,
-    pub playerName: String,
+    #[serde(rename = "playerName")]
+    pub player_name: String,
     pub correct: bool,
 }
 
@@ -36,7 +36,8 @@ pub struct ColorResult {
     pub action: String,
     pub correct: bool,
     pub score: i32,
-    pub totalScore: i32,
+    #[serde(rename = "totalScore")]
+    pub total_score: i32,
 }
 
 #[derive(Serialize)]
@@ -55,19 +56,25 @@ pub struct GameStateMsg {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub leaderboard: Option<Vec<LeaderboardEntry>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub roundTimeLeft: Option<u64>,
-    pub hasAnswered: bool,
+    #[serde(rename = "roundTimeLeft")]
+    pub round_time_left: Option<u64>,
+    #[serde(rename = "hasAnswered")]
+    pub has_answered: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub answer: Option<String>,
-    pub answeredCount: usize,
-    pub totalPlayers: usize,
+    #[serde(rename = "answeredCount")]
+    pub answered_count: usize,
+    #[serde(rename = "totalPlayers")]
+    pub total_players: usize,
 }
 
 #[derive(Serialize)]
 pub struct UpdateAnswerCount {
     pub action: String,
-    pub answeredCount: usize,
-    pub totalPlayers: usize,
+    #[serde(rename = "answeredCount")]
+    pub answered_count: usize,
+    #[serde(rename = "totalPlayers")]
+    pub total_players: usize,
 }
 
 pub fn load_songs_from_csv(filepath: &str) -> Vec<Song> {

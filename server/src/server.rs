@@ -65,7 +65,7 @@ async fn handle_ws(mut socket: WebSocket, state: AppState) {
                                         action: "color_result".to_string(),
                                         correct,
                                         score: new_score,
-                                        totalScore: total_score,
+                                        total_score,
                                     };
                                     let json_msg = serde_json::to_string(&response).unwrap();
                                     tx.send(json_msg).ok();
@@ -224,11 +224,11 @@ async fn send_game_state(state: &AppState, player_name: &str) {
                 None
             },
             leaderboard: lb,
-            roundTimeLeft: round_time_left,
-            hasAnswered: player.has_answered,
+            round_time_left,
+            has_answered: player.has_answered,
             answer: player.answer.clone(),
-            answeredCount: answered_count,
-            totalPlayers: total,
+            answered_count,
+            total_players: total,
         };
         let json_msg = serde_json::to_string(&gm).unwrap();
         (json_msg, player.tx.clone())
@@ -253,8 +253,8 @@ async fn broadcast_answer_count(state: &AppState) {
     };
     let msg = UpdateAnswerCount {
         action: "update_answer_count".into(),
-        answeredCount: answered,
-        totalPlayers: total,
+        answered_count: answered,
+        total_players: total,
     };
     let json_msg = serde_json::to_string(&msg).unwrap();
 
@@ -267,7 +267,7 @@ async fn broadcast_answer_count(state: &AppState) {
 async fn broadcast_player_answered(state: &AppState, player_name: &str, is_correct: bool) {
     let msg = PlayerAnsweredMsg {
         action: "player_answered".to_string(),
-        playerName: player_name.to_string(),
+        player_name: player_name.to_string(),
         correct: is_correct,
     };
     let json_msg = serde_json::to_string(&msg).unwrap();
