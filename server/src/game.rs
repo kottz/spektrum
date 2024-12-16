@@ -401,7 +401,7 @@ impl GameCore {
                             round_colors: self.round_colors.clone(),
                             round_time_left: self
                                 .round_start_time
-                                .map(|start| self.round_duration - start.elapsed().as_secs()),
+                                .map(|start| self.round_duration.saturating_sub(start.elapsed().as_secs())),
                             current_song: self.current_song.clone(),
                             correct_colors: self.correct_colors.clone(),
                         })
