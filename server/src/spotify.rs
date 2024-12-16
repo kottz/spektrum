@@ -190,6 +190,7 @@ impl SpotifyController {
         if !self._check_token().await {
             return false;
         }
+
         let active_device = match self.get_active_device().await {
             Some(d) => d,
             None => {
@@ -197,26 +198,38 @@ impl SpotifyController {
                 return false;
             }
         };
+
         let device_id = match active_device.get("id").and_then(|v| v.as_str()) {
             Some(id) => id,
             None => return false,
         };
+
         let token = self.token.clone().unwrap_or_default();
-        let url = format!(
-            "https://api.spotify.com/v1/me/player/pause?device_id={}",
-            device_id
-        );
 
         let resp = match self
             .client
-            .put(&url)
+            .put("https://api.spotify.com/v1/me/player/pause")
             .header("Authorization", format!("Bearer {}", token))
+            .header("Content-Type", "application/json")
+            .query(&[("device_id", device_id)])
+            .json(&serde_json::json!({}))
             .send()
             .await
         {
             Ok(r) => r,
-            Err(_) => return false,
+            Err(e) => {
+                error!("Failed to send pause request: {}", e);
+                return false;
+            }
         };
-        [204, 202].contains(&resp.status().as_u16())
+
+        let status = resp.status().as_u16();
+        let success = [200, 202, 204].contains(&status);
+
+        if !success {
+            error!("Failed to pause. Status code: {}", status);
+        }
+
+        success
     }
 }
