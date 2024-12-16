@@ -3,7 +3,7 @@ use base64::Engine;
 use reqwest::Client;
 use serde_json::Value;
 use std::time::{Duration, SystemTime};
-use tracing::{error, info, warn};
+use tracing::{error, warn};
 
 #[derive(Clone)]
 pub struct SpotifyController {

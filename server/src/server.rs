@@ -2,7 +2,6 @@ use axum::extract::{
     ws::{Message, WebSocket, WebSocketUpgrade},
     State,
 };
-use futures_util::{SinkExt, StreamExt};
 use tokio::{
     io::{self, AsyncBufReadExt, BufReader},
     sync::mpsc,
@@ -173,11 +172,7 @@ fn calc_time_left(lobby: &GameLobby) -> u64 {
     if let Some(start) = lobby.round_start_time {
         let elapsed_ms = start.elapsed().as_millis() as u64;
         let total_ms = lobby.round_duration * 1000;
-        if elapsed_ms >= total_ms {
-            0
-        } else {
-            total_ms - elapsed_ms
-        }
+        total_ms.saturating_sub(elapsed_ms)
     } else {
         0
     }

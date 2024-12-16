@@ -84,30 +84,28 @@ pub fn load_songs_from_csv(filepath: &str) -> Vec<Song> {
         .unwrap();
 
     let mut songs = Vec::new();
-    for result in rdr.records() {
-        if let Ok(record) = result {
-            if record.len() < 5 {
-                continue;
-            }
-            let id = record[0].parse().unwrap_or(0);
-            let song_name = record[1].trim().to_string();
-            let artist = record[2].trim().to_string();
-            let uri = record[3].trim().to_string();
-            let colors_str = record[4].trim().to_string();
-            let color_list: Vec<String> = colors_str
-                .split(';')
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty())
-                .collect();
-
-            songs.push(Song {
-                id,
-                song_name,
-                artist,
-                uri,
-                colors: color_list,
-            });
+    for record in rdr.records().flatten() {
+        if record.len() < 5 {
+            continue;
         }
+        let id = record[0].parse().unwrap_or(0);
+        let song_name = record[1].trim().to_string();
+        let artist = record[2].trim().to_string();
+        let uri = record[3].trim().to_string();
+        let colors_str = record[4].trim().to_string();
+        let color_list: Vec<String> = colors_str
+            .split(';')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        songs.push(Song {
+            id,
+            song_name,
+            artist,
+            uri,
+            colors: color_list,
+        });
     }
     songs
 }

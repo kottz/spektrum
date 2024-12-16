@@ -6,7 +6,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tower_http::services::ServeDir;
-use tracing::{debug, error, info};
+use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod game; // GameLobby + Player

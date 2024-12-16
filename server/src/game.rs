@@ -1,7 +1,7 @@
 use rand::seq::SliceRandom;
 use std::{
     collections::{HashMap, HashSet},
-    time::{Duration, Instant},
+    time::Instant,
 };
 use tokio::sync::mpsc;
 use tracing::{info, warn};
