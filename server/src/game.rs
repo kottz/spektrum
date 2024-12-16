@@ -1,33 +1,11 @@
 use rand::seq::SliceRandom;
-use std::{
-    collections::{HashMap, HashSet},
-    time::Instant,
-};
-use tokio::sync::mpsc;
+use std::collections::{HashMap, HashSet};
+use std::time::Instant;
+use tokio::sync::{mpsc, oneshot};
 use tracing::{info, warn};
+use uuid::Uuid;
 
 use crate::models::{ColorDef, Song};
-
-#[derive(Clone)]
-pub struct Player {
-    pub name: String,
-    pub score: i32,
-    pub has_answered: bool,
-    pub answer: Option<String>,
-    pub tx: mpsc::UnboundedSender<String>,
-}
-
-impl Player {
-    pub fn new(name: &str, tx: mpsc::UnboundedSender<String>) -> Self {
-        Self {
-            name: name.to_string(),
-            score: 0,
-            has_answered: false,
-            answer: None,
-            tx,
-        }
-    }
-}
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum GameState {
@@ -47,27 +25,225 @@ pub enum GameError {
     InvalidGameState,
     #[error("Round already in progress")]
     RoundInProgress,
+    #[error("Channel send error")]
+    ChannelError,
+    #[error("Lobby not found: {0}")]
+    LobbyNotFound(String),
 }
 
-pub type GameResult<T> = Result<T, GameError>;
+#[derive(Debug)]
+pub enum GameCommand {
+    AddPlayer {
+        name: String,
+        tx: mpsc::UnboundedSender<String>,
+        reply: oneshot::Sender<Result<(), GameError>>,
+    },
+    RemovePlayer {
+        name: String,
+    },
+    AnswerColor {
+        player_name: String,
+        color: String,
+        reply: oneshot::Sender<Result<(bool, i32), GameError>>,
+    },
+    ToggleState {
+        specified_colors: Option<Vec<String>>,
+        reply: oneshot::Sender<Result<GameState, GameError>>,
+    },
+    GetState {
+        reply: oneshot::Sender<GameStateSnapshot>,
+    },
+    UpdateLobbyName {
+        name: String,
+        reply: oneshot::Sender<Result<(), GameError>>,
+    },
+    Broadcast {
+        message: String,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub enum GameEvent {
+    PlayerJoined {
+        name: String,
+    },
+    PlayerLeft {
+        name: String,
+    },
+    ColorSelected {
+        player: String,
+        correct: bool,
+        score: i32,
+    },
+    StateChanged {
+        state: GameState,
+        colors: Option<Vec<ColorDef>>,
+        current_song: Option<Song>,
+    },
+    RoundEnded,
+    NameUpdated {
+        name: String,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub struct GameStateSnapshot {
+    pub id: Uuid,
+    pub name: Option<String>,
+    pub state: GameState,
+    pub players: HashMap<String, PlayerSnapshot>,
+    pub round_colors: Vec<ColorDef>,
+    pub round_time_left: Option<u64>,
+    pub current_song: Option<Song>,
+    pub correct_colors: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PlayerSnapshot {
+    pub name: String,
+    pub score: i32,
+    pub has_answered: bool,
+    pub answer: Option<String>,
+    pub tx: mpsc::UnboundedSender<String>,
+}
 
 #[derive(Clone)]
-pub struct GameLobby {
-    pub name: String,
-    pub players: HashMap<String, Player>,
-    pub all_colors: Vec<ColorDef>,
-    pub round_colors: Vec<ColorDef>,
-    pub correct_colors: Vec<String>,
-    pub state: GameState,
-    pub round_start_time: Option<Instant>,
-    pub round_duration: u64,
-    pub songs: Vec<Song>,
-    pub used_songs: HashSet<String>,
-    pub current_song: Option<Song>,
+struct Player {
+    name: String,
+    score: i32,
+    has_answered: bool,
+    answer: Option<String>,
+    tx: mpsc::UnboundedSender<String>,
 }
 
-impl GameLobby {
-    pub fn new(name: String, songs: Vec<Song>) -> Self {
+impl Player {
+    fn new(name: &str, tx: mpsc::UnboundedSender<String>) -> Self {
+        Self {
+            name: name.to_string(),
+            score: 0,
+            has_answered: false,
+            answer: None,
+            tx,
+        }
+    }
+
+    fn to_snapshot(&self) -> PlayerSnapshot {
+        PlayerSnapshot {
+            name: self.name.clone(),
+            score: self.score,
+            has_answered: self.has_answered,
+            answer: self.answer.clone(),
+            tx: self.tx.clone(),
+        }
+    }
+}
+
+pub struct GameCore {
+    id: Uuid,
+    name: Option<String>,
+    players: HashMap<String, Player>,
+    all_colors: Vec<ColorDef>,
+    round_colors: Vec<ColorDef>,
+    correct_colors: Vec<String>,
+    state: GameState,
+    round_start_time: Option<Instant>,
+    round_duration: u64,
+    songs: Vec<Song>,
+    used_songs: HashSet<String>,
+    current_song: Option<Song>,
+}
+
+#[derive(Clone)]
+pub struct GameHandle {
+    id: Uuid,
+    tx: mpsc::UnboundedSender<GameCommand>,
+}
+
+impl GameHandle {
+    pub fn id(&self) -> Uuid {
+        self.id
+    }
+
+    pub async fn add_player(
+        &self,
+        name: String,
+        tx: mpsc::UnboundedSender<String>,
+    ) -> Result<(), GameError> {
+        let (reply_tx, reply_rx) = oneshot::channel();
+        self.tx
+            .send(GameCommand::AddPlayer {
+                name,
+                tx,
+                reply: reply_tx,
+            })
+            .map_err(|_| GameError::ChannelError)?;
+        reply_rx.await.map_err(|_| GameError::ChannelError)?
+    }
+
+    pub async fn remove_player(&self, name: String) -> Result<(), GameError> {
+        self.tx
+            .send(GameCommand::RemovePlayer { name })
+            .map_err(|_| GameError::ChannelError)
+    }
+
+    pub async fn answer_color(
+        &self,
+        player_name: String,
+        color: String,
+    ) -> Result<(bool, i32), GameError> {
+        let (reply_tx, reply_rx) = oneshot::channel();
+        self.tx
+            .send(GameCommand::AnswerColor {
+                player_name,
+                color,
+                reply: reply_tx,
+            })
+            .map_err(|_| GameError::ChannelError)?;
+        reply_rx.await.map_err(|_| GameError::ChannelError)?
+    }
+
+    pub async fn toggle_state(
+        &self,
+        specified_colors: Option<Vec<String>>,
+    ) -> Result<GameState, GameError> {
+        let (reply_tx, reply_rx) = oneshot::channel();
+        self.tx
+            .send(GameCommand::ToggleState {
+                specified_colors,
+                reply: reply_tx,
+            })
+            .map_err(|_| GameError::ChannelError)?;
+        reply_rx.await.map_err(|_| GameError::ChannelError)?
+    }
+
+    pub async fn update_name(&self, name: String) -> Result<(), GameError> {
+        let (reply_tx, reply_rx) = oneshot::channel();
+        self.tx
+            .send(GameCommand::UpdateLobbyName {
+                name,
+                reply: reply_tx,
+            })
+            .map_err(|_| GameError::ChannelError)?;
+        reply_rx.await.map_err(|_| GameError::ChannelError)?
+    }
+
+    pub async fn get_state(&self) -> Result<GameStateSnapshot, GameError> {
+        let (reply_tx, reply_rx) = oneshot::channel();
+        self.tx
+            .send(GameCommand::GetState { reply: reply_tx })
+            .map_err(|_| GameError::ChannelError)?;
+        Ok(reply_rx.await.map_err(|_| GameError::ChannelError)?)
+    }
+
+    pub async fn broadcast(&self, message: String) -> Result<(), GameError> {
+        self.tx
+            .send(GameCommand::Broadcast { message })
+            .map_err(|_| GameError::ChannelError)
+    }
+}
+
+impl GameCore {
+    pub fn new(id: Uuid, name: Option<String>, songs: Vec<Song>) -> Self {
         let all_colors = vec![
             ColorDef {
                 name: "Red".into(),
@@ -124,6 +300,7 @@ impl GameLobby {
         ];
 
         Self {
+            id,
             name,
             players: HashMap::new(),
             all_colors,
@@ -138,59 +315,116 @@ impl GameLobby {
         }
     }
 
-    pub fn add_player(&mut self, name: &str, tx: mpsc::UnboundedSender<String>) {
-        if !self.players.contains_key(name) {
-            self.players.insert(name.to_string(), Player::new(name, tx));
-        }
+    pub fn spawn(
+        name: Option<String>,
+        songs: Vec<Song>,
+    ) -> (GameHandle, mpsc::UnboundedReceiver<GameEvent>) {
+        let id = Uuid::new_v4();
+        let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
+        let (event_tx, event_rx) = mpsc::unbounded_channel();
+
+        let mut core = GameCore::new(id, name, songs);
+
+        tokio::spawn(async move {
+            core.run(cmd_rx, event_tx).await;
+        });
+
+        (GameHandle { id, tx: cmd_tx }, event_rx)
     }
 
-    pub fn remove_player(&mut self, name: &str) {
-        self.players.remove(name);
-    }
-
-    pub fn get_answer_count(&self) -> (usize, usize) {
-        let answered = self.players.values().filter(|p| p.has_answered).count();
-        let total = self.players.len();
-        (answered, total)
-    }
-
-    pub fn toggle_state(&mut self, specified_colors: Option<Vec<String>>) -> GameResult<GameState> {
-        match self.state {
-            GameState::Score => {
-                self.start_new_round(specified_colors)?;
-                Ok(self.state.clone())
+    async fn run(
+        &mut self,
+        mut cmd_rx: mpsc::UnboundedReceiver<GameCommand>,
+        event_tx: mpsc::UnboundedSender<GameEvent>,
+    ) {
+        while let Some(cmd) = cmd_rx.recv().await {
+            match cmd {
+                GameCommand::AddPlayer { name, tx, reply } => {
+                    if !self.players.contains_key(&name) {
+                        self.players.insert(name.clone(), Player::new(&name, tx));
+                        event_tx
+                            .send(GameEvent::PlayerJoined { name: name.clone() })
+                            .ok();
+                        reply.send(Ok(())).ok();
+                    }
+                }
+                GameCommand::RemovePlayer { name } => {
+                    if self.players.remove(&name).is_some() {
+                        event_tx.send(GameEvent::PlayerLeft { name }).ok();
+                    }
+                }
+                GameCommand::AnswerColor {
+                    player_name,
+                    color,
+                    reply,
+                } => {
+                    let result = self.check_answer(&player_name, &color);
+                    if let Ok((correct, score)) = result {
+                        event_tx
+                            .send(GameEvent::ColorSelected {
+                                player: player_name,
+                                correct,
+                                score,
+                            })
+                            .ok();
+                    }
+                    reply.send(result).ok();
+                }
+                GameCommand::ToggleState {
+                    specified_colors,
+                    reply,
+                } => {
+                    let result = self.toggle_state(specified_colors);
+                    if let Ok(ref new_state) = result {
+                        event_tx
+                            .send(GameEvent::StateChanged {
+                                state: new_state.clone(),
+                                colors: Some(self.round_colors.clone()),
+                                current_song: self.current_song.clone(),
+                            })
+                            .ok();
+                    }
+                    reply.send(result).ok();
+                }
+                GameCommand::GetState { reply } => {
+                    reply
+                        .send(GameStateSnapshot {
+                            id: self.id,
+                            name: self.name.clone(),
+                            state: self.state.clone(),
+                            players: self
+                                .players
+                                .iter()
+                                .map(|(k, v)| (k.clone(), v.to_snapshot()))
+                                .collect(),
+                            round_colors: self.round_colors.clone(),
+                            round_time_left: self
+                                .round_start_time
+                                .map(|start| self.round_duration - start.elapsed().as_secs()),
+                            current_song: self.current_song.clone(),
+                            correct_colors: self.correct_colors.clone(),
+                        })
+                        .ok();
+                }
+                GameCommand::UpdateLobbyName { name, reply } => {
+                    self.name = Some(name.clone());
+                    event_tx.send(GameEvent::NameUpdated { name }).ok();
+                    reply.send(Ok(())).ok();
+                }
+                GameCommand::Broadcast { message } => {
+                    for player in self.players.values() {
+                        player.tx.send(message.clone()).ok();
+                    }
+                }
             }
-            GameState::Question => {
-                self.end_round();
-                Ok(self.state.clone())
-            }
         }
     }
 
-    pub fn start_new_round(&mut self, specified_colors: Option<Vec<String>>) -> GameResult<()> {
-        self.select_round_colors(specified_colors)?;
-        self.round_start_time = Some(Instant::now());
-        self.state = GameState::Question;
-        for p in self.players.values_mut() {
-            p.has_answered = false;
-            p.answer = None;
-        }
-        Ok(())
-    }
-
-    pub fn end_round(&mut self) {
-        if let Some(song) = &self.current_song {
-            self.used_songs.insert(song.uri.clone());
-        }
-        self.current_song = None;
-        self.state = GameState::Score;
-    }
-
-    pub fn all_players_answered(&self) -> bool {
-        self.players.values().all(|p| p.has_answered)
-    }
-
-    pub fn check_answer(&mut self, player_name: &str, color_name: &str) -> GameResult<(bool, i32)> {
+    pub fn check_answer(
+        &mut self,
+        player_name: &str,
+        color_name: &str,
+    ) -> Result<(bool, i32), GameError> {
         if let GameState::Question = self.state {
             let player = self
                 .players
@@ -233,7 +467,45 @@ impl GameLobby {
         }
     }
 
-    pub fn select_round_colors(&mut self, specified_colors: Option<Vec<String>>) -> GameResult<()> {
+    pub fn toggle_state(
+        &mut self,
+        specified_colors: Option<Vec<String>>,
+    ) -> Result<GameState, GameError> {
+        match self.state {
+            GameState::Score => {
+                self.start_new_round(specified_colors)?;
+                Ok(self.state.clone())
+            }
+            GameState::Question => {
+                self.end_round();
+                Ok(self.state.clone())
+            }
+        }
+    }
+
+    fn start_new_round(&mut self, specified_colors: Option<Vec<String>>) -> Result<(), GameError> {
+        self.select_round_colors(specified_colors)?;
+        self.round_start_time = Some(Instant::now());
+        self.state = GameState::Question;
+        for p in self.players.values_mut() {
+            p.has_answered = false;
+            p.answer = None;
+        }
+        Ok(())
+    }
+
+    fn end_round(&mut self) {
+        if let Some(song) = &self.current_song {
+            self.used_songs.insert(song.uri.clone());
+        }
+        self.current_song = None;
+        self.state = GameState::Score;
+    }
+
+    fn select_round_colors(
+        &mut self,
+        specified_colors: Option<Vec<String>>,
+    ) -> Result<(), GameError> {
         self.round_colors.clear();
         self.correct_colors.clear();
 
@@ -243,7 +515,7 @@ impl GameLobby {
         }
     }
 
-    fn select_specified_colors(&mut self, colors: Vec<String>) -> GameResult<()> {
+    fn select_specified_colors(&mut self, colors: Vec<String>) -> Result<(), GameError> {
         let chosen_correct_colors: Vec<_> = colors
             .iter()
             .filter_map(|c| {
@@ -261,7 +533,7 @@ impl GameLobby {
         self.setup_round_colors(chosen_correct_colors)
     }
 
-    fn select_random_colors(&mut self) -> GameResult<()> {
+    fn select_random_colors(&mut self) -> Result<(), GameError> {
         let available_songs: Vec<_> = self
             .songs
             .iter()
@@ -296,7 +568,10 @@ impl GameLobby {
         self.setup_round_colors(chosen_correct_colors)
     }
 
-    fn setup_round_colors(&mut self, chosen_correct_colors: Vec<ColorDef>) -> GameResult<()> {
+    fn setup_round_colors(
+        &mut self,
+        chosen_correct_colors: Vec<ColorDef>,
+    ) -> Result<(), GameError> {
         self.round_colors.extend(chosen_correct_colors.clone());
         self.correct_colors = chosen_correct_colors
             .iter()

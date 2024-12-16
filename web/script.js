@@ -1,5 +1,6 @@
-let socket = new WebSocket('ws://192.168.1.155:8765/ws');
+let socket = null;
 let playerName = '';
+let currentLobbyId = null;
 let roundStartTime;
 let roundDuration;
 let timerInterval;
@@ -8,27 +9,145 @@ let playerAnswer = null;
 let colors = [];
 let answeredPlayers = [];
 let totalPlayers = 0;
+// const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+// const wsUrl = `${wsProtocol}//${window.location.host}/ws?lobby=${lobbyId}`;
+// socket = new WebSocket(wsUrl);
 
-socket.onmessage = function(event) {
-    const data = JSON.parse(event.data);
-    if (data.action === 'game_state') {
-        handleGameState(data);
-    } else if (data.action === 'color_result') {
-        handleColorResult(data);
-    } else if (data.action === 'update_answer_count') {
-        updateAnswerStatus(data.answeredCount, data.totalPlayers);
-    } else if (data.action === 'player_answered') {
-        handlePlayerAnswer(data.playerName, data.correct);
+// Lobby Management Functions
+async function createLobby() {
+    const lobbyName = document.getElementById('newLobbyName').value;
+    try {
+        const response = await fetch('/api/lobbies', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                name: lobbyName || null // Send null if no name provided
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to create lobby');
+        }
+
+        const lobby = await response.json();
+        showJoinForm(lobby.id, lobby.name || 'Unnamed Lobby');
+    } catch (error) {
+        console.error('Error creating lobby:', error);
+        alert('Failed to create lobby. Please try again.');
     }
-};
+}
+
+function showJoinForm(lobbyId, lobbyName) {
+    currentLobbyId = lobbyId;
+    document.getElementById('lobbySelection').style.display = 'none';
+    document.getElementById('selectedLobbyName').textContent = lobbyName;
+    document.getElementById('joinForm').style.display = 'block';
+}
+
+
+function connectToLobby(lobbyId) {
+    if (socket) {
+        socket.close();
+    }
+
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProtocol}//${window.location.host}/ws?lobby=${lobbyId}`;
+    socket = new WebSocket(wsUrl);
+
+    socket.onopen = function() {
+        socket.send(JSON.stringify({
+            action: 'join',
+            name: playerName
+        }));
+        document.getElementById('joinForm').style.display = 'none';
+        document.getElementById('lobbyInfo').style.display = 'block';
+    };
+
+    setupWebSocketHandlers();
+}
+
+function setupWebSocketHandlers() {
+    socket.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        switch (data.action) {
+            case 'game_state':
+                handleGameState(data);
+                break;
+            case 'color_result':
+                handleColorResult(data);
+                break;
+            case 'update_answer_count':
+                updateAnswerStatus(data.answered_count, data.total_players);
+                break;
+            case 'player_answered':
+                handlePlayerAnswer(data.player_name, data.correct);
+                break;
+            case 'error':
+                handleError(data.message);
+                break;
+        }
+    };
+
+    socket.onclose = function(event) {
+        console.log('WebSocket connection closed. Attempting to reconnect...');
+        setTimeout(() => {
+            if (currentLobbyId && playerName) {
+                connectToLobby(currentLobbyId);
+                socket.onopen = function() {
+                    socket.send(JSON.stringify({
+                        action: 'join',
+                        name: playerName
+                    }));
+                };
+            }
+        }, 3000);
+    };
+
+    socket.onerror = function(error) {
+        console.error('WebSocket error:', error);
+    };
+}
 
 function joinLobby() {
     playerName = document.getElementById('playerName').value;
-    if (playerName) {
-        socket.send(JSON.stringify({ action: 'join', name: playerName }));
-        document.getElementById('joinForm').style.display = 'none';
-        document.getElementById('lobbyInfo').style.display = 'block';
+    if (!playerName) {
+        alert('Please enter your name');
+        return;
     }
+
+    if (!currentLobbyId) {
+        alert('No lobby selected');
+        return;
+    }
+
+    connectToLobby(currentLobbyId);
+}
+
+function leaveLobby() {
+    if (socket) {
+        socket.close();
+    }
+    currentLobbyId = null;
+    playerName = '';
+    document.getElementById('lobbyInfo').style.display = 'none';
+    document.getElementById('lobbySelection').style.display = 'block';
+    resetGameState();
+    initializeApp(); // Refresh lobby list
+}
+
+function resetGameState() {
+    hasAnswered = false;
+    playerAnswer = null;
+    colors = [];
+    answeredPlayers = [];
+    totalPlayers = 0;
+    stopTimer();
+    document.getElementById('colorButtons').innerHTML = '';
+    document.getElementById('leaderboard').innerHTML = '';
+    document.getElementById('roundResult').textContent = '';
+    document.getElementById('yourScore').textContent = '0';
 }
 
 function handleGameState(data) {
@@ -41,16 +160,16 @@ function handleGameState(data) {
         playerAnswer = data.answer;
         colors = data.colors;
         answeredPlayers = [];
-        totalPlayers = data.totalPlayers;
+        totalPlayers = data.total_players;
 
         createColorButtons(colors);
         document.getElementById('colorButtons').style.display = 'grid';
         document.getElementById('leaderboard').style.display = 'none';
         document.getElementById('roundResult').textContent = '';
         document.getElementById('answerStatusContainer').style.display = 'flex';
-        updateAnswerStatus(data.answeredCount, data.totalPlayers);
+        updateAnswerStatus(data.answered_count, data.total_players);
 
-        let timeLeftMs = data.roundTimeLeft || 0; // fallback if undefined
+        let timeLeftMs = data.round_time_left || 0;
         startTimer(timeLeftMs);
 
     } else if (data.state === 'score') {
@@ -80,21 +199,6 @@ function startTimer(timeLeftMs) {
 function stopTimer() {
     clearInterval(timerInterval);
     document.getElementById('timer').textContent = '';
-}
-
-function updateTimer() {
-    const now = Date.now();
-    const timeElapsed = now - roundStartTime;
-    const timeRemaining = roundDuration - timeElapsed;
-
-    if (timeRemaining <= 0) {
-        stopTimer();
-        document.getElementById('timer').textContent = 'Time\'s up!';
-        document.getElementById('colorButtons').style.display = 'none';
-    } else {
-        const secondsRemaining = (timeRemaining / 1000).toFixed(2);
-        document.getElementById('timer').textContent = `Time remaining: ${secondsRemaining}s`;
-    }
 }
 
 function updateYourScore(score) {
@@ -130,12 +234,11 @@ function selectColor(colorName) {
 }
 
 function handleColorResult(data) {
-    updateYourScore(data.totalScore);
+    updateYourScore(data.total_score);
     const resultText = data.correct ?
         `Correct! You earned ${data.score} points this round.` :
         `Wrong color. You earned 0 points this round.`;
     document.getElementById('roundResult').textContent = resultText;
-    stopTimer();
 }
 
 function updateAnswerStatus(answeredCount, totalPlayers) {
@@ -148,20 +251,14 @@ function updateAnswerStatus(answeredCount, totalPlayers) {
     answeredPlayers.forEach(p => {
         const playerSpan = document.createElement('span');
         playerSpan.className = 'answered-player';
-
-        if (p.correct) {
-            playerSpan.style.backgroundColor = '#35cf0e';
-        } else {
-            playerSpan.style.backgroundColor = '#cf0e22';
-        }
+        playerSpan.style.backgroundColor = p.correct ? '#35cf0e' : '#cf0e22';
         playerSpan.textContent = p.playerName;
-
         answeredPlayersElement.appendChild(playerSpan);
     });
 }
 
 function handlePlayerAnswer(playerName, correct) {
-    if (!answeredPlayers.includes(playerName)) {
+    if (!answeredPlayers.some(p => p.playerName === playerName)) {
         answeredPlayers.push({ playerName, correct });
         updateAnswerStatus(answeredPlayers.length, totalPlayers);
     }
@@ -171,7 +268,7 @@ function updateLeaderboard(players) {
     const leaderboard = document.getElementById('leaderboard');
     leaderboard.innerHTML = '<h2>Leaderboard</h2>';
     players.sort((a, b) => b.score - a.score);
-    const maxScore = players[0].score;
+    const maxScore = players.length > 0 ? players[0].score : 0;
 
     players.forEach((player, index) => {
         const playerItem = document.createElement('div');
@@ -186,7 +283,7 @@ function updateLeaderboard(players) {
 
         const progress = document.createElement('div');
         progress.className = 'progress';
-        const width = (player.score / maxScore) * 100;
+        const width = maxScore > 0 ? (player.score / maxScore) * 100 : 0;
         progress.style.width = `${width}%`;
 
         progressBar.appendChild(progress);
@@ -196,16 +293,53 @@ function updateLeaderboard(players) {
     });
 }
 
+function handleError(message) {
+    console.error('Error:', message);
+    alert(message);
+}
 
-// Reconnect logic
-socket.onclose = function(event) {
-    console.log('WebSocket connection closed. Attempting to reconnect...');
-    setTimeout(function() {
-        socket = new WebSocket('ws://192.168.1.155:8765/ws');
-        if (playerName) {
-            socket.onopen = function() {
-                socket.send(JSON.stringify({ action: 'join', name: playerName }));
-            };
+async function initializeApp() {
+    try {
+        const response = await fetch('/api/lobbies');
+        if (!response.ok) {
+            throw new Error('Failed to fetch lobbies');
         }
-    }, 3000);
-};
+        const lobbies = await response.json();
+        updateLobbyList(lobbies);
+    } catch (error) {
+        console.error('Error fetching lobbies:', error);
+        document.getElementById('lobbyList').innerHTML =
+            '<p class="error-message">Failed to load lobbies. Please try again later.</p>';
+    }
+}
+
+function updateLobbyList(lobbies) {
+    const lobbyList = document.getElementById('lobbyList');
+    lobbyList.innerHTML = '';
+
+    if (lobbies.length === 0) {
+        lobbyList.innerHTML = '<p>No active lobbies. Create one to get started!</p>';
+        return;
+    }
+
+    lobbies.forEach(lobby => {
+        const lobbyElement = document.createElement('div');
+        lobbyElement.className = 'lobby-item';
+        lobbyElement.innerHTML = `
+            <div class="lobby-info">
+                <span>${lobby.name || 'Unnamed Lobby'}</span>
+                <span>${lobby.player_count} players</span>
+            </div>
+            <button onclick="showJoinForm('${lobby.id}', '${lobby.name || 'Unnamed Lobby'}')">
+                Join
+            </button>
+        `;
+        lobbyList.appendChild(lobbyElement);
+    });
+}
+
+// Start the application
+document.addEventListener('DOMContentLoaded', initializeApp);
+
+// Refresh lobby list periodically
+setInterval(initializeApp, 10000);

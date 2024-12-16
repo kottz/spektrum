@@ -130,3 +130,74 @@ input[type="text"] {
     border-radius: 3px;
     font-size: 0.9em;
 }
+
+#lobbySelection {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+#createLobby, #joinExisting {
+    background-color: rgba(255, 255, 255, 0.1);
+    padding: 1.5rem;
+    border-radius: 10px;
+}
+
+.lobby-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.05);
+    padding: 1rem;
+    margin: 0.5rem 0;
+    border-radius: 5px;
+    transition: background-color 0.3s ease;
+}
+
+.lobby-item:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.lobby-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.lobby-info span:last-child {
+    font-size: 0.9em;
+    opacity: 0.7;
+}
+
+#lobbyHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.leave-button {
+    background-color: #ff3357;
+}
+
+.leave-button:hover {
+    background-color: #c71a3c;
+}
+
+#newLobbyName {
+    width: 100%;
+    margin-bottom: 1rem;
+}
+
+#lobbyList {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.error-message {
+    color: #ff3357;
+    margin: 1rem 0;
+    padding: 0.5rem;
+    background-color: rgba(255, 51, 87, 0.1);
+    border-radius: 5px;
+}

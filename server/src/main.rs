@@ -1,39 +1,36 @@
-use axum::{routing::any, Router};
+use axum::{
+    routing::{get, post},
+    Router,
+};
 use axum_server::Server;
 use clap::Parser;
-use std::{
-    net::SocketAddr,
-    sync::{Arc, Mutex},
-};
+use std::net::SocketAddr;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use tower_http::services::ServeDir;
 use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod game;
+mod game_manager;
 mod models;
 mod server;
 mod spotify;
 
-use crate::game::GameLobby;
-use crate::server::{admin_input_loop, ws_handler};
+use crate::game_manager::GameLobbyManager;
+use crate::server::{
+    create_lobby_handler, handle_lobby_events, list_lobbies_handler, ws_handler, ServerState,
+};
 use crate::spotify::{SpotifyController, SpotifyError};
 
 #[derive(Parser, Debug)]
 pub struct Args {
     #[arg(long)]
-    pub lobby: String,
+    pub songs_csv: String,
     #[arg(long, default_value_t = 8765)]
     pub port: u16,
-    #[arg(long)]
-    pub songs_csv: String,
     #[arg(long, default_value_t = false)]
     pub no_spotify: bool,
-}
-
-#[derive(Clone)]
-pub struct AppState {
-    pub lobby: Arc<Mutex<GameLobby>>,
-    pub spotify: Option<Arc<Mutex<SpotifyController>>>,
 }
 
 #[tokio::main]
@@ -47,10 +44,7 @@ async fn main() {
         .init();
 
     let args = Args::parse();
-
-    let songs = models::load_songs_from_csv(&args.songs_csv);
-    let lobby = GameLobby::new(args.lobby.clone(), songs);
-    info!("Created lobby: {}", args.lobby);
+    let game_manager = Arc::new(GameLobbyManager::new());
 
     let spotify_controller = if !args.no_spotify {
         match SpotifyController::new().await {
@@ -85,20 +79,37 @@ async fn main() {
         None
     };
 
-    let state = AppState {
-        lobby: Arc::new(Mutex::new(lobby)),
+    let songs = Arc::new(models::load_songs_from_csv(&args.songs_csv));
+    let state = Arc::new(ServerState {
+        game_manager,
         spotify: spotify_controller,
-    };
+        songs: songs.clone(),
+    });
+
+    // // Create a default lobby if desired
+    // {
+    //     let state = state.clone();
+    //     if let Ok((handle, events)) = state
+    //         .game_manager
+    //         .create_lobby(Some("Default Lobby".to_string()), songs.clone())
+    //         .await
+    //     {
+    //         let spotify = state.spotify.clone();
+    //         tokio::spawn(async move {
+    //             handle_lobby_events(handle, events, spotify).await;
+    //         });
+    //         info!("Created default lobby");
+    //     }
+    // }
 
     let app = Router::new()
-        .route("/ws", any(ws_handler))
-        .fallback_service(ServeDir::new("./assets").append_index_html_on_directories(true))
-        .with_state(state.clone());
-
-    let admin_state = state.clone();
-    tokio::spawn(async move {
-        admin_input_loop(admin_state).await;
-    });
+        .route("/ws", get(ws_handler))
+        .route(
+            "/api/lobbies",
+            get(list_lobbies_handler).post(create_lobby_handler),
+        )
+        .fallback_service(ServeDir::new("../web").append_index_html_on_directories(true))
+        .with_state(state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], args.port));
     info!("Starting server on http://{}", addr);

@@ -11,11 +11,34 @@
 <body>
 	<div class="container">
 		<h1>Color Game</h1>
-		<div id="joinForm">
-			<input type="text" id="playerName" placeholder="Enter your name">
-			<button onclick="joinLobby()">Join Lobby</button>
+
+		<!-- Lobby Selection Screen -->
+		<div id="lobbySelection">
+			<div id="createLobby">
+				<h2>Create New Lobby</h2>
+				<input type="text" id="newLobbyName" placeholder="Enter lobby name (optional)">
+				<button onclick="createLobby()">Create Lobby</button>
+			</div>
+
+			<div id="joinExisting">
+				<h2>Join Lobby</h2>
+				<div id="lobbyList"></div>
+			</div>
 		</div>
+
+		<!-- Player Name Entry -->
+		<div id="joinForm" style="display: none;">
+			<h2>Join <span id="selectedLobbyName"></span></h2>
+			<input type="text" id="playerName" placeholder="Enter your name">
+			<button onclick="joinLobby()">Join Game</button>
+		</div>
+
+		<!-- Game Interface -->
 		<div id="lobbyInfo" style="display: none;">
+			<div id="lobbyHeader">
+				<h2>Lobby: <span id="currentLobbyName"></span></h2>
+				<button onclick="leaveLobby()" class="leave-button">Leave Lobby</button>
+			</div>
 			<div id="gameState"></div>
 			<div id="timer"></div>
 			<h2>Your Total Score: <span id="yourScore">0</span></h2>
@@ -30,7 +53,7 @@
 			<div id="leaderboard" style="display: none;"></div>
 		</div>
 	</div>
-	<script src="script.js?v=1.0"></script>
+	<script src="script.js"></script>
 </body>
 
 </html>
