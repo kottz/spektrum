@@ -18,9 +18,7 @@ mod server;
 mod spotify;
 
 use crate::game_manager::GameLobbyManager;
-use crate::server::{
-    create_lobby_handler, handle_lobby_events, list_lobbies_handler, ws_handler, ServerState,
-};
+use crate::server::{create_lobby_handler, list_lobbies_handler, ws_handler, ServerState};
 use crate::spotify::{SpotifyController, SpotifyError};
 
 #[derive(Parser, Debug)]
@@ -79,28 +77,19 @@ async fn main() {
         None
     };
 
-    let songs = Arc::new(models::load_songs_from_csv(&args.songs_csv));
+    let songs = match models::load_songs_from_csv(&args.songs_csv) {
+        Ok(songs) => Arc::new(songs),
+        Err(e) => {
+            error!("Failed to load songs from CSV: {}. Exiting.", e);
+            std::process::exit(1);
+        }
+    };
+
     let state = Arc::new(ServerState {
         game_manager,
         spotify: spotify_controller,
         songs: songs.clone(),
     });
-
-    // // Create a default lobby if desired
-    // {
-    //     let state = state.clone();
-    //     if let Ok((handle, events)) = state
-    //         .game_manager
-    //         .create_lobby(Some("Default Lobby".to_string()), songs.clone())
-    //         .await
-    //     {
-    //         let spotify = state.spotify.clone();
-    //         tokio::spawn(async move {
-    //             handle_lobby_events(handle, events, spotify).await;
-    //         });
-    //         info!("Created default lobby");
-    //     }
-    // }
 
     let app = Router::new()
         .route("/ws", get(ws_handler))
@@ -113,8 +102,8 @@ async fn main() {
 
     let addr = SocketAddr::from(([0, 0, 0, 0], args.port));
     info!("Starting server on http://{}", addr);
-    Server::bind(addr)
-        .serve(app.into_make_service())
-        .await
-        .unwrap();
+    if let Err(e) = Server::bind(addr).serve(app.into_make_service()).await {
+        error!("Failed to start server: {}. Exiting.", e);
+        std::process::exit(1);
+    }
 }

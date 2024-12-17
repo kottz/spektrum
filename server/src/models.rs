@@ -1,6 +1,7 @@
 use crate::game::GameState;
-use csv::ReaderBuilder;
+use csv::{Error as CsvError, ReaderBuilder, StringRecord};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use uuid::Uuid;
 
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -150,35 +151,53 @@ pub enum AdminResponse {
     Error { message: String },
 }
 
-pub fn load_songs_from_csv(filepath: &str) -> Vec<Song> {
+#[derive(Debug, Error)]
+pub enum ModelError {
+    #[error("CSV error: {0}")]
+    CsvError(#[from] CsvError),
+    #[error("Invalid CSV record: {0}")]
+    InvalidRecord(String),
+    #[error("Failed to parse song ID: {0}")]
+    ParseSongIdError(#[from] std::num::ParseIntError),
+    #[error("Invalid number of fields in the record. Expected 5, found {0}")]
+    InvalidFieldCount(usize),
+}
+
+pub fn load_songs_from_csv(filepath: &str) -> Result<Vec<Song>, ModelError> {
     let mut rdr = ReaderBuilder::new()
         .has_headers(false)
-        .from_path(filepath)
-        .unwrap();
+        .from_path(filepath)?;
 
     let mut songs = Vec::new();
-    for record in rdr.records().flatten() {
-        if record.len() < 5 {
-            continue;
+    for result in rdr.records() {
+        let record = result?;
+        if record.len() != 5 {
+            return Err(ModelError::InvalidFieldCount(record.len()));
         }
-        let id = record[0].parse().unwrap_or(0);
-        let song_name = record[1].trim().to_string();
-        let artist = record[2].trim().to_string();
-        let uri = record[3].trim().to_string();
-        let colors_str = record[4].trim().to_string();
-        let color_list: Vec<String> = colors_str
-            .split(';')
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect();
-
-        songs.push(Song {
-            id,
-            song_name,
-            artist,
-            uri,
-            colors: color_list,
-        });
+        let song = parse_song_record(&record)?;
+        songs.push(song);
     }
-    songs
+    Ok(songs)
+}
+
+fn parse_song_record(record: &StringRecord) -> Result<Song, ModelError> {
+    let id: u32 = record[0].parse()?;
+    let song_name = record[1].trim().to_string();
+    let artist = record[2].trim().to_string();
+    let uri = record[3].trim().to_string();
+    let colors_str = record[4].trim().to_string();
+
+    let color_list: Vec<String> = colors_str
+        .split(';')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    Ok(Song {
+        id,
+        song_name,
+        artist,
+        uri,
+        colors: color_list,
+    })
 }
