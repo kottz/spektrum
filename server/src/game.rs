@@ -343,15 +343,21 @@ impl GameCore {
                 GameCommand::AddPlayer { name, tx, reply } => {
                     if !self.players.contains_key(&name) {
                         self.players.insert(name.clone(), Player::new(&name, tx));
-                        event_tx
-                            .send(GameEvent::PlayerJoined { name: name.clone() })
-                            .ok();
-                        reply.send(Ok(())).ok();
+                        if let Err(e) =
+                            event_tx.send(GameEvent::PlayerJoined { name: name.clone() })
+                        {
+                            warn!("Failed to send PlayerJoined event: {:?}", e);
+                        }
+                        if let Err(e) = reply.send(Ok(())) {
+                            warn!("Failed to send reply for AddPlayer command: {:?}", e);
+                        }
                     }
                 }
                 GameCommand::RemovePlayer { name } => {
                     if self.players.remove(&name).is_some() {
-                        event_tx.send(GameEvent::PlayerLeft { name }).ok();
+                        if let Err(e) = event_tx.send(GameEvent::PlayerLeft { name }) {
+                            warn!("Failed to send PlayerLeft event: {:?}", e);
+                        }
                     }
                 }
                 GameCommand::AnswerColor {
@@ -361,15 +367,17 @@ impl GameCore {
                 } => {
                     let result = self.check_answer(&player_name, &color);
                     if let Ok((correct, score)) = result {
-                        event_tx
-                            .send(GameEvent::ColorSelected {
-                                player: player_name,
-                                correct,
-                                score,
-                            })
-                            .ok();
+                        if let Err(e) = event_tx.send(GameEvent::ColorSelected {
+                            player: player_name,
+                            correct,
+                            score,
+                        }) {
+                            warn!("Failed to send ColorSelected event: {:?}", e);
+                        }
                     }
-                    reply.send(result).ok();
+                    if let Err(e) = reply.send(result) {
+                        warn!("Failed to send reply for AnswerColor command: {:?}", e);
+                    }
                 }
                 GameCommand::ToggleState {
                     specified_colors,
@@ -377,48 +385,61 @@ impl GameCore {
                 } => {
                     let result = self.toggle_state(specified_colors);
                     if let Ok(ref new_state) = result {
-                        event_tx
-                            .send(GameEvent::StateChanged {
-                                state: new_state.clone(),
-                                colors: Some(self.round_colors.clone()),
-                                current_song: self.current_song.clone(),
-                            })
-                            .ok();
+                        if let Err(e) = event_tx.send(GameEvent::StateChanged {
+                            state: new_state.clone(),
+                            colors: Some(self.round_colors.clone()),
+                            current_song: self.current_song.clone(),
+                        }) {
+                            warn!("Failed to send StateChanged event: {:?}", e);
+                        }
                     }
-                    reply.send(result).ok();
+                    if let Err(e) = reply.send(result) {
+                        warn!("Failed to send reply for ToggleState command: {:?}", e);
+                    }
                 }
                 GameCommand::GetState { reply } => {
-                    reply
-                        .send(GameStateSnapshot {
-                            id: self.id,
-                            name: self.name.clone(),
-                            state: self.state.clone(),
-                            players: self
-                                .players
-                                .iter()
-                                .map(|(k, v)| (k.clone(), v.to_snapshot()))
-                                .collect(),
-                            round_colors: self.round_colors.clone(),
-                            round_time_left: self
-                                .round_start_time
-                                .map(|start| self.round_duration.saturating_sub(start.elapsed().as_secs())),
-                            current_song: self.current_song.clone(),
-                            correct_colors: self.correct_colors.clone(),
-                        })
-                        .ok();
+                    if let Err(e) = reply.send(GameStateSnapshot {
+                        id: self.id,
+                        name: self.name.clone(),
+                        state: self.state.clone(),
+                        players: self
+                            .players
+                            .iter()
+                            .map(|(k, v)| (k.clone(), v.to_snapshot()))
+                            .collect(),
+                        round_colors: self.round_colors.clone(),
+                        round_time_left: self.round_start_time.map(|start| {
+                            self.round_duration
+                                .saturating_sub(start.elapsed().as_secs())
+                        }),
+                        current_song: self.current_song.clone(),
+                        correct_colors: self.correct_colors.clone(),
+                    }) {
+                        warn!("Failed to send reply for GetState command: {:?}", e);
+                    }
                 }
                 GameCommand::UpdateLobbyName { name, reply } => {
                     self.name = Some(name.clone());
-                    event_tx.send(GameEvent::NameUpdated { name }).ok();
-                    reply.send(Ok(())).ok();
+                    if let Err(e) = event_tx.send(GameEvent::NameUpdated { name }) {
+                        warn!("Failed to send NameUpdated event: {:?}", e);
+                    }
+                    if let Err(e) = reply.send(Ok(())) {
+                        warn!("Failed to send reply for UpdateLobbyName command: {:?}", e);
+                    }
                 }
                 GameCommand::Broadcast { message } => {
                     for player in self.players.values() {
-                        player.tx.send(message.clone()).ok();
+                        if let Err(e) = player.tx.send(message.clone()) {
+                            warn!(
+                                "Failed to broadcast message to player {}: {:?}",
+                                player.name, e
+                            );
+                        }
                     }
                 }
             }
         }
+        info!("Game loop ended for game {}", self.id);
     }
 
     pub fn check_answer(
