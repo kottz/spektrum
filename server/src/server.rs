@@ -23,14 +23,35 @@ use crate::models::{
 };
 use crate::spotify::SpotifyController;
 
+#[derive(Debug)]
+enum ClientErrorMessage {
+    InvalidAction,
+    JoinFailed,
+    AnswerRejected,
+    GameStateFailed,
+    NotAuthorized,
+    InvalidInput,
+    ServerError,
+}
+
+impl ClientErrorMessage {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::InvalidAction => "This action is not allowed",
+            Self::JoinFailed => "Unable to join the game",
+            Self::AnswerRejected => "Your answer could not be processed",
+            Self::GameStateFailed => "Failed to update game state",
+            Self::NotAuthorized => "You are not authorized to perform this action",
+            Self::InvalidInput => "Invalid input provided",
+            Self::ServerError => "An unexpected error occurred",
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum WebSocketError {
     #[error("Failed to parse message: {0}")]
     MessageParse(#[from] serde_json::Error),
-    #[error("WebSocket communication error: {0}")]
-    Communication(String),
-    #[error("Invalid message format")]
-    InvalidFormat,
     #[error("Game error: {0}")]
     Game(#[from] GameError),
 }
@@ -148,7 +169,7 @@ async fn handle_socket(socket: WebSocket, handle: GameHandle, is_admin: bool) {
                     handle_client_message(&text, &handle, &tx, &mut player_name, is_admin).await
                 {
                     warn!("Error handling client message: {:?}", e);
-                    send_error(&tx, &format!("Error processing message: {}", e));
+                    send_error(&tx, ClientErrorMessage::ServerError.as_str());
                 }
             }
             Ok(Message::Close(_)) => {
@@ -159,7 +180,7 @@ async fn handle_socket(socket: WebSocket, handle: GameHandle, is_admin: bool) {
             Ok(Message::Pong(_)) => continue,
             Ok(Message::Binary(_)) => {
                 warn!("Received unexpected binary message");
-                send_error(&tx, "Binary messages are not supported");
+                send_error(&tx, ClientErrorMessage::InvalidInput.as_str());
             }
             Err(e) => {
                 warn!("WebSocket receive error: {:?}", e);
@@ -199,7 +220,7 @@ async fn handle_client_message(
                 }
                 Err(e) => {
                     warn!("Error toggling state: {:?}", e);
-                    send_error(tx, &format!("Failed to toggle state: {}", e));
+                    send_error(tx, ClientErrorMessage::GameStateFailed.as_str());
                 }
             }
         }
@@ -210,12 +231,12 @@ async fn handle_client_message(
                     *player_name = Some(name);
                     if let Err(e) = send_initial_state(handle, tx).await {
                         warn!("Error sending initial state: {:?}", e);
-                        send_error(tx, "Failed to send initial game state");
+                        send_error(tx, ClientErrorMessage::GameStateFailed.as_str());
                     }
                 }
                 Err(e) => {
                     warn!("Error adding player: {:?}", e);
-                    send_error(tx, &format!("Failed to join: {}", e));
+                    send_error(tx, ClientErrorMessage::JoinFailed.as_str());
                     return Err(WebSocketError::Game(e));
                 }
             }
@@ -234,11 +255,11 @@ async fn handle_client_message(
                     }
                     Err(e) => {
                         warn!("Error processing color selection: {:?}", e);
-                        send_error(tx, &format!("Failed to process answer: {}", e));
+                        send_error(tx, ClientErrorMessage::AnswerRejected.as_str());
                     }
                 }
             } else {
-                send_error(tx, "Must join game before selecting colors");
+                send_error(tx, ClientErrorMessage::NotAuthorized.as_str());
             }
         }
 
@@ -246,13 +267,13 @@ async fn handle_client_message(
             *player_name = Some("Admin".to_string());
             if let Err(e) = send_initial_state(handle, tx).await {
                 warn!("Error sending initial state to admin: {:?}", e);
-                send_error(tx, "Failed to send initial game state");
+                send_error(tx, ClientErrorMessage::GameStateFailed.as_str());
             }
         }
 
         _ => {
             warn!("Invalid action received: {:?}", msg);
-            send_error(tx, "Invalid action for current role or game state");
+            send_error(tx, ClientErrorMessage::InvalidAction.as_str());
         }
     }
 
