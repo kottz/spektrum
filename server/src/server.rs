@@ -15,13 +15,16 @@ use tokio::sync::{mpsc, Mutex};
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::game::{GameError, GameEvent, GameHandle, GameState};
 use crate::game_manager::GameLobbyManager;
 use crate::models::{
     ClientMessage, ColorResult, GameStateMsg, LeaderboardEntry, LobbyCreateRequest, LobbyInfo,
     PlayerAnsweredMsg, ServerMessage, Song, UpdateAnswerCount,
 };
 use crate::spotify::SpotifyController;
+use crate::{
+    game::{GameError, GameEvent, GameHandle, GameState},
+    game_manager,
+};
 
 #[derive(Debug)]
 enum ClientErrorMessage {
@@ -139,14 +142,27 @@ pub async fn ws_handler(
         .get("lobby")
         .and_then(|id| Uuid::parse_str(id).ok())
         .ok_or_else(|| GameError::LobbyNotFound("Invalid lobby ID".to_string()))?;
-
     let is_admin = params.get("role").map_or(false, |role| role == "admin");
-    let handle = state.game_manager.get_lobby(lobby_id).await?;
 
-    Ok(ws.on_upgrade(move |socket| handle_socket(socket, handle, is_admin)))
+    Ok(ws.on_upgrade(move |socket| async move {
+        if let Err(e) = handle_socket(socket, state, lobby_id, is_admin).await {
+            warn!("WebSocket error: {:?}", e);
+        }
+    }))
 }
 
-async fn handle_socket(socket: WebSocket, handle: GameHandle, is_admin: bool) {
+async fn handle_socket(
+    socket: WebSocket,
+    state: Arc<ServerState>,
+    lobby_id: Uuid,
+    is_admin: bool,
+) -> Result<(), WebSocketError> {
+    let handle = state
+        .game_manager
+        .get_lobby(lobby_id)
+        .await
+        .map_err(WebSocketError::Game)?;
+
     let (mut ws_tx, mut ws_rx) = socket.split();
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
     let mut player_name: Option<String> = None;
@@ -165,8 +181,16 @@ async fn handle_socket(socket: WebSocket, handle: GameHandle, is_admin: bool) {
     while let Some(msg_result) = ws_rx.next().await {
         match msg_result {
             Ok(Message::Text(text)) => {
-                if let Err(e) =
-                    handle_client_message(&text, &handle, &tx, &mut player_name, is_admin).await
+                if let Err(e) = handle_client_message(
+                    &text,
+                    &handle,
+                    &tx,
+                    &mut player_name,
+                    is_admin,
+                    &state.game_manager,
+                    lobby_id,
+                )
+                .await
                 {
                     warn!("Error handling client message: {:?}", e);
                     send_error(&tx, ClientErrorMessage::ServerError.as_str());
@@ -190,13 +214,13 @@ async fn handle_socket(socket: WebSocket, handle: GameHandle, is_admin: bool) {
     }
 
     if let Some(name) = player_name {
-        if !is_admin {
-            if let Err(e) = handle.remove_player(name).await {
-                warn!("Error removing player on disconnect: {:?}", e);
-            }
+        if let Err(e) = handle.remove_player(name).await {
+            warn!("Error removing player on disconnect: {:?}", e);
         }
     }
     forward_task.abort();
+
+    Ok(())
 }
 
 async fn handle_client_message(
@@ -205,6 +229,8 @@ async fn handle_client_message(
     tx: &mpsc::UnboundedSender<String>,
     player_name: &mut Option<String>,
     is_admin: bool,
+    game_manager: &GameLobbyManager,
+    lobby_id: Uuid,
 ) -> Result<(), WebSocketError> {
     let msg: ClientMessage = serde_json::from_str(text).map_err(|e| {
         warn!("Failed to parse client message: {:?}", e);
@@ -216,7 +242,7 @@ async fn handle_client_message(
             match handle.toggle_state(specified_colors).await {
                 Ok(new_state) => {
                     let response = ServerMessage::StateUpdated { state: new_state };
-                    send_message_safe(tx, &response);
+                    send_message(tx, &response);
                 }
                 Err(e) => {
                     warn!("Error toggling state: {:?}", e);
@@ -242,6 +268,18 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::CloseLobby if is_admin => {
+            info!("received a closelobby message from admin");
+            if let Err(e) = handle.close_lobby().await {
+                warn!("Error closing lobby: {:?}", e);
+                send_error(tx, ClientErrorMessage::ServerError.as_str());
+            }
+        }
+
+        ClientMessage::CloseLobby if !is_admin => {
+            send_error(tx, ClientErrorMessage::NotAuthorized.as_str());
+        }
+
         ClientMessage::SelectColor { color } if !is_admin => {
             if let Some(name) = player_name {
                 match handle.answer_color(name.clone(), color).await {
@@ -251,7 +289,7 @@ async fn handle_client_message(
                             score,
                             total_score: score,
                         });
-                        send_message_safe(tx, &response);
+                        send_message(tx, &response);
                     }
                     Err(e) => {
                         warn!("Error processing color selection: {:?}", e);
@@ -322,6 +360,17 @@ pub async fn handle_lobby_events(
                     warn!("Failed to broadcast game state: {:?}", e);
                 }
             }
+            GameEvent::LobbyClosed { reason, players } => {
+                for player in players.values() {
+                    send_message(
+                        &player.tx,
+                        &ServerMessage::LobbyClosing {
+                            reason: reason.clone(),
+                        },
+                    );
+                }
+                break;
+            }
             _ => {}
         }
     }
@@ -388,7 +437,7 @@ async fn send_initial_state(
         lobby_id: snapshot.id,
         lobby_name: snapshot.name,
     });
-    send_message_safe(tx, &msg);
+    send_message(tx, &msg);
     Ok(())
 }
 
@@ -423,7 +472,7 @@ async fn broadcast_game_state(handle: &GameHandle) -> Result<(), WebSocketError>
             lobby_id: snapshot.id,
             lobby_name: name.clone(),
         });
-        send_message_safe(&player.tx, &msg);
+        send_message(&player.tx, &msg);
     }
     Ok(())
 }
@@ -436,7 +485,7 @@ async fn broadcast_answer_count(handle: &GameHandle) -> Result<(), WebSocketErro
     });
 
     for player in snapshot.players.values() {
-        send_message_safe(&player.tx, &msg);
+        send_message(&player.tx, &msg);
     }
     Ok(())
 }
@@ -453,12 +502,12 @@ async fn broadcast_player_answered(
     });
 
     for player in snapshot.players.values() {
-        send_message_safe(&player.tx, &msg);
+        send_message(&player.tx, &msg);
     }
     Ok(())
 }
 
-fn send_message_safe(tx: &mpsc::UnboundedSender<String>, msg: &ServerMessage) {
+fn send_message(tx: &mpsc::UnboundedSender<String>, msg: &ServerMessage) {
     match serde_json::to_string(msg) {
         Ok(json) => {
             if let Err(e) = tx.send(json) {
@@ -475,7 +524,7 @@ fn send_error(tx: &mpsc::UnboundedSender<String>, error: &str) {
     let msg = ServerMessage::Error {
         message: error.to_string(),
     };
-    send_message_safe(tx, &msg);
+    send_message(tx, &msg);
 }
 
 fn game_state_to_string(state: &GameState) -> String {

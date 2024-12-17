@@ -25,7 +25,7 @@ body {
 
 button {
     margin-top: 10px;
-    background-color: #3357FF;
+    background-color: #3357ff;
     color: white;
     border: none;
     padding: 10px 15px;
@@ -36,6 +36,12 @@ button {
 
 button:hover {
     background-color: #1a3cc7;
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
 }
 
 .player-item {
@@ -59,7 +65,7 @@ button:hover {
 
 .progress {
     height: 100%;
-    background-color: #33FF57;
+    background-color: #33ff57;
     transition: width 0.5s ease-in-out;
 }
 
@@ -123,7 +129,7 @@ input[type="text"] {
 }
 
 .answered-player {
-    background-color: #3357FF;
+    background-color: #3357ff;
     color: white;
     padding: 5px 10px;
     margin-right: 5px;
@@ -137,7 +143,8 @@ input[type="text"] {
     gap: 2rem;
 }
 
-#createLobby, #joinExisting {
+#createLobby,
+#joinExisting {
     background-color: rgba(255, 255, 255, 0.1);
     padding: 1.5rem;
     border-radius: 10px;
@@ -215,4 +222,86 @@ input[type="text"] {
     padding: 15px;
     border-radius: 5px;
     margin: 20px 0;
+}
+
+.notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 15px 25px;
+    border-radius: 5px;
+    z-index: 1000;
+    animation:
+        slideIn 0.3s ease-out,
+        fadeOut 0.3s ease-in 2.7s;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.notification.error {
+    background-color: #ff3357;
+    color: white;
+}
+
+.notification.info {
+    background-color: #3357ff;
+    color: white;
+}
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background-color: #1c2333;
+    padding: 20px;
+    border-radius: 10px;
+    max-width: 400px;
+    width: 90%;
+    text-align: center;
+}
+
+.modal-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.modal-buttons button.confirm {
+    background-color: #ff3357;
+}
+
+.modal-buttons button.cancel {
+    background-color: #3357ff;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes fadeOut {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(100%);
+        opacity: 0;
+    }
 }

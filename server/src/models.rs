@@ -45,6 +45,8 @@ pub enum ClientMessage {
     SelectColor { color: String },
     #[serde(rename = "create_lobby")]
     CreateLobby { name: Option<String> },
+    #[serde(rename = "close_lobby")]
+    CloseLobby,
     #[serde(rename = "update_lobby_name")]
     UpdateLobbyName { name: String },
     #[serde(rename = "toggle_state")]
@@ -70,6 +72,8 @@ pub enum ServerMessage {
     LobbyCreated(LobbyInfo),
     #[serde(rename = "lobby_updated")]
     LobbyUpdated(LobbyInfo),
+    #[serde(rename = "lobby_closing")]
+    LobbyClosing { reason: String },
     #[serde(rename = "state_updated")]
     StateUpdated { state: GameState },
 }

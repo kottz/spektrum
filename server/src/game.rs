@@ -42,6 +42,9 @@ pub enum GameCommand {
     RemovePlayer {
         name: String,
     },
+    CloseLobby {
+        reply: oneshot::Sender<Result<(), GameError>>,
+    },
     AnswerColor {
         player_name: String,
         color: String,
@@ -85,6 +88,10 @@ pub enum GameEvent {
     NameUpdated {
         name: String,
     },
+    LobbyClosed {
+        reason: String,
+        players: HashMap<String, Player>,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -108,13 +115,13 @@ pub struct PlayerSnapshot {
     pub tx: mpsc::UnboundedSender<String>,
 }
 
-#[derive(Clone)]
-struct Player {
-    name: String,
+#[derive(Clone, Debug)]
+pub struct Player {
+    pub name: String,
     score: i32,
     has_answered: bool,
     answer: Option<String>,
-    tx: mpsc::UnboundedSender<String>,
+    pub tx: mpsc::UnboundedSender<String>,
 }
 
 impl Player {
@@ -185,6 +192,14 @@ impl GameHandle {
         self.tx
             .send(GameCommand::RemovePlayer { name })
             .map_err(|_| GameError::ChannelError)
+    }
+
+    pub async fn close_lobby(&self) -> Result<(), GameError> {
+        let (reply_tx, reply_rx) = oneshot::channel();
+        self.tx
+            .send(GameCommand::CloseLobby { reply: reply_tx })
+            .map_err(|_| GameError::ChannelError)?;
+        reply_rx.await.map_err(|_| GameError::ChannelError)?
     }
 
     pub async fn answer_color(
@@ -359,6 +374,20 @@ impl GameCore {
                             warn!("Failed to send PlayerLeft event: {:?}", e);
                         }
                     }
+                }
+                GameCommand::CloseLobby { reply } => {
+                    let players = self.players.clone();
+                    if let Err(e) = event_tx.send(GameEvent::LobbyClosed {
+                        reason: "Admin closed the lobby".to_string(),
+                        players,
+                    }) {
+                        warn!("Failed to send lobby closed event: {:?}", e);
+                    }
+                    info!("game core close lobby event fired.");
+                    if let Err(e) = reply.send(Ok(())) {
+                        warn!("Failed to send reply for CloseLobby command: {:?}", e);
+                    }
+                    break;
                 }
                 GameCommand::AnswerColor {
                     player_name,
