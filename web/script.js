@@ -1,174 +1,87 @@
 let socket = null;
 let playerName = "";
+let playerId = crypto.randomUUID();
 let currentLobbyId = null;
-let roundStartTime;
-let roundDuration;
-let timerInterval;
-let hasAnswered = false;
-let playerAnswer = null;
-let colors = [];
-let answeredPlayers = [];
-let totalPlayers = 0;
 let isAdmin = false;
-let lobbyClosing = false;
+let colors = [];
+let playerAnswer = null;
+let hasAnswered = false;
+let playerScore = 0;
+let totalPlayers = 0;
+let answeredPlayers = [];
 
 async function createLobby() {
-  const lobbyName = document.getElementById("newLobbyName").value;
   try {
     const response = await fetch("/api/lobbies", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        name: lobbyName || null,
-      }),
+      body: JSON.stringify({ round_duration: 60 }),
     });
 
     if (!response.ok) {
       throw new Error("Failed to create lobby");
     }
 
-    const lobby = await response.json();
+    const data = await response.json();
+    currentLobbyId = data.lobby_id;
     isAdmin = true;
-    showAdminView(lobby);
+    showAdminView(currentLobbyId);
+    connectToLobby(currentLobbyId, playerName, isAdmin);
   } catch (error) {
     console.error("Error creating lobby:", error);
-    showNotification("Failed to create lobby. Please try again.", true);
+    showNotification("Failed to create lobby", true);
   }
 }
 
-function showNotification(message, isError = false) {
-  const notification = document.createElement("div");
-  notification.className = `notification ${isError ? "error" : "info"}`;
-  notification.textContent = message;
-  document.body.appendChild(notification);
-
-  setTimeout(() => {
-    notification.remove();
-  }, 3000);
-}
-
-function showConfirmationModal(message, onConfirm, onCancel) {
-  const template = document.getElementById("confirmationModalTemplate");
-  const modal = template.content.cloneNode(true);
-
-  modal.querySelector("p").textContent = message;
-  modal.querySelector(".confirm").onclick = () => {
-    onConfirm();
-    closeModal();
-  };
-  modal.querySelector(".cancel").onclick = onCancel || closeModal;
-
-  document.getElementById("modalContainer").appendChild(modal);
-}
-
-function closeModal() {
-  const modal = document.querySelector(".modal-overlay");
-  if (modal) {
-    modal.remove();
+async function initializeApp() {
+  try {
+    const response = await fetch("/api/lobbies");
+    if (!response.ok) {
+      throw new Error("Failed to fetch lobbies");
+    }
+    const data = await response.json();
+    updateLobbyList(data.lobbies);
+  } catch (error) {
+    console.error("Error fetching lobbies:", error);
+    document.getElementById("lobbyList").innerHTML =
+      '<p class="error-message">Failed to load lobbies.</p>';
   }
 }
 
-function showJoinForm(lobbyId, lobbyName) {
+function updateLobbyList(lobbyIds) {
+  const lobbyList = document.getElementById("lobbyList");
+  lobbyList.innerHTML = "";
+
+  if (lobbyIds.length === 0) {
+    lobbyList.innerHTML =
+      "<p>No active lobbies. Create one to get started!</p>";
+    return;
+  }
+
+  lobbyIds.forEach((id) => {
+    const lobbyElement = document.createElement("div");
+    lobbyElement.className = "lobby-item";
+    lobbyElement.innerHTML = `
+      <div class="lobby-info">
+        <span>Lobby: ${id}</span>
+      </div>
+      <button onclick="showJoinForm('${id}')">Join</button>
+    `;
+    lobbyList.appendChild(lobbyElement);
+  });
+}
+
+function showJoinForm(lobbyId) {
   currentLobbyId = lobbyId;
   document.getElementById("lobbySelection").style.display = "none";
-  document.getElementById("selectedLobbyName").textContent = lobbyName;
+  document.getElementById("selectedLobbyName").textContent = lobbyId;
   document.getElementById("joinForm").style.display = "block";
 }
 
-function connectToLobby(lobbyId) {
-  if (socket) {
-    socket.close();
-  }
-
-  const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const wsUrl = `${wsProtocol}//${window.location.host}/ws?lobby=${lobbyId}`;
-  socket = new WebSocket(wsUrl);
-
-  socket.onopen = function () {
-    socket.send(
-      JSON.stringify({
-        action: "join",
-        name: playerName,
-      }),
-    );
-    document.getElementById("joinForm").style.display = "none";
-    document.getElementById("lobbyInfo").style.display = "block";
-  };
-
-  setupWebSocketHandlers();
-}
-
-function setupWebSocketHandlers() {
-  socket.onmessage = function (event) {
-    try {
-      const data = JSON.parse(event.data);
-      console.log("Received message:", data);
-
-      switch (data.action) {
-        case "game_state":
-          handleGameState(data);
-          break;
-        case "color_result":
-          handleColorResult(data);
-          break;
-        case "update_answer_count":
-          updateAnswerStatus(data.answeredCount, data.totalPlayers);
-          break;
-        case "player_answered":
-          handlePlayerAnswer(data.playerName, data.correct);
-          break;
-        case "state_updated":
-          break;
-        case "lobby_closing":
-          handleLobbyClosing(data.reason);
-          break;
-        case "error":
-          handleError(data.message);
-          break;
-        default:
-          console.warn("Unhandled message type:", data.action);
-      }
-    } catch (error) {
-      console.error("Error processing message:", error);
-      showNotification("Error processing server message", true);
-    }
-  };
-
-  socket.onclose = function (event) {
-    if (lobbyClosing) {
-      lobbyClosing = false;
-      return;
-    }
-
-    console.log("WebSocket connection closed. Attempting to reconnect...");
-    showNotification("Connection lost. Attempting to reconnect...", true);
-
-    setTimeout(() => {
-      if (currentLobbyId && playerName) {
-        connectToLobby(currentLobbyId);
-        socket.onopen = function () {
-          socket.send(
-            JSON.stringify({
-              action: "join",
-              name: playerName,
-            }),
-          );
-          showNotification("Reconnected to lobby");
-        };
-      }
-    }, 3000);
-  };
-
-  socket.onerror = function (error) {
-    console.error("WebSocket error:", error);
-    showNotification("Connection error occurred", true);
-  };
-}
-
 function joinLobby() {
-  playerName = document.getElementById("playerName").value;
+  playerName = document.getElementById("playerName").value.trim();
   if (!playerName) {
     showNotification("Please enter your name", true);
     return;
@@ -179,172 +92,286 @@ function joinLobby() {
     return;
   }
 
-  connectToLobby(currentLobbyId);
+  connectToLobby(currentLobbyId, playerName, false);
+}
+
+function connectToLobby(lobbyId, name, adminFlag) {
+  closeConnection();
+  const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const wsUrl = `${wsProtocol}//${window.location.host}/ws`;
+  socket = new WebSocket(wsUrl);
+
+  socket.onopen = () => {
+    const joinMsg = {
+      type: "JoinLobby",
+      lobby_id: lobbyId,
+      player_id: playerId,
+      name: name,
+      is_admin: adminFlag,
+    };
+    socket.send(JSON.stringify(joinMsg));
+
+    document.getElementById("joinForm").style.display = "none";
+    document.getElementById("lobbyInfo").style.display = "block";
+    resetUIState();
+  };
+
+  socket.onmessage = handleServerMessage;
+
+  socket.onclose = () => {
+    showNotification("Disconnected from lobby.", true);
+  };
+
+  socket.onerror = (error) => {
+    console.error("WebSocket error:", error);
+    showNotification("Connection error", true);
+  };
+}
+
+function handleServerMessage(event) {
+  let data;
+  try {
+    data = JSON.parse(event.data);
+  } catch (e) {
+    console.error("Invalid message from server:", e);
+    return;
+  }
+  console.log("received:");
+  console.log(data);
+  switch (data.type) {
+    case "InitialPlayerList":
+      updateInitialPlayerList(data.players);
+      break;
+    case "PlayerJoined":
+      playerJoined(data.player_name, data.current_score);
+      break;
+    case "PlayerLeft":
+      playerLeft(data.player_name);
+      break;
+    case "PlayerAnswered":
+      handlePlayerAnswered(data.player_name, data.correct, data.new_score);
+      break;
+    case "StateChanged":
+      handleStateChanged(data.new_phase, data.colors);
+      break;
+    case "GameOver":
+      handleGameOver(data.final_scores, data.reason);
+      break;
+    case "GameClosed":
+      handleGameClosed(data.reason);
+      break;
+    case "Error":
+      showNotification(data.message, true);
+      break;
+    default:
+      console.warn("Unhandled server message type:", data.type);
+  }
+}
+
+function updateInitialPlayerList(players) {
+  // players is an array of (name, score)
+  totalPlayers = players.length;
+  updateLeaderboard(players.map(([name, score]) => ({ name, score })));
+}
+
+function playerJoined(name, score) {
+  totalPlayers += 1;
+  showNotification(`${name} joined the game`);
+}
+
+function playerLeft(name) {
+  totalPlayers = Math.max(0, totalPlayers - 1);
+  showNotification(`${name} left the game`);
+}
+
+function handlePlayerAnswered(name, correct, newScore) {
+  // If it's the current player, update their score
+  if (name === playerName) {
+    playerScore = newScore;
+    updateYourScore(playerScore);
+  }
+  answeredPlayers.push({ playerName: name, correct });
+  updateAnswerStatus(answeredPlayers.length, totalPlayers);
+}
+
+function updateAnswerStatus(answeredCount, totalPlayers) {
+  const counterElement = document.getElementById("answerCounter");
+  counterElement.textContent = `${answeredCount}/${totalPlayers}`;
+
+  const answeredPlayersElement = document.getElementById("answeredPlayers");
+  answeredPlayersElement.innerHTML = "";
+
+  answeredPlayers.forEach((p) => {
+    const playerSpan = document.createElement("span");
+    playerSpan.className = "answered-player";
+    playerSpan.style.backgroundColor = p.correct ? "#35cf0e" : "#cf0e22";
+    playerSpan.textContent = p.playerName;
+    answeredPlayersElement.appendChild(playerSpan);
+  });
+}
+
+function handleStateChanged(phase, newColors) {
+  document.getElementById("gameState").textContent = `Current Phase: ${phase}`;
+  stopTimer();
+
+  if (phase === "lobby") {
+    document.getElementById("colorButtons").style.display = "none";
+    document.getElementById("leaderboard").style.display = "none";
+    document.getElementById("answerStatusContainer").style.display = "none";
+    document.getElementById("roundResult").textContent = "";
+  } else if (phase === "question") {
+    // Reset answeredPlayers for the new round
+    console.log("moving into question phase. do you see the answerstatuscontainer?");
+    answeredPlayers = [];
+    updateAnswerStatus(0, totalPlayers);
+
+    hasAnswered = false;
+    colors = newColors;
+    document.getElementById("roundResult").textContent = "";
+    document.getElementById("leaderboard").style.display = "none";
+    createColorButtons(colors);
+    document.getElementById("colorButtons").style.display = "grid";
+    document.getElementById("answerStatusContainer").style.display = "flex";
+
+    // Example: 60 seconds timer
+    startTimer(60000);
+  } else if (phase === "score") {
+    document.getElementById("colorButtons").style.display = "none";
+    document.getElementById("leaderboard").style.display = "block";
+    document.getElementById("roundResult").textContent = "";
+    document.getElementById("answerStatusContainer").style.display = "none";
+  }
+}
+
+function handleGameOver(finalScores, reason) {
+  stopTimer();
+  showNotification(`Game Over: ${reason}`, true);
+  updateLeaderboard(finalScores.map(([name, score]) => ({ name, score })));
+}
+
+function handleGameClosed(reason) {
+  showNotification(`Game Closed: ${reason}`, true);
+  closeConnection();
+  resetUIState();
+  isAdmin = false;
+  document.getElementById("lobbyInfo").style.display = "none";
+  document.getElementById("adminControls").style.display = "none";
+  document.getElementById("lobbySelection").style.display = "block";
+  initializeApp();
 }
 
 function leaveLobby() {
   if (isAdmin) {
     showConfirmationModal(
       "Are you sure you want to leave? This will close the lobby for all players.",
-      confirmAdminLeave,
-      () => closeModal(),
+      () => {
+        sendMessage({
+          type: "Leave",
+          lobby_id: currentLobbyId,
+          player_id: playerId,
+        });
+        handleGameClosed("Admin closed the lobby");
+      },
     );
   } else {
-    if (socket) {
-      socket.close();
-    }
-    currentLobbyId = null;
-    playerName = "";
+    sendMessage({
+      type: "Leave",
+      lobby_id: currentLobbyId,
+      player_id: playerId,
+    });
+    closeConnection();
+    resetUIState();
     document.getElementById("lobbyInfo").style.display = "none";
     document.getElementById("lobbySelection").style.display = "block";
-    resetGameState();
-    initializeApp();
   }
 }
 
-function confirmAdminLeave() {
-  lobbyClosing = true;
-  adminLeaveLobby();
-}
-
-function adminLeaveLobby() {
-  if (socket && socket.readyState === WebSocket.OPEN) {
-    sendMessage({ action: "close_lobby" });
-    handleLobbyClosing("Admin closed the lobby");
-  } else {
-    showNotification("Unable to close lobby: Connection Lost", true);
-  }
-}
-
-function handleLobbyClosing(reason) {
-  showNotification(reason, true);
-  lobbyClosing = true;
-
+function closeConnection() {
   if (socket) {
     socket.close();
+    socket = null;
   }
-
-  resetGameState();
-  isAdmin = false;
-
-  document.getElementById("lobbyInfo").style.display = "none";
-  document.getElementById("adminControls").style.display = "none";
-  document.getElementById("lobbySelection").style.display = "block";
-
-  currentLobbyId = null;
-  playerName = "";
-
-  initializeApp();
 }
 
-function showAdminView(lobby) {
+function showAdminView(lobbyId) {
   document.getElementById("lobbySelection").style.display = "none";
   document.getElementById("joinForm").style.display = "none";
   document.getElementById("lobbyInfo").style.display = "block";
   document.getElementById("adminControls").style.display = "block";
-  document.getElementById("currentLobbyName").textContent =
-    lobby.name || "Unnamed Lobby";
-  connectToLobbyAsAdmin(lobby.id);
-}
-
-function connectToLobbyAsAdmin(lobbyId) {
-  if (socket) {
-    socket.close();
-  }
-
-  currentLobbyId = lobbyId;
-  const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const wsUrl = `${wsProtocol}//${window.location.host}/ws?lobby=${lobbyId}&role=admin`;
-  socket = new WebSocket(wsUrl);
-
-  setupWebSocketHandlers();
+  document.getElementById("currentLobbyName").textContent = lobbyId;
 }
 
 function sendMessage(message) {
-  try {
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify(message));
-    } else {
-      showNotification("Connection not available", true);
-    }
-  } catch (error) {
-    console.error("Error sending message:", error);
-    showNotification("Failed to send message to server", true);
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    console.log("sending message:");
+    console.log(message);
+    socket.send(JSON.stringify(message));
+  } else {
+    showNotification("Connection not available", true);
   }
 }
 
 function toggleRound() {
   if (socket && isAdmin) {
-    sendMessage({ action: "toggle_state" });
+    // This toggles the game phase on the server
+    sendMessage({
+      type: "ToggleState",
+      lobby_id: currentLobbyId,
+      player_id: playerId,
+      specified_colors: null,
+      operation: "ToggleQuestion",
+    });
   }
 }
 
-function resetGameState() {
-  hasAnswered = false;
-  playerAnswer = null;
-  colors = [];
-  answeredPlayers = [];
-  totalPlayers = 0;
-  stopTimer();
-  document.getElementById("colorButtons").innerHTML = "";
+function startGame() {
+  if (socket && isAdmin) {
+    // This toggles the game phase on the server
+    sendMessage({
+      type: "ToggleState",
+      lobby_id: currentLobbyId,
+      player_id: playerId,
+      specified_colors: null,
+      operation: "StartGame",
+    });
+  }
+}
+
+function endGame() {
+  if (socket && isAdmin) {
+    // This toggles the game phase on the server
+    sendMessage({
+      type: "ToggleState",
+      lobby_id: currentLobbyId,
+      player_id: playerId,
+      specified_colors: null,
+      operation: "EndGame",
+    });
+  }
+}
+
+function selectColor(colorName) {
+  if (!hasAnswered) {
+    sendMessage({
+      type: "Answer",
+      lobby_id: currentLobbyId,
+      player_id: playerId,
+      color: colorName,
+    });
+    hasAnswered = true;
+    playerAnswer = colorName;
+    stopTimer();
+    createColorButtons(colors);
+  }
+}
+
+function resetUIState() {
+  playerScore = 0;
+  document.getElementById("yourScore").textContent = "0";
   document.getElementById("leaderboard").innerHTML = "";
   document.getElementById("roundResult").textContent = "";
-  document.getElementById("yourScore").textContent = "0";
-}
-
-function handleGameState(data) {
-  document.getElementById("gameState").textContent =
-    `Current Phase: ${data.state.charAt(0).toUpperCase() + data.state.slice(1)}`;
-  updateYourScore(data.score);
-
-  if (data.state === "question") {
-    hasAnswered = data.hasAnswered;
-    playerAnswer = data.answer;
-    colors = data.colors;
-    answeredPlayers = [];
-    totalPlayers = data.totalPlayers;
-
-    createColorButtons(colors);
-    document.getElementById("colorButtons").style.display = "grid";
-    document.getElementById("leaderboard").style.display = "none";
-    document.getElementById("roundResult").textContent = "";
-    document.getElementById("answerStatusContainer").style.display = "flex";
-    updateAnswerStatus(data.answeredCount, data.totalPlayers);
-
-    let timeLeftMs = data.roundTimeLeft * 1000 || 0;
-    startTimer(timeLeftMs);
-  } else if (data.state === "score") {
-    document.getElementById("colorButtons").style.display = "none";
-    updateLeaderboard(data.leaderboard);
-    document.getElementById("leaderboard").style.display = "block";
-    document.getElementById("answerStatusContainer").style.display = "none";
-    stopTimer();
-  }
-}
-
-function startTimer(timeLeftMs) {
-  stopTimer();
-  timerInterval = setInterval(() => {
-    timeLeftMs -= 10;
-    if (timeLeftMs <= 0) {
-      stopTimer();
-      document.getElementById("timer").textContent = "Time's up!";
-      document.getElementById("colorButtons").style.display = "none";
-    } else {
-      const secondsRemaining = (timeLeftMs / 1000).toFixed(2);
-      document.getElementById("timer").textContent =
-        `Time remaining: ${secondsRemaining}s`;
-    }
-  }, 10);
-}
-
-function stopTimer() {
-  clearInterval(timerInterval);
-  document.getElementById("timer").textContent = "";
-}
-
-function updateYourScore(score) {
-  document.getElementById("yourScore").textContent = score;
+  document.getElementById("colorButtons").innerHTML = "";
+  document.getElementById("answerStatusContainer").style.display = "none";
 }
 
 function createColorButtons(colors) {
@@ -366,45 +393,8 @@ function createColorButtons(colors) {
   });
 }
 
-function selectColor(colorName) {
-  if (!hasAnswered) {
-    sendMessage({ action: "select_color", color: colorName });
-    hasAnswered = true;
-    playerAnswer = colorName;
-    stopTimer();
-    createColorButtons(colors);
-  }
-}
-
-function handleColorResult(data) {
-  updateYourScore(data.totalScore);
-  const resultText = data.correct
-    ? `Correct! You earned ${data.score} points this round.`
-    : `Wrong color. You earned 0 points this round.`;
-  document.getElementById("roundResult").textContent = resultText;
-}
-
-function updateAnswerStatus(answeredCount, totalPlayers) {
-  const counterElement = document.getElementById("answerCounter");
-  counterElement.textContent = `${answeredCount}/${totalPlayers}`;
-
-  const answeredPlayersElement = document.getElementById("answeredPlayers");
-  answeredPlayersElement.innerHTML = "";
-
-  answeredPlayers.forEach((p) => {
-    const playerSpan = document.createElement("span");
-    playerSpan.className = "answered-player";
-    playerSpan.style.backgroundColor = p.correct ? "#35cf0e" : "#cf0e22";
-    playerSpan.textContent = p.playerName;
-    answeredPlayersElement.appendChild(playerSpan);
-  });
-}
-
-function handlePlayerAnswer(playerName, correct) {
-  if (!answeredPlayers.some((p) => p.playerName === playerName)) {
-    answeredPlayers.push({ playerName, correct });
-    updateAnswerStatus(answeredPlayers.length, totalPlayers);
-  }
+function updateYourScore(score) {
+  document.getElementById("yourScore").textContent = score;
 }
 
 function updateLeaderboard(players) {
@@ -416,7 +406,6 @@ function updateLeaderboard(players) {
   players.forEach((player, index) => {
     const playerItem = document.createElement("div");
     playerItem.className = "player-item";
-
     const playerInfo = document.createElement("div");
     playerInfo.className = "player-info";
     playerInfo.innerHTML = `<span>${index + 1}. ${player.name}</span><span>${player.score} points</span>`;
@@ -436,53 +425,64 @@ function updateLeaderboard(players) {
   });
 }
 
-function handleError(message) {
-  console.error("Error:", message);
-  showNotification(message, true);
+function showNotification(message, isError = false) {
+  const notification = document.createElement("div");
+  notification.className = `notification ${isError ? "error" : "info"}`;
+  notification.textContent = message;
+  document.body.appendChild(notification);
+
+  setTimeout(() => {
+    notification.remove();
+  }, 3000);
 }
 
-async function initializeApp() {
-  try {
-    const response = await fetch("/api/lobbies");
-    if (!response.ok) {
-      throw new Error("Failed to fetch lobbies");
+function showConfirmationModal(message, onConfirm) {
+  const template = document.getElementById("confirmationModalTemplate");
+  const modal = template.content.cloneNode(true);
+
+  modal.querySelector("p").textContent = message;
+  modal.querySelector(".confirm").onclick = () => {
+    onConfirm();
+    closeModal();
+  };
+  modal.querySelector(".cancel").onclick = closeModal;
+
+  document.getElementById("modalContainer").appendChild(modal);
+}
+
+function closeModal() {
+  const modal = document.querySelector(".modal-overlay");
+  if (modal) {
+    modal.remove();
+  }
+}
+
+function startTimer(durationMs) {
+  let timeLeftMs = durationMs;
+  const timerElem = document.getElementById("timer");
+  const interval = setInterval(() => {
+    timeLeftMs -= 100;
+    if (timeLeftMs <= 0) {
+      clearInterval(interval);
+      timerElem.textContent = "Time's up!";
+    } else {
+      const seconds = (timeLeftMs / 1000).toFixed(1);
+      timerElem.textContent = `Time remaining: ${seconds}s`;
     }
-    const lobbies = await response.json();
-    updateLobbyList(lobbies);
-  } catch (error) {
-    console.error("Error fetching lobbies:", error);
-    document.getElementById("lobbyList").innerHTML =
-      '<p class="error-message">Failed to load lobbies. Please try again later.</p>';
-    showNotification("Failed to load lobbies", true);
-  }
+  }, 100);
+
+  // Store the interval ID so we can stop it later if needed
+  timerElem.dataset.intervalId = interval;
 }
 
-function updateLobbyList(lobbies) {
-  const lobbyList = document.getElementById("lobbyList");
-  lobbyList.innerHTML = "";
-
-  if (lobbies.length === 0) {
-    lobbyList.innerHTML =
-      "<p>No active lobbies. Create one to get started!</p>";
-    return;
+function stopTimer() {
+  const timerElem = document.getElementById("timer");
+  const interval = timerElem.dataset.intervalId;
+  if (interval) {
+    clearInterval(interval);
+    delete timerElem.dataset.intervalId;
   }
-
-  lobbies.forEach((lobby) => {
-    const lobbyElement = document.createElement("div");
-    lobbyElement.className = "lobby-item";
-    lobbyElement.innerHTML = `
-            <div class="lobby-info">
-                <span>${lobby.name || "Unnamed Lobby"}</span>
-                <span>${lobby.playerCount} players</span>
-            </div>
-            <button onclick="showJoinForm('${lobby.id}', '${lobby.name || "Unnamed Lobby"}')">
-                Join
-            </button>
-        `;
-    lobbyList.appendChild(lobbyElement);
-  });
+  timerElem.textContent = "";
 }
 
 document.addEventListener("DOMContentLoaded", initializeApp);
-
-setInterval(initializeApp, 10000);

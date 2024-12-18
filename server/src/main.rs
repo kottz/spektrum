@@ -4,22 +4,19 @@ use axum::{
 };
 use axum_server::Server;
 use clap::Parser;
+use csv::{Error as CsvError, ReaderBuilder, StringRecord};
 use std::net::SocketAddr;
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use thiserror::Error;
 use tower_http::services::ServeDir;
 use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod game;
 mod game_manager;
-mod models;
 mod server;
-mod spotify;
 
-use crate::game_manager::GameLobbyManager;
-use crate::server::{create_lobby_handler, list_lobbies_handler, ws_handler, ServerState};
-use crate::spotify::{SpotifyController, SpotifyError};
+use crate::game::Song;
+use crate::server::{create_lobby_handler, list_lobbies_handler, ws_handler, AppState};
 
 #[derive(Parser, Debug)]
 pub struct Args {
@@ -29,6 +26,57 @@ pub struct Args {
     pub port: u16,
     #[arg(long, default_value_t = false)]
     pub no_spotify: bool,
+}
+
+#[derive(Debug, Error)]
+pub enum SongFileError {
+    #[error("CSV error: {0}")]
+    CsvError(#[from] CsvError),
+    #[error("Invalid CSV record: {0}")]
+    InvalidRecord(String),
+    #[error("Failed to parse song ID: {0}")]
+    ParseSongIdError(#[from] std::num::ParseIntError),
+    #[error("Invalid number of fields in the record. Expected 5, found {0}")]
+    InvalidFieldCount(usize),
+}
+
+pub fn load_songs_from_csv(filepath: &str) -> Result<Vec<Song>, SongFileError> {
+    let mut rdr = ReaderBuilder::new()
+        .has_headers(false)
+        .from_path(filepath)?;
+
+    let mut songs = Vec::new();
+    for result in rdr.records() {
+        let record = result?;
+        if record.len() != 5 {
+            return Err(SongFileError::InvalidFieldCount(record.len()));
+        }
+        let song = parse_song_record(&record)?;
+        songs.push(song);
+    }
+    Ok(songs)
+}
+
+fn parse_song_record(record: &StringRecord) -> Result<Song, SongFileError> {
+    let id: u32 = record[0].parse()?;
+    let song_name = record[1].trim().to_string();
+    let artist = record[2].trim().to_string();
+    let uri = record[3].trim().to_string();
+    let colors_str = record[4].trim().to_string();
+
+    let color_list: Vec<String> = colors_str
+        .split(';')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    Ok(Song {
+        id,
+        song_name,
+        artist,
+        uri,
+        colors: color_list,
+    })
 }
 
 #[tokio::main]
@@ -42,54 +90,15 @@ async fn main() {
         .init();
 
     let args = Args::parse();
-    let game_manager = Arc::new(GameLobbyManager::new());
 
-    let spotify_controller = if !args.no_spotify {
-        match SpotifyController::new().await {
-            Ok(ctrl) => {
-                let mut c2 = ctrl.clone();
-                match c2.get_active_device().await {
-                    Ok(dev) => {
-                        let device_name = dev
-                            .get("name")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("Unknown Device");
-                        info!("Found active Spotify device: {}", device_name);
-                        Some(Arc::new(Mutex::new(ctrl)))
-                    }
-                    Err(SpotifyError::NoActiveDevice) => {
-                        error!("No active Spotify device found at startup.");
-                        std::process::exit(1);
-                    }
-                    Err(e) => {
-                        error!("Failed to get active device: {}. Exiting.", e);
-                        std::process::exit(1);
-                    }
-                }
-            }
-            Err(e) => {
-                error!("Spotify integration failed to initialize: {}. Exiting.", e);
-                std::process::exit(1);
-            }
-        }
-    } else {
-        info!("Spotify integration disabled. Running without playback.");
-        None
-    };
-
-    let songs = match models::load_songs_from_csv(&args.songs_csv) {
-        Ok(songs) => Arc::new(songs),
+    let songs = match load_songs_from_csv(&args.songs_csv) {
+        Ok(songs) => songs,
         Err(e) => {
             error!("Failed to load songs from CSV: {}. Exiting.", e);
             std::process::exit(1);
         }
     };
-
-    let state = Arc::new(ServerState {
-        game_manager,
-        spotify: spotify_controller,
-        songs: songs.clone(),
-    });
+    let state = AppState::new(songs);
 
     let app = Router::new()
         .route("/ws", get(ws_handler))
@@ -99,9 +108,9 @@ async fn main() {
         )
         .fallback_service(ServeDir::new("../web").append_index_html_on_directories(true))
         .with_state(state);
-
-    let addr = SocketAddr::from(([0, 0, 0, 0], args.port));
+    let addr = SocketAddr::from(([0, 0, 0, 0], 8765));
     info!("Starting server on http://{}", addr);
+
     if let Err(e) = Server::bind(addr).serve(app.into_make_service()).await {
         error!("Failed to start server: {}. Exiting.", e);
         std::process::exit(1);
