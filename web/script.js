@@ -1,6 +1,5 @@
 let socket = null;
 let playerName = "";
-let playerId = crypto.randomUUID();
 let currentLobbyId = null;
 let isAdmin = false;
 let colors = [];
@@ -105,7 +104,6 @@ function connectToLobby(lobbyId, name, adminFlag) {
     const joinMsg = {
       type: "JoinLobby",
       lobby_id: lobbyId,
-      player_id: playerId,
       name: name,
       is_admin: adminFlag,
     };
@@ -268,7 +266,6 @@ function leaveLobby() {
         sendMessage({
           type: "Leave",
           lobby_id: currentLobbyId,
-          player_id: playerId,
         });
         handleGameClosed("Admin closed the lobby");
       },
@@ -277,10 +274,10 @@ function leaveLobby() {
     sendMessage({
       type: "Leave",
       lobby_id: currentLobbyId,
-      player_id: playerId,
     });
     closeConnection();
     resetUIState();
+    currentLobbyId = null;
     document.getElementById("lobbyInfo").style.display = "none";
     document.getElementById("lobbySelection").style.display = "block";
   }
@@ -317,7 +314,6 @@ function toggleRound() {
     sendMessage({
       type: "ToggleState",
       lobby_id: currentLobbyId,
-      player_id: playerId,
       specified_colors: null,
       operation: "ToggleQuestion",
     });
@@ -330,7 +326,6 @@ function startGame() {
     sendMessage({
       type: "ToggleState",
       lobby_id: currentLobbyId,
-      player_id: playerId,
       specified_colors: null,
       operation: "StartGame",
     });
@@ -343,7 +338,6 @@ function endGame() {
     sendMessage({
       type: "ToggleState",
       lobby_id: currentLobbyId,
-      player_id: playerId,
       specified_colors: null,
       operation: "EndGame",
     });
@@ -355,7 +349,6 @@ function selectColor(colorName) {
     sendMessage({
       type: "Answer",
       lobby_id: currentLobbyId,
-      player_id: playerId,
       color: colorName,
     });
     hasAnswered = true;
@@ -482,7 +475,7 @@ function stopTimer() {
     clearInterval(interval);
     delete timerElem.dataset.intervalId;
   }
-  timerElem.textContent = "";
+  timerElem.textContent = "Answer Received!";
 }
 
 document.addEventListener("DOMContentLoaded", initializeApp);

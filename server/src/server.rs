@@ -7,19 +7,16 @@ use axum::{
     extract::State,
     extract::WebSocketUpgrade,
     response::IntoResponse,
-    routing::{get, post},
-    Json, Router,
+    Json,
 };
 use futures_util::{sink::SinkExt, stream::StreamExt};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    net::SocketAddr,
     sync::{Arc, Mutex},
     time::Instant,
 };
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
-use tower_http::services::ServeDir;
 use tracing::*;
 use uuid::Uuid;
 
@@ -32,22 +29,18 @@ use uuid::Uuid;
 pub enum ClientMsg {
     JoinLobby {
         lobby_id: Uuid,
-        player_id: Uuid,
         name: String,
         is_admin: bool,
     },
     Leave {
         lobby_id: Uuid,
-        player_id: Uuid,
     },
     Answer {
         lobby_id: Uuid,
-        player_id: Uuid,
         color: String,
     },
     ToggleState {
         lobby_id: Uuid,
-        player_id: Uuid,
         specified_colors: Option<Vec<String>>,
         operation: StateOperation,
     },
@@ -56,6 +49,14 @@ pub enum ClientMsg {
 #[derive(Debug, Serialize)]
 #[serde(tag = "type")]
 pub enum ServerMsg {
+    LobbyCreated {
+        admin_id: Uuid,
+        lobby_id: Uuid,
+    },
+    LobbyJoinedAck {
+        player_id: Uuid,
+        player_name: String,
+    },
     InitialPlayerList {
         players: Vec<(String, i32)>,
     },
@@ -221,7 +222,8 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
     let (tx, mut rx) = unbounded_channel::<ServerMsg>();
 
     let mut lobby_id: Option<Uuid> = None;
-    let mut player_id: Option<Uuid> = None;
+    let player_id: Uuid = Uuid::new_v4();
+    info!("New WebSocket connection from player {}", player_id);
 
     let send_task = tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
@@ -243,21 +245,19 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
                 let events = match client_msg {
                     ClientMsg::JoinLobby {
                         lobby_id: lid,
-                        player_id: pid,
                         name,
                         is_admin,
                     } => {
                         {
                             let mut conns = state.connections.lock().unwrap();
-                            conns.insert((lid, pid), tx.clone());
+                            conns.insert((lid, player_id), tx.clone());
                         }
                         lobby_id = Some(lid);
-                        player_id = Some(pid);
                         mgr.update(
                             ManagerEvent::LobbyEvent {
                                 lobby_id: lid,
                                 event: InputEvent::Join {
-                                    sender_id: pid,
+                                    sender_id: player_id,
                                     name,
                                     is_admin,
                                 },
@@ -267,30 +267,28 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
                     }
                     ClientMsg::Leave {
                         lobby_id: lid,
-                        player_id: pid,
                     } => {
                         let ev = mgr.update(
                             ManagerEvent::LobbyEvent {
                                 lobby_id: lid,
-                                event: InputEvent::Leave { sender_id: pid },
+                                event: InputEvent::Leave { sender_id: player_id },
                             },
                             now,
                         );
                         {
                             let mut conns = state.connections.lock().unwrap();
-                            conns.remove(&(lid, pid));
+                            conns.remove(&(lid, player_id));
                         }
                         ev
                     }
                     ClientMsg::Answer {
                         lobby_id: lid,
-                        player_id: pid,
                         color,
                     } => mgr.update(
                         ManagerEvent::LobbyEvent {
                             lobby_id: lid,
                             event: InputEvent::Answer {
-                                sender_id: pid,
+                                sender_id: player_id,
                                 color,
                             },
                         },
@@ -298,14 +296,13 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
                     ),
                     ClientMsg::ToggleState {
                         lobby_id: lid,
-                        player_id: pid,
                         specified_colors,
                         operation,
                     } => mgr.update(
                         ManagerEvent::LobbyEvent {
                             lobby_id: lid,
                             event: InputEvent::ToggleState {
-                                sender_id: pid,
+                                sender_id: player_id,
                                 specified_colors,
                                 operation,
                             },
@@ -324,7 +321,7 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
     }
 
     // Client disconnected
-    if let (Some(lid), Some(pid)) = (lobby_id, player_id) {
+    if let (Some(lid), pid) = (lobby_id, player_id) {
         let mut conns = state.connections.lock().unwrap();
         conns.remove(&(lid, pid));
     }
@@ -342,6 +339,17 @@ fn broadcast_manager_outputs(outputs: Vec<ManagerOutput>, state: &AppState) {
         let data = &mo.event.data;
 
         let server_msg = match data {
+            OutputEventData::LobbyCreated { admin_id, lobby_id } => ServerMsg::LobbyCreated {
+                admin_id: *admin_id,
+                lobby_id: *lobby_id,
+            },
+            OutputEventData::LobbyJoinedAck {
+                player_id,
+                player_name,
+            } => ServerMsg::LobbyJoinedAck {
+                player_id: *player_id,
+                player_name: player_name.clone(),
+            },
             OutputEventData::InitialPlayerList { players } => ServerMsg::InitialPlayerList {
                 players: players.clone(),
             },

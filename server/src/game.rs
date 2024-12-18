@@ -40,7 +40,12 @@ pub struct PlayerState {
     pub score: i32,
     pub has_answered: bool,
     pub answer: Option<String>,
-    pub is_admin: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct AdminState {
+    pub admin_id: Uuid,
+    pub name: String,
 }
 
 /// Special operations that can be performed during state transitions
@@ -84,6 +89,14 @@ pub struct OutputEvent {
 /// Actual content of the outgoing event.
 #[derive(Clone, Debug)]
 pub enum OutputEventData {
+    LobbyCreated {
+        admin_id: Uuid,
+        lobby_id: Uuid,
+    },
+    LobbyJoinedAck {
+        player_id: Uuid,
+        player_name: String,
+    },
     InitialPlayerList {
         players: Vec<(String, i32)>,
     },
@@ -120,6 +133,7 @@ pub enum OutputEventData {
 pub struct GameState {
     pub lobby_id: Uuid,
     pub players: HashMap<Uuid, PlayerState>,
+    pub admins: HashMap<Uuid, AdminState>,
     pub phase: GamePhase,
     pub round_start_time: Option<Instant>,
     pub round_duration: u64,
@@ -157,6 +171,7 @@ impl GameEngine {
             state: GameState {
                 lobby_id,
                 players: HashMap::new(),
+                admins: HashMap::new(),
                 phase: GamePhase::Lobby,
                 round_start_time: None,
                 round_duration,
@@ -183,26 +198,32 @@ impl GameEngine {
                 name,
                 is_admin,
             } => {
-                if self.state.players.contains_key(&sender_id) {
-                    outputs.push(OutputEvent {
-                        recipient: sender_id,
-                        data: OutputEventData::Error {
-                            message: "Player ID already exists.".to_string(),
-                        },
-                    });
-                    return outputs;
+                if is_admin {
+                    let admin = AdminState {
+                        admin_id: sender_id,
+                        name: name.clone(),
+                    };
+                    self.state.admins.insert(sender_id, admin);
+                } else {
+                    if self.state.players.contains_key(&sender_id) {
+                        outputs.push(OutputEvent {
+                            recipient: sender_id,
+                            data: OutputEventData::Error {
+                                message: "Player ID already exists.".to_string(),
+                            },
+                        });
+                        return outputs;
+                    }
+
+                    let player = PlayerState {
+                        player_id: sender_id,
+                        name: name.clone(),
+                        score: 0,
+                        has_answered: false,
+                        answer: None,
+                    };
+                    self.state.players.insert(sender_id, player);
                 }
-
-                let player = PlayerState {
-                    player_id: sender_id,
-                    name: name.clone(),
-                    score: 0,
-                    has_answered: false,
-                    answer: None,
-                    is_admin,
-                };
-                self.state.players.insert(sender_id, player);
-
                 // Send initial player list to the new player
                 let player_list: Vec<(String, i32)> = self
                     .state
@@ -333,12 +354,7 @@ impl GameEngine {
                 specified_colors,
                 operation,
             } => {
-                if !self
-                    .state
-                    .players
-                    .get(&sender_id)
-                    .map_or(false, |p| p.is_admin)
-                {
+                if !self.state.admins.contains_key(&sender_id) {
                     outputs.push(OutputEvent {
                         recipient: sender_id,
                         data: OutputEventData::Error {
