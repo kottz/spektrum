@@ -709,7 +709,7 @@ mod tests {
             InputEvent::ToggleState {
                 sender_id: admin_id,
                 specified_colors: None,
-                operation: Some(StateOperation::StartGame),
+                operation: StateOperation::StartGame,
             },
             Instant::now(),
         );
