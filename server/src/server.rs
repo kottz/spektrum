@@ -1,7 +1,8 @@
 use crate::game::{
-    ColorDef, GamePhase, InputEvent, OutputEvent, OutputEventData, Song, StateOperation,
+    ColorDef, ErrorCode, EventContext, GameAction, GameEvent, GamePhase, GameResponse, Recipients,
+    ResponsePayload, Song,
 };
-use crate::game_manager::{GameManager, ManagerEvent, ManagerOutput};
+use crate::game_manager::GameManager;
 use axum::{
     extract::ws::{Message, WebSocket},
     extract::State,
@@ -39,23 +40,29 @@ pub enum ClientMsg {
         lobby_id: Uuid,
         color: String,
     },
-    ToggleState {
+    AdminAction {
         lobby_id: Uuid,
-        specified_colors: Option<Vec<String>>,
-        operation: StateOperation,
+        action: AdminAction,
     },
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type")]
+pub enum AdminAction {
+    StartGame,
+    StartRound { colors: Option<Vec<String>> },
+    EndRound,
+    EndGame { reason: String },
+    CloseGame { reason: String },
+}
+
+#[derive(Clone, Debug, Serialize)]
 #[serde(tag = "type")]
 pub enum ServerMsg {
-    LobbyCreated {
-        admin_id: Uuid,
-        lobby_id: Uuid,
-    },
-    LobbyJoinedAck {
+    JoinedLobby {
         player_id: Uuid,
-        player_name: String,
+        name: String,
+        players: Vec<(String, i32)>,
     },
     InitialPlayerList {
         players: Vec<(String, i32)>,
@@ -65,20 +72,20 @@ pub enum ServerMsg {
         current_score: i32,
     },
     PlayerLeft {
-        player_name: String,
+        name: String,
     },
     PlayerAnswered {
-        player_name: String,
+        name: String,
         correct: bool,
         new_score: i32,
     },
     StateChanged {
-        new_phase: String,
+        phase: String,
         colors: Vec<ColorDef>,
         scoreboard: Vec<(String, i32)>,
     },
     GameOver {
-        final_scores: Vec<(String, i32)>,
+        scores: Vec<(String, i32)>,
         reason: String,
     },
     GameClosed {
@@ -191,7 +198,7 @@ pub async fn create_lobby_handler(
         },
     ];
 
-    let mut mgr = state.manager.lock().unwrap();
+    let mgr = state.manager.lock().unwrap();
     let (lobby_id, admin_id) = mgr.create_lobby(state.songs.to_vec(), all_colors, round_duration);
 
     Json(CreateLobbyResponse { lobby_id, admin_id })
@@ -199,7 +206,7 @@ pub async fn create_lobby_handler(
 
 pub async fn list_lobbies_handler(State(state): State<AppState>) -> impl IntoResponse {
     let mgr = state.manager.lock().unwrap();
-    let lobby_ids: Vec<Uuid> = mgr.lobbies.keys().cloned().collect();
+    let lobby_ids = mgr.list_lobbies();
     Json(ListLobbiesResponse { lobbies: lobby_ids })
 }
 
@@ -235,83 +242,128 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
         match serde_json::from_str::<ClientMsg>(&text) {
             Ok(client_msg) => {
                 let now = Instant::now();
-                let mut mgr = state.manager.lock().unwrap();
-                let events = match client_msg {
+                let mgr = state.manager.lock().unwrap();
+
+                let responses = match client_msg {
                     ClientMsg::JoinLobby {
                         lobby_id: lid,
                         admin_id,
                         name,
                     } => {
+                        if let Some(aid) = admin_id {
+                            player_id = aid;
+                        }
                         {
-                            if let Some(aid) = admin_id {
-                                player_id = aid;
-                            }
                             let mut conns = state.connections.lock().unwrap();
                             conns.insert((lid, player_id), tx.clone());
                         }
                         lobby_id = Some(lid);
-                        mgr.update(
-                            ManagerEvent::LobbyEvent {
-                                lobby_id: lid,
-                                event: InputEvent::Join {
+
+                        if let Some(lobby) = mgr.get_lobby(&lid) {
+                            let event = GameEvent {
+                                context: EventContext {
+                                    lobby_id: lid,
                                     sender_id: player_id,
-                                    name,
+                                    timestamp: now,
+                                    is_admin: admin_id.is_some(),
                                 },
-                            },
-                            now,
-                        )
+                                action: GameAction::Join { name },
+                            };
+                            lobby.process_event(event)
+                        } else {
+                            vec![GameResponse {
+                                recipients: Recipients::Single(player_id),
+                                payload: ResponsePayload::Error {
+                                    code: ErrorCode::LobbyNotFound,
+                                    message: "Lobby not found".into(),
+                                },
+                            }]
+                        }
                     }
                     ClientMsg::Leave { lobby_id: lid } => {
-                        let ev = mgr.update(
-                            ManagerEvent::LobbyEvent {
-                                lobby_id: lid,
-                                event: InputEvent::Leave {
+                        if let Some(lobby) = mgr.get_lobby(&lid) {
+                            let event = GameEvent {
+                                context: EventContext {
+                                    lobby_id: lid,
                                     sender_id: player_id,
+                                    timestamp: now,
+                                    is_admin: false,
                                 },
-                            },
-                            now,
-                        );
-                        {
-                            let mut conns = state.connections.lock().unwrap();
-                            conns.remove(&(lid, player_id));
+                                action: GameAction::Leave,
+                            };
+                            let responses = lobby.process_event(event);
+                            {
+                                let mut conns = state.connections.lock().unwrap();
+                                conns.remove(&(lid, player_id));
+                            }
+                            responses
+                        } else {
+                            vec![]
                         }
-                        ev
                     }
                     ClientMsg::Answer {
                         lobby_id: lid,
                         color,
-                    } => mgr.update(
-                        ManagerEvent::LobbyEvent {
-                            lobby_id: lid,
-                            event: InputEvent::Answer {
-                                sender_id: player_id,
-                                color,
-                            },
-                        },
-                        now,
-                    ),
-                    ClientMsg::ToggleState {
-                        lobby_id: lid,
-                        specified_colors,
-                        operation,
                     } => {
-                        let ev = mgr.update(
-                            ManagerEvent::LobbyEvent {
-                                lobby_id: lid,
-                                event: InputEvent::ToggleState {
+                        if let Some(lobby) = mgr.get_lobby(&lid) {
+                            let event = GameEvent {
+                                context: EventContext {
+                                    lobby_id: lid,
                                     sender_id: player_id,
-                                    specified_colors,
-                                    operation,
+                                    timestamp: now,
+                                    is_admin: false,
                                 },
-                            },
-                            now,
-                        );
-                        ev
+                                action: GameAction::Answer { color },
+                            };
+                            lobby.process_event(event)
+                        } else {
+                            vec![]
+                        }
+                    }
+                    ClientMsg::AdminAction {
+                        lobby_id: lid,
+                        action,
+                    } => {
+                        if let Some(lobby) = mgr.get_lobby(&lid) {
+                            let game_action = match action {
+                                AdminAction::StartGame => GameAction::StartGame,
+                                AdminAction::StartRound { colors } => GameAction::StartRound {
+                                    specified_colors: colors,
+                                },
+                                AdminAction::EndRound => GameAction::EndRound,
+                                AdminAction::EndGame { reason } => GameAction::EndGame { reason },
+                                AdminAction::CloseGame { reason } => {
+                                    GameAction::CloseGame { reason }
+                                }
+                            };
+
+                            let event = GameEvent {
+                                context: EventContext {
+                                    lobby_id: lid,
+                                    sender_id: player_id,
+                                    timestamp: now,
+                                    is_admin: true,
+                                },
+                                action: game_action,
+                            };
+                            let responses = lobby.process_event(event);
+
+                            // Check if we need to remove the lobby
+                            if responses
+                                .iter()
+                                .any(|r| matches!(r.payload, ResponsePayload::GameClosed { .. }))
+                            {
+                                mgr.remove_lobby(&lid);
+                            }
+                            responses
+                        } else {
+                            vec![]
+                        }
                     }
                 };
                 drop(mgr);
 
-                broadcast_manager_outputs(events, &state);
+                broadcast_responses(responses, &state);
             }
             Err(e) => {
                 warn!("Failed to parse client msg: {}", e);
@@ -329,75 +381,95 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
     info!("WebSocket closed");
 }
 
-fn broadcast_manager_outputs(outputs: Vec<ManagerOutput>, state: &AppState) {
+fn broadcast_responses(responses: Vec<GameResponse>, state: &AppState) {
     let conns = state.connections.lock().unwrap();
 
-    for mo in outputs {
-        let lobby_id = mo.lobby_id;
-        let recipient = mo.event.recipient;
-        let data = &mo.event.data;
+    for response in responses {
+        let server_msg = convert_to_server_msg(&response.payload);
 
-        let server_msg = match data {
-            OutputEventData::LobbyJoinedAck {
-                player_id,
-                player_name,
-            } => ServerMsg::LobbyJoinedAck {
-                player_id: *player_id,
-                player_name: player_name.clone(),
-            },
-            OutputEventData::InitialPlayerList { players } => ServerMsg::InitialPlayerList {
-                players: players.clone(),
-            },
-            OutputEventData::PlayerJoined {
-                player_name,
-                current_score,
-            } => ServerMsg::PlayerJoined {
-                player_name: player_name.clone(),
-                current_score: *current_score,
-            },
-            OutputEventData::PlayerLeft { player_name } => ServerMsg::PlayerLeft {
-                player_name: player_name.clone(),
-            },
-            OutputEventData::PlayerAnswered {
-                player_name,
-                correct,
-                new_score,
-            } => ServerMsg::PlayerAnswered {
-                player_name: player_name.clone(),
-                correct: *correct,
-                new_score: *new_score,
-            },
-            OutputEventData::StateChanged { new_phase, colors, scoreboard } => {
-                let pstr = match new_phase {
-                    GamePhase::Lobby => "lobby",
-                    GamePhase::Score => "score",
-                    GamePhase::Question => "question",
-                    GamePhase::GameOver => "gameover",
-                }
-                .to_string();
-                ServerMsg::StateChanged {
-                    new_phase: pstr,
-                    colors: colors.clone(),
-                    scoreboard: scoreboard.clone(),
-                }
-            }
-            OutputEventData::GameOver {
-                final_scores,
-                reason,
-            } => ServerMsg::GameOver {
-                final_scores: final_scores.clone(),
-                reason: reason.clone(),
-            },
-            OutputEventData::GameClosed { reason } => ServerMsg::GameClosed {
-                reason: reason.clone(),
-            },
-            OutputEventData::Error { message } => ServerMsg::Error {
-                message: message.clone(),
-            },
+        // Extract all recipients for this lobby from the connections map
+        let lobby_connections: Vec<_> = conns
+            .keys()
+            .filter(|(lobby, _)| true) // We might want to filter by lobby here
+            .collect();
+
+        let recipients = match &response.recipients {
+            Recipients::Single(id) => lobby_connections
+                .iter()
+                .filter(|(_, pid)| pid == id)
+                .copied()
+                .collect::<Vec<_>>(),
+            Recipients::Multiple(ids) => lobby_connections
+                .iter()
+                .filter(|(_, pid)| ids.contains(pid))
+                .copied()
+                .collect(),
+            Recipients::AllExcept(exclude_ids) => lobby_connections
+                .iter()
+                .filter(|(_, pid)| !exclude_ids.contains(pid))
+                .copied()
+                .collect(),
+            Recipients::All => lobby_connections,
         };
 
-        if let Some(client_sender) = conns.get(&(lobby_id, recipient)) {
-            let _ = client_sender.send(server_msg);
+        for &key in &recipients {
+            if let Some(sender) = conns.get(&key) {
+                let _ = sender.send(server_msg.clone());
+            }
         }
+    }
+}
+
+fn convert_to_server_msg(payload: &ResponsePayload) -> ServerMsg {
+    match payload {
+        ResponsePayload::Joined {
+            player_id,
+            name,
+            current_players,
+        } => ServerMsg::JoinedLobby {
+            player_id: *player_id,
+            name: name.clone(),
+            players: current_players.clone(),
+        },
+        ResponsePayload::PlayerLeft { name } => ServerMsg::PlayerLeft { name: name.clone() },
+        ResponsePayload::PlayerAnswered {
+            name,
+            correct,
+            new_score,
+        } => ServerMsg::PlayerAnswered {
+            name: name.clone(),
+            correct: *correct,
+            new_score: *new_score,
+        },
+        ResponsePayload::StateChanged {
+            phase,
+            colors,
+            scoreboard,
+        } => {
+            let phase_str = match phase {
+                GamePhase::Lobby => "lobby",
+                GamePhase::Score => "score",
+                GamePhase::Question => "question",
+                GamePhase::GameOver => "gameover",
+            };
+            ServerMsg::StateChanged {
+                phase: phase_str.to_string(),
+                colors: colors.clone(),
+                scoreboard: scoreboard.clone(),
+            }
+        }
+        ResponsePayload::GameOver {
+            final_scores,
+            reason,
+        } => ServerMsg::GameOver {
+            scores: final_scores.clone(),
+            reason: reason.clone(),
+        },
+        ResponsePayload::GameClosed { reason } => ServerMsg::GameClosed {
+            reason: reason.clone(),
+        },
+        ResponsePayload::Error { code, message } => ServerMsg::Error {
+            message: format!("{:?}: {}", code, message),
+        },
     }
 }
