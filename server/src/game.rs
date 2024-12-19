@@ -227,13 +227,7 @@ impl GameEngine {
 
     fn handle_join(&mut self, ctx: EventContext, name: String) -> Vec<GameResponse> {
         if self.state.admin_id == ctx.sender_id {
-            return vec![GameResponse {
-                recipients: Recipients::Single(ctx.sender_id),
-                payload: ResponsePayload::Error {
-                    code: ErrorCode::InvalidAction,
-                    message: "Admin cannot join game".into(),
-                },
-            }];
+            return vec![];
         }
         if self.state.phase != GamePhase::Lobby {
             return vec![GameResponse {
