@@ -105,6 +105,7 @@ pub enum ResponsePayload {
     Joined {
         player_id: Uuid,
         name: String,
+        round_duration: u64,
         current_players: Vec<(String, i32)>,
     },
     PlayerLeft {
@@ -256,6 +257,7 @@ impl GameEngine {
                 payload: ResponsePayload::Joined {
                     player_id: ctx.sender_id,
                     name: name.clone(),
+                    round_duration: self.state.round_duration,
                     current_players,
                 },
             },
@@ -348,7 +350,7 @@ impl GameEngine {
 
         let correct = self.state.correct_colors.contains(&color);
         let new_score = if correct {
-            let score_delta = ((5000.0 - (elapsed.as_secs_f64() * 100.0)).max(0.0)) as i32;
+            let score_delta = ((self.state.round_duration as f64 * 100.0 - (elapsed.as_secs_f64() * 100.0)).max(0.0)) as i32;
             player.score += score_delta;
             player.score
         } else {

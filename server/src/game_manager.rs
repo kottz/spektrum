@@ -12,6 +12,8 @@ use crate::game::{
     ColorDef, EventContext, GameAction, GameEngine, GameEvent, GamePhase, GameResponse, Recipients, ResponsePayload, Song
 };
 
+use crate::server::ServerMessage;
+use crate::server::convert_to_server_message;
 /// A single lobby instance that manages its own connection pool and game engine
 pub struct GameLobby {
     id: Uuid,
@@ -152,148 +154,151 @@ impl GameManager {
     }
 }
 
-/// Helper function to convert game responses to server messages
-fn convert_to_server_message(payload: &ResponsePayload) -> ServerMessage {
-    match payload {
-        ResponsePayload::Joined {
-            player_id,
-            name,
-            current_players,
-        } => ServerMessage::JoinedLobby {
-            player_id: *player_id,
-            name: name.clone(),
-            players: current_players.clone(),
-        },
-        ResponsePayload::PlayerLeft { name } => ServerMessage::PlayerLeft { name: name.clone() },
-        ResponsePayload::PlayerAnswered {
-            name,
-            correct,
-            new_score,
-        } => ServerMessage::PlayerAnswered {
-            name: name.clone(),
-            correct: *correct,
-            new_score: *new_score,
-        },
-        ResponsePayload::StateChanged {
-            phase,
-            colors,
-            scoreboard,
-        } => ServerMessage::PhaseChanged {
-            phase: *phase,
-            colors: colors.clone(),
-            scoreboard: scoreboard.clone(),
-        },
-        ResponsePayload::GameOver {
-            final_scores,
-            reason,
-        } => ServerMessage::GameOver {
-            scores: final_scores.clone(),
-            reason: reason.clone(),
-        },
-        ResponsePayload::GameClosed { reason } => ServerMessage::GameClosed {
-            reason: reason.clone(),
-        },
-        ResponsePayload::Error { code, message } => ServerMessage::Error {
-            message: format!("{:?}: {}", code, message),
-        },
-    }
-}
-
-// External message protocol (Client <-> Server messages)
-#[derive(Debug, Deserialize)]
-#[serde(tag = "type")]
-pub enum ClientMessage {
-    JoinLobby {
-        lobby_id: Uuid,
-        admin_id: Option<Uuid>,
-        name: String,
-    },
-    Leave {
-        lobby_id: Uuid,
-    },
-    Answer {
-        lobby_id: Uuid,
-        color: String,
-    },
-    AdminAction {
-        lobby_id: Uuid,
-        action: AdminAction,
-    },
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(tag = "type")]
-pub enum AdminAction {
-    StartGame,
-    StartRound { colors: Option<Vec<String>> },
-    EndRound,
-    EndGame { reason: String },
-    CloseGame { reason: String },
-}
-
-#[derive(Clone, Debug, Serialize)]
-#[serde(tag = "type")]
-pub enum ServerMessage {
-    JoinedLobby {
-        player_id: Uuid,
-        name: String,
-        players: Vec<(String, i32)>,
-    },
-    PlayerLeft {
-        name: String,
-    },
-    PlayerAnswered {
-        name: String,
-        correct: bool,
-        new_score: i32,
-    },
-    PhaseChanged {
-        phase: GamePhase,
-        colors: Vec<ColorDef>,
-        scoreboard: Vec<(String, i32)>,
-    },
-    GameOver {
-        scores: Vec<(String, i32)>,
-        reason: String,
-    },
-    GameClosed {
-        reason: String,
-    },
-    Error {
-        message: String,
-    },
-}
-
-// Convert client messages to game events
-impl ClientMessage {
-    pub fn into_game_event(self, sender_id: Uuid, is_admin: bool) -> GameEvent {
-        let context = EventContext {
-            lobby_id: match &self {
-                ClientMessage::JoinLobby { lobby_id, .. } => *lobby_id,
-                ClientMessage::Leave { lobby_id } => *lobby_id,
-                ClientMessage::Answer { lobby_id, .. } => *lobby_id,
-                ClientMessage::AdminAction { lobby_id, .. } => *lobby_id,
-            },
-            sender_id,
-            timestamp: Instant::now(),
-            is_admin,
-        };
-
-        let action = match self {
-            ClientMessage::JoinLobby { name, .. } => GameAction::Join { name },
-            ClientMessage::Leave { .. } => GameAction::Leave,
-            ClientMessage::Answer { color, .. } => GameAction::Answer { color },
-            ClientMessage::AdminAction { action, .. } => match action {
-                AdminAction::StartGame => GameAction::StartGame,
-                AdminAction::StartRound { colors } => GameAction::StartRound {
-                    specified_colors: colors,
-                },
-                AdminAction::EndRound => GameAction::EndRound,
-                AdminAction::EndGame { reason } => GameAction::EndGame { reason },
-                AdminAction::CloseGame { reason } => GameAction::CloseGame { reason },
-            },
-        };
-
-        GameEvent { context, action }
-    }
-}
+// /// Helper function to convert game responses to server messages
+// fn convert_to_server_message(payload: &ResponsePayload) -> ServerMessage {
+//     match payload {
+//         ResponsePayload::Joined {
+//             player_id,
+//             name,
+//             round_duration,
+//             current_players,
+//         } => ServerMessage::JoinedLobby {
+//             player_id: *player_id,
+//             name: name.clone(),
+//             round_duration: *round_duration,
+//             players: current_players.clone(),
+//         },
+//         ResponsePayload::PlayerLeft { name } => ServerMessage::PlayerLeft { name: name.clone() },
+//         ResponsePayload::PlayerAnswered {
+//             name,
+//             correct,
+//             new_score,
+//         } => ServerMessage::PlayerAnswered {
+//             name: name.clone(),
+//             correct: *correct,
+//             new_score: *new_score,
+//         },
+//         ResponsePayload::StateChanged {
+//             phase,
+//             colors,
+//             scoreboard,
+//         } => ServerMessage::PhaseChanged {
+//             phase: *phase,
+//             colors: colors.clone(),
+//             scoreboard: scoreboard.clone(),
+//         },
+//         ResponsePayload::GameOver {
+//             final_scores,
+//             reason,
+//         } => ServerMessage::GameOver {
+//             scores: final_scores.clone(),
+//             reason: reason.clone(),
+//         },
+//         ResponsePayload::GameClosed { reason } => ServerMessage::GameClosed {
+//             reason: reason.clone(),
+//         },
+//         ResponsePayload::Error { code, message } => ServerMessage::Error {
+//             message: format!("{:?}: {}", code, message),
+//         },
+//     }
+// }
+//
+// // External message protocol (Client <-> Server messages)
+// #[derive(Debug, Deserialize)]
+// #[serde(tag = "type")]
+// pub enum ClientMessage {
+//     JoinLobby {
+//         lobby_id: Uuid,
+//         admin_id: Option<Uuid>,
+//         name: String,
+//     },
+//     Leave {
+//         lobby_id: Uuid,
+//     },
+//     Answer {
+//         lobby_id: Uuid,
+//         color: String,
+//     },
+//     AdminAction {
+//         lobby_id: Uuid,
+//         action: AdminAction,
+//     },
+// }
+//
+// #[derive(Debug, Deserialize)]
+// #[serde(tag = "type")]
+// pub enum AdminAction {
+//     StartGame,
+//     StartRound { colors: Option<Vec<String>> },
+//     EndRound,
+//     EndGame { reason: String },
+//     CloseGame { reason: String },
+// }
+//
+// #[derive(Clone, Debug, Serialize)]
+// #[serde(tag = "type")]
+// pub enum ServerMessage {
+//     JoinedLobby {
+//         player_id: Uuid,
+//         name: String,
+//         round_duration: u64,
+//         players: Vec<(String, i32)>,
+//     },
+//     PlayerLeft {
+//         name: String,
+//     },
+//     PlayerAnswered {
+//         name: String,
+//         correct: bool,
+//         new_score: i32,
+//     },
+//     PhaseChanged {
+//         phase: GamePhase,
+//         colors: Vec<ColorDef>,
+//         scoreboard: Vec<(String, i32)>,
+//     },
+//     GameOver {
+//         scores: Vec<(String, i32)>,
+//         reason: String,
+//     },
+//     GameClosed {
+//         reason: String,
+//     },
+//     Error {
+//         message: String,
+//     },
+// }
+//
+// // Convert client messages to game events
+// impl ClientMessage {
+//     pub fn into_game_event(self, sender_id: Uuid, is_admin: bool) -> GameEvent {
+//         let context = EventContext {
+//             lobby_id: match &self {
+//                 ClientMessage::JoinLobby { lobby_id, .. } => *lobby_id,
+//                 ClientMessage::Leave { lobby_id } => *lobby_id,
+//                 ClientMessage::Answer { lobby_id, .. } => *lobby_id,
+//                 ClientMessage::AdminAction { lobby_id, .. } => *lobby_id,
+//             },
+//             sender_id,
+//             timestamp: Instant::now(),
+//             is_admin,
+//         };
+//
+//         let action = match self {
+//             ClientMessage::JoinLobby { name, .. } => GameAction::Join { name },
+//             ClientMessage::Leave { .. } => GameAction::Leave,
+//             ClientMessage::Answer { color, .. } => GameAction::Answer { color },
+//             ClientMessage::AdminAction { action, .. } => match action {
+//                 AdminAction::StartGame => GameAction::StartGame,
+//                 AdminAction::StartRound { colors } => GameAction::StartRound {
+//                     specified_colors: colors,
+//                 },
+//                 AdminAction::EndRound => GameAction::EndRound,
+//                 AdminAction::EndGame { reason } => GameAction::EndGame { reason },
+//                 AdminAction::CloseGame { reason } => GameAction::CloseGame { reason },
+//             },
+//         };
+//
+//         GameEvent { context, action }
+//     }
+// }

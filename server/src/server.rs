@@ -58,10 +58,11 @@ pub enum AdminAction {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(tag = "type")]
-pub enum ServerMsg {
+pub enum ServerMessage {
     JoinedLobby {
         player_id: Uuid,
         name: String,
+        round_duration: u64,
         players: Vec<(String, i32)>,
     },
     InitialPlayerList {
@@ -103,7 +104,7 @@ pub enum ServerMsg {
 #[derive(Clone)]
 pub struct AppState {
     pub manager: Arc<Mutex<GameManager>>,
-    pub connections: Arc<Mutex<HashMap<(Uuid, Uuid), UnboundedSender<ServerMsg>>>>,
+    pub connections: Arc<Mutex<HashMap<(Uuid, Uuid), UnboundedSender<ServerMessage>>>>,
     pub songs: Arc<Vec<Song>>,
 }
 
@@ -220,7 +221,7 @@ pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> 
 
 pub async fn handle_socket(socket: WebSocket, state: AppState) {
     let (mut ws_tx, mut ws_rx) = socket.split();
-    let (tx, mut rx) = unbounded_channel::<ServerMsg>();
+    let (tx, mut rx) = unbounded_channel::<ServerMessage>();
 
     let mut lobby_id: Option<Uuid> = None;
     let mut player_id: Uuid = Uuid::new_v4();
@@ -385,7 +386,7 @@ fn broadcast_responses(responses: Vec<GameResponse>, state: &AppState) {
     let conns = state.connections.lock().unwrap();
 
     for response in responses {
-        let server_msg = convert_to_server_msg(&response.payload);
+        let server_msg = convert_to_server_message(&response.payload);
 
         // Extract all recipients for this lobby from the connections map
         let lobby_connections: Vec<_> = conns
@@ -420,23 +421,25 @@ fn broadcast_responses(responses: Vec<GameResponse>, state: &AppState) {
     }
 }
 
-fn convert_to_server_msg(payload: &ResponsePayload) -> ServerMsg {
+pub fn convert_to_server_message(payload: &ResponsePayload) -> ServerMessage {
     match payload {
         ResponsePayload::Joined {
             player_id,
             name,
+            round_duration,
             current_players,
-        } => ServerMsg::JoinedLobby {
+        } => ServerMessage::JoinedLobby {
             player_id: *player_id,
             name: name.clone(),
+            round_duration: *round_duration,
             players: current_players.clone(),
         },
-        ResponsePayload::PlayerLeft { name } => ServerMsg::PlayerLeft { name: name.clone() },
+        ResponsePayload::PlayerLeft { name } => ServerMessage::PlayerLeft { name: name.clone() },
         ResponsePayload::PlayerAnswered {
             name,
             correct,
             new_score,
-        } => ServerMsg::PlayerAnswered {
+        } => ServerMessage::PlayerAnswered {
             name: name.clone(),
             correct: *correct,
             new_score: *new_score,
@@ -452,7 +455,7 @@ fn convert_to_server_msg(payload: &ResponsePayload) -> ServerMsg {
                 GamePhase::Question => "question",
                 GamePhase::GameOver => "gameover",
             };
-            ServerMsg::StateChanged {
+            ServerMessage::StateChanged {
                 phase: phase_str.to_string(),
                 colors: colors.clone(),
                 scoreboard: scoreboard.clone(),
@@ -461,14 +464,14 @@ fn convert_to_server_msg(payload: &ResponsePayload) -> ServerMsg {
         ResponsePayload::GameOver {
             final_scores,
             reason,
-        } => ServerMsg::GameOver {
+        } => ServerMessage::GameOver {
             scores: final_scores.clone(),
             reason: reason.clone(),
         },
-        ResponsePayload::GameClosed { reason } => ServerMsg::GameClosed {
+        ResponsePayload::GameClosed { reason } => ServerMessage::GameClosed {
             reason: reason.clone(),
         },
-        ResponsePayload::Error { code, message } => ServerMsg::Error {
+        ResponsePayload::Error { code, message } => ServerMessage::Error {
             message: format!("{:?}: {}", code, message),
         },
     }

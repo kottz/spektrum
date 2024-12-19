@@ -5,6 +5,7 @@ let currentAdminId = null;
 let isAdmin = false;
 let colors = [];
 let playerAnswer = null;
+let roundDuration = 60;
 let hasAnswered = false;
 let playerScore = 0;
 let totalPlayers = 0;
@@ -17,7 +18,7 @@ async function createLobby() {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ round_duration: 60 }),
+      body: JSON.stringify({ round_duration: roundDuration }),
     });
 
     if (!response.ok) {
@@ -152,6 +153,7 @@ function handleServerMessage(event) {
 
   switch (data.type) {
     case "JoinedLobby":
+      roundDuration = data.round_duration;
       updateLeaderboard(data.players);
       break;
     case "InitialPlayerList":
@@ -250,7 +252,7 @@ function handleStateChanged(phase, newColors, scoreboard) {
       document.getElementById("colorButtons").style.display = "grid";
     }
     document.getElementById("answerStatusContainer").style.display = "flex";
-    startTimer(60000);
+    startTimer(roundDuration * 1000);
   } else if (phase === "score") {
     const formattedScoreboard = scoreboard.map(([name, score]) => ({
       name,
