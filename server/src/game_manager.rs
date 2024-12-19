@@ -1,18 +1,13 @@
 use std::collections::HashMap;
 use std::time::Instant;
 use uuid::Uuid;
+use tracing::info;
 
 use crate::game::{ColorDef, GameEngine, InputEvent, OutputEvent, OutputEventData, Song};
 
 /// A single "manager" event that either creates a lobby or forwards an `InputEvent`
 /// to a specific lobby.
 pub enum ManagerEvent {
-    /// Create a new lobby with optional parameters like custom songs/colors.
-    CreateLobby {
-        songs: Vec<Song>,
-        colors: Vec<ColorDef>,
-        round_duration: u64,
-    },
     /// An event directed at an existing lobby.
     LobbyEvent { lobby_id: Uuid, event: InputEvent },
 }
@@ -41,6 +36,20 @@ impl GameManager {
         }
     }
 
+    pub fn create_lobby(
+        &mut self,
+        songs: Vec<Song>,
+        colors: Vec<ColorDef>,
+        round_duration: u64,
+    ) -> (Uuid, Uuid) {
+        let lobby_id = Uuid::new_v4();
+        let admin_id = Uuid::new_v4();
+        let engine = GameEngine::new(lobby_id, admin_id, songs, colors, round_duration);
+
+        self.lobbies.insert(lobby_id, engine);
+        (lobby_id, admin_id)
+    }
+
     /// Handle a `ManagerEvent`. If it's `CreateLobby`, this will create a new `GameEngine`
     /// with a fresh `lobby_id`. If it's a `LobbyEvent`, it finds the correct engine and
     /// updates it. Returns a list of `ManagerOutput` for the caller to broadcast.
@@ -49,20 +58,6 @@ impl GameManager {
     /// so the game logic can handle timing.
     pub fn update(&mut self, manager_event: ManagerEvent, now: Instant) -> Vec<ManagerOutput> {
         match manager_event {
-            ManagerEvent::CreateLobby {
-                songs,
-                colors,
-                round_duration,
-            } => {
-                let new_lobby_id = Uuid::new_v4();
-                let engine = GameEngine::new(new_lobby_id, songs, colors, round_duration);
-                self.lobbies.insert(new_lobby_id, engine);
-
-                // You might want to return an acknowledgement event or just an empty vec.
-                // For example, an external code can broadcast "LobbyCreated" to the user.
-                vec![]
-            }
-
             ManagerEvent::LobbyEvent { lobby_id, event } => {
                 let mut outputs = Vec::new();
 
@@ -76,6 +71,7 @@ impl GameManager {
                         // If the engine told us the game is closed, remove the lobby
                         match &evt.data {
                             OutputEventData::GameClosed { reason: _ } => {
+                                info!("Removing lobby {}", lobby_id);
                                 // We'll remove the lobby AFTER collecting the outputs so that
                                 // the outside code can still send the "GameClosed" notification
                                 // to all players.

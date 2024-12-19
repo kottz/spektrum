@@ -1,6 +1,7 @@
 let socket = null;
 let playerName = "";
 let currentLobbyId = null;
+let currentAdminId = null;
 let isAdmin = false;
 let colors = [];
 let playerAnswer = null;
@@ -25,6 +26,7 @@ async function createLobby() {
 
     const data = await response.json();
     currentLobbyId = data.lobby_id;
+    currentAdminId = data.admin_id;
     isAdmin = true;
     showAdminView(currentLobbyId);
     connectToLobby(currentLobbyId, playerName, isAdmin);
@@ -94,7 +96,7 @@ function joinLobby() {
   connectToLobby(currentLobbyId, playerName, false);
 }
 
-function connectToLobby(lobbyId, name, adminFlag) {
+function connectToLobby(lobbyId, name) {
   closeConnection();
   const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const wsUrl = `${wsProtocol}//${window.location.host}/ws`;
@@ -104,8 +106,8 @@ function connectToLobby(lobbyId, name, adminFlag) {
     const joinMsg = {
       type: "JoinLobby",
       lobby_id: lobbyId,
+      admin_id: currentAdminId,
       name: name,
-      is_admin: adminFlag,
     };
     socket.send(JSON.stringify(joinMsg));
 
@@ -137,6 +139,9 @@ function handleServerMessage(event) {
   console.log("received:");
   console.log(data);
   switch (data.type) {
+    case "LobbyCreated":
+      console.log("received lobby created confirmation");
+      break;
     case "InitialPlayerList":
       updateInitialPlayerList(data.players);
       break;
@@ -150,7 +155,7 @@ function handleServerMessage(event) {
       handlePlayerAnswered(data.player_name, data.correct, data.new_score);
       break;
     case "StateChanged":
-      handleStateChanged(data.new_phase, data.colors);
+      handleStateChanged(data.new_phase, data.colors, data.scoreboard);
       break;
     case "GameOver":
       handleGameOver(data.final_scores, data.reason);
@@ -208,7 +213,7 @@ function updateAnswerStatus(answeredCount, totalPlayers) {
   });
 }
 
-function handleStateChanged(phase, newColors) {
+function handleStateChanged(phase, newColors, scoreboard) {
   document.getElementById("gameState").textContent = `Current Phase: ${phase}`;
   stopTimer();
 
@@ -234,6 +239,11 @@ function handleStateChanged(phase, newColors) {
     // Example: 60 seconds timer
     startTimer(60000);
   } else if (phase === "score") {
+    const formattedScoreboard = scoreboard.map(([name, score]) => ({
+      name,
+      score
+    }));
+    updateLeaderboard(formattedScoreboard);
     document.getElementById("colorButtons").style.display = "none";
     document.getElementById("leaderboard").style.display = "block";
     document.getElementById("roundResult").textContent = "";
@@ -332,14 +342,15 @@ function startGame() {
   }
 }
 
-function endGame() {
+function endGame(reason = "Game ended by admin") {
   if (socket && isAdmin) {
-    // This toggles the game phase on the server
     sendMessage({
       type: "ToggleState",
       lobby_id: currentLobbyId,
       specified_colors: null,
-      operation: "EndGame",
+      operation: {
+        EndGame: reason
+      }
     });
   }
 }

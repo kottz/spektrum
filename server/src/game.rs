@@ -63,7 +63,6 @@ pub enum InputEvent {
     Join {
         sender_id: Uuid,
         name: String,
-        is_admin: bool,
     },
     Leave {
         sender_id: Uuid,
@@ -89,10 +88,6 @@ pub struct OutputEvent {
 /// Actual content of the outgoing event.
 #[derive(Clone, Debug)]
 pub enum OutputEventData {
-    LobbyCreated {
-        admin_id: Uuid,
-        lobby_id: Uuid,
-    },
     LobbyJoinedAck {
         player_id: Uuid,
         player_name: String,
@@ -115,6 +110,7 @@ pub enum OutputEventData {
     StateChanged {
         new_phase: GamePhase,
         colors: Vec<ColorDef>,
+        scoreboard: Vec<(String, i32)>,
     },
     GameOver {
         final_scores: Vec<(String, i32)>,
@@ -133,7 +129,7 @@ pub enum OutputEventData {
 pub struct GameState {
     pub lobby_id: Uuid,
     pub players: HashMap<Uuid, PlayerState>,
-    pub admins: HashMap<Uuid, AdminState>,
+    pub admin: Uuid,
     pub phase: GamePhase,
     pub round_start_time: Option<Instant>,
     pub round_duration: u64,
@@ -154,6 +150,16 @@ pub struct GameState {
     pub all_colors: Vec<ColorDef>,
 }
 
+impl GameState {
+    /// Helper method to generate a scoreboard for the current game state.
+    pub fn soceboard(&self) -> Vec<(String, i32)> {
+        self.players
+            .values()
+            .map(|p| (p.name.clone(), p.score))
+            .collect()
+    }
+}
+
 /// The game engine wrapper that processes events against the `GameState`.
 pub struct GameEngine {
     state: GameState,
@@ -163,6 +169,7 @@ impl GameEngine {
     /// Creates a new GameEngine with a fresh `GameState`.
     pub fn new(
         lobby_id: Uuid,
+        admin_id: Uuid,
         all_songs: Vec<Song>,
         all_colors: Vec<ColorDef>,
         round_duration: u64,
@@ -171,7 +178,7 @@ impl GameEngine {
             state: GameState {
                 lobby_id,
                 players: HashMap::new(),
-                admins: HashMap::new(),
+                admin: admin_id,
                 phase: GamePhase::Lobby,
                 round_start_time: None,
                 round_duration,
@@ -193,17 +200,12 @@ impl GameEngine {
         let mut outputs = Vec::new();
 
         match event {
-            InputEvent::Join {
-                sender_id,
-                name,
-                is_admin,
-            } => {
-                if is_admin {
+            InputEvent::Join { sender_id, name } => {
+                if sender_id == self.state.admin {
                     let admin = AdminState {
                         admin_id: sender_id,
                         name: name.clone(),
                     };
-                    self.state.admins.insert(sender_id, admin);
                 } else {
                     if self.state.players.contains_key(&sender_id) {
                         outputs.push(OutputEvent {
@@ -251,9 +253,28 @@ impl GameEngine {
                         });
                     }
                 }
+                // notify admin about the new player
+                outputs.push(OutputEvent {
+                    recipient: self.state.admin,
+                    data: OutputEventData::PlayerJoined {
+                        player_name: name.clone(),
+                        current_score: 0,
+                    },
+                });
             }
 
             InputEvent::Leave { sender_id } => {
+                if sender_id == self.state.admin {
+                    for &pid in self.state.players.keys() {
+                        outputs.push(OutputEvent {
+                            recipient: pid,
+                            data: OutputEventData::GameClosed {
+                                reason: "Host left the game".to_string(),
+                            },
+                        });
+                    }
+                    return outputs;
+                }
                 if let Some(removed) = self.state.players.remove(&sender_id) {
                     for &pid in &self.state.players.keys().cloned().collect::<Vec<_>>() {
                         outputs.push(OutputEvent {
@@ -263,6 +284,13 @@ impl GameEngine {
                             },
                         });
                     }
+                    // Notify admin about the player leaving
+                    outputs.push(OutputEvent {
+                        recipient: self.state.admin,
+                        data: OutputEventData::PlayerLeft {
+                            player_name: removed.name.clone(),
+                        },
+                    });
                 } else {
                     outputs.push(OutputEvent {
                         recipient: sender_id,
@@ -347,6 +375,14 @@ impl GameEngine {
                         },
                     });
                 }
+                outputs.push(OutputEvent {
+                    recipient: self.state.admin,
+                    data: OutputEventData::PlayerAnswered {
+                        player_name: player_name.clone(),
+                        correct,
+                        new_score,
+                    },
+                });
             }
 
             InputEvent::ToggleState {
@@ -354,7 +390,7 @@ impl GameEngine {
                 specified_colors,
                 operation,
             } => {
-                if !self.state.admins.contains_key(&sender_id) {
+                if sender_id != self.state.admin {
                     outputs.push(OutputEvent {
                         recipient: sender_id,
                         data: OutputEventData::Error {
@@ -382,6 +418,7 @@ impl GameEngine {
                                 data: OutputEventData::StateChanged {
                                     new_phase: GamePhase::Score,
                                     colors: Vec::new(),
+                                    scoreboard: self.state.soceboard(),
                                 },
                             });
                         }
@@ -439,6 +476,7 @@ impl GameEngine {
                                             data: OutputEventData::StateChanged {
                                                 new_phase: GamePhase::Question,
                                                 colors: self.state.colors.clone(),
+                                                scoreboard: self.state.soceboard(),
                                             },
                                         });
                                     }
@@ -452,13 +490,19 @@ impl GameEngine {
                             }
                         }
                         GamePhase::Question => {
-                            self.end_round();
+                            if let Some(song) = &self.state.current_song {
+                                self.state.used_songs.insert(song.uri.clone());
+                            }
+                            self.state.current_song = None;
+                            self.state.phase = GamePhase::Score;
+
                             for &pid in self.state.players.keys() {
                                 outputs.push(OutputEvent {
                                     recipient: pid,
                                     data: OutputEventData::StateChanged {
                                         new_phase: GamePhase::Score,
                                         colors: Vec::new(),
+                                        scoreboard: self.state.soceboard(),
                                     },
                                 });
                             }
@@ -610,15 +654,6 @@ impl GameEngine {
         round_colors
     }
 
-    /// Ends a question round and transitions back to Score phase.
-    fn end_round(&mut self) {
-        if let Some(song) = &self.state.current_song {
-            self.state.used_songs.insert(song.uri.clone());
-        }
-        self.state.current_song = None;
-        self.state.phase = GamePhase::Score;
-    }
-
     /// Helper method to transition to GameOver state
     fn transition_to_game_over(&mut self, reason: String, outputs: &mut Vec<OutputEvent>) {
         self.state.phase = GamePhase::GameOver;
@@ -681,7 +716,8 @@ mod tests {
     fn test_game_initialization() {
         let (songs, colors) = setup_test_data();
         let lobby_id = Uuid::new_v4();
-        let engine = GameEngine::new(lobby_id, songs, colors, 30);
+        let admin_id = Uuid::new_v4();
+        let engine = GameEngine::new(lobby_id, admin_id, songs, colors, 30);
         assert_eq!(engine.state.phase, GamePhase::Lobby);
     }
 
@@ -689,14 +725,14 @@ mod tests {
     fn test_player_join() {
         let (songs, colors) = setup_test_data();
         let lobby_id = Uuid::new_v4();
-        let mut engine = GameEngine::new(lobby_id, songs, colors, 30);
+        let admin_id = Uuid::new_v4();
+        let mut engine = GameEngine::new(lobby_id, admin_id, songs, colors, 30);
 
         let player_id = Uuid::new_v4();
         let outputs = engine.update(
             InputEvent::Join {
                 sender_id: player_id,
                 name: "TestPlayer".to_string(),
-                is_admin: true,
             },
             Instant::now(),
         );
@@ -709,14 +745,14 @@ mod tests {
     fn test_game_start() {
         let (songs, colors) = setup_test_data();
         let lobby_id = Uuid::new_v4();
-        let mut engine = GameEngine::new(lobby_id, songs, colors, 30);
+        let admin_id = Uuid::new_v4();
+        let mut engine = GameEngine::new(lobby_id, admin_id, songs, colors, 30);
 
         let admin_id = Uuid::new_v4();
         engine.update(
             InputEvent::Join {
                 sender_id: admin_id,
                 name: "Admin".to_string(),
-                is_admin: true,
             },
             Instant::now(),
         );

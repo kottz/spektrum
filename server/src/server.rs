@@ -29,8 +29,8 @@ use uuid::Uuid;
 pub enum ClientMsg {
     JoinLobby {
         lobby_id: Uuid,
+        admin_id: Option<Uuid>,
         name: String,
-        is_admin: bool,
     },
     Leave {
         lobby_id: Uuid,
@@ -75,6 +75,7 @@ pub enum ServerMsg {
     StateChanged {
         new_phase: String,
         colors: Vec<ColorDef>,
+        scoreboard: Vec<(String, i32)>,
     },
     GameOver {
         final_scores: Vec<(String, i32)>,
@@ -126,6 +127,7 @@ struct ListLobbiesResponse {
 #[derive(Debug, Serialize)]
 struct CreateLobbyResponse {
     lobby_id: Uuid,
+    admin_id: Uuid,
 }
 
 pub async fn create_lobby_handler(
@@ -190,17 +192,9 @@ pub async fn create_lobby_handler(
     ];
 
     let mut mgr = state.manager.lock().unwrap();
-    mgr.update(
-        ManagerEvent::CreateLobby {
-            songs: state.songs.to_vec(),
-            colors: all_colors,
-            round_duration,
-        },
-        Instant::now(),
-    );
-    let lobby_id = mgr.lobbies.keys().last().cloned().unwrap();
+    let (lobby_id, admin_id) = mgr.create_lobby(state.songs.to_vec(), all_colors, round_duration);
 
-    Json(CreateLobbyResponse { lobby_id })
+    Json(CreateLobbyResponse { lobby_id, admin_id })
 }
 
 pub async fn list_lobbies_handler(State(state): State<AppState>) -> impl IntoResponse {
@@ -222,7 +216,7 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
     let (tx, mut rx) = unbounded_channel::<ServerMsg>();
 
     let mut lobby_id: Option<Uuid> = None;
-    let player_id: Uuid = Uuid::new_v4();
+    let mut player_id: Uuid = Uuid::new_v4();
     info!("New WebSocket connection from player {}", player_id);
 
     let send_task = tokio::spawn(async move {
@@ -245,10 +239,13 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
                 let events = match client_msg {
                     ClientMsg::JoinLobby {
                         lobby_id: lid,
+                        admin_id,
                         name,
-                        is_admin,
                     } => {
                         {
+                            if let Some(aid) = admin_id {
+                                player_id = aid;
+                            }
                             let mut conns = state.connections.lock().unwrap();
                             conns.insert((lid, player_id), tx.clone());
                         }
@@ -259,19 +256,18 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
                                 event: InputEvent::Join {
                                     sender_id: player_id,
                                     name,
-                                    is_admin,
                                 },
                             },
                             now,
                         )
                     }
-                    ClientMsg::Leave {
-                        lobby_id: lid,
-                    } => {
+                    ClientMsg::Leave { lobby_id: lid } => {
                         let ev = mgr.update(
                             ManagerEvent::LobbyEvent {
                                 lobby_id: lid,
-                                event: InputEvent::Leave { sender_id: player_id },
+                                event: InputEvent::Leave {
+                                    sender_id: player_id,
+                                },
                             },
                             now,
                         );
@@ -298,17 +294,20 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
                         lobby_id: lid,
                         specified_colors,
                         operation,
-                    } => mgr.update(
-                        ManagerEvent::LobbyEvent {
-                            lobby_id: lid,
-                            event: InputEvent::ToggleState {
-                                sender_id: player_id,
-                                specified_colors,
-                                operation,
+                    } => {
+                        let ev = mgr.update(
+                            ManagerEvent::LobbyEvent {
+                                lobby_id: lid,
+                                event: InputEvent::ToggleState {
+                                    sender_id: player_id,
+                                    specified_colors,
+                                    operation,
+                                },
                             },
-                        },
-                        now,
-                    ),
+                            now,
+                        );
+                        ev
+                    }
                 };
                 drop(mgr);
 
@@ -339,10 +338,6 @@ fn broadcast_manager_outputs(outputs: Vec<ManagerOutput>, state: &AppState) {
         let data = &mo.event.data;
 
         let server_msg = match data {
-            OutputEventData::LobbyCreated { admin_id, lobby_id } => ServerMsg::LobbyCreated {
-                admin_id: *admin_id,
-                lobby_id: *lobby_id,
-            },
             OutputEventData::LobbyJoinedAck {
                 player_id,
                 player_name,
@@ -372,7 +367,7 @@ fn broadcast_manager_outputs(outputs: Vec<ManagerOutput>, state: &AppState) {
                 correct: *correct,
                 new_score: *new_score,
             },
-            OutputEventData::StateChanged { new_phase, colors } => {
+            OutputEventData::StateChanged { new_phase, colors, scoreboard } => {
                 let pstr = match new_phase {
                     GamePhase::Lobby => "lobby",
                     GamePhase::Score => "score",
@@ -383,6 +378,7 @@ fn broadcast_manager_outputs(outputs: Vec<ManagerOutput>, state: &AppState) {
                 ServerMsg::StateChanged {
                     new_phase: pstr,
                     colors: colors.clone(),
+                    scoreboard: scoreboard.clone(),
                 }
             }
             OutputEventData::GameOver {
