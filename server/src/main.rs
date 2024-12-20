@@ -14,6 +14,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 mod game;
 mod game_manager;
 mod server;
+mod messages;
 
 use crate::game::Song;
 use crate::server::{create_lobby_handler, list_lobbies_handler, ws_handler, AppState};
