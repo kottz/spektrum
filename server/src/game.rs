@@ -2,7 +2,7 @@ use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
-    time::{Duration, Instant},
+    time::Instant,
 };
 use uuid::Uuid;
 

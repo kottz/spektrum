@@ -341,7 +341,7 @@ fn broadcast_responses(responses: Vec<GameResponse>, state: &AppState) {
         };
 
         for &key in &recipients {
-            if let Some(sender) = conns.get(&key) {
+            if let Some(sender) = conns.get(key) {
                 let _ = sender.send(server_msg.clone());
             }
         }
