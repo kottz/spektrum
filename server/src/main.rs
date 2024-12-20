@@ -43,13 +43,13 @@ pub enum SongFileError {
 
 pub fn load_songs_from_csv(filepath: &str) -> Result<Vec<Song>, SongFileError> {
     let mut rdr = ReaderBuilder::new()
-        .has_headers(false)
+        .has_headers(true)
         .from_path(filepath)?;
 
     let mut songs = Vec::new();
     for result in rdr.records() {
         let record = result?;
-        if record.len() != 5 {
+        if record.len() != 6 {
             return Err(SongFileError::InvalidFieldCount(record.len()));
         }
         let song = parse_song_record(&record)?;
@@ -62,8 +62,9 @@ fn parse_song_record(record: &StringRecord) -> Result<Song, SongFileError> {
     let id: u32 = record[0].parse()?;
     let song_name = record[1].trim().to_string();
     let artist = record[2].trim().to_string();
-    let uri = record[3].trim().to_string();
-    let colors_str = record[4].trim().to_string();
+    let colors_str = record[3].trim().to_string();
+    let spotify_uri = record[4].trim().to_string();
+    let youtube_id = record[5].trim().to_string();
 
     let color_list: Vec<String> = colors_str
         .split(';')
@@ -75,8 +76,9 @@ fn parse_song_record(record: &StringRecord) -> Result<Song, SongFileError> {
         id,
         song_name,
         artist,
-        uri,
         colors: color_list,
+        spotify_uri,
+        youtube_id,
     })
 }
 

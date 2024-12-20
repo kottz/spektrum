@@ -26,8 +26,9 @@ pub struct Song {
     pub id: u32,
     pub song_name: String,
     pub artist: String,
-    pub uri: String,
     pub colors: Vec<String>,
+    pub spotify_uri: String,
+    pub youtube_id: String,
 }
 
 #[derive(Clone, Debug)]
@@ -462,7 +463,7 @@ impl GameEngine {
         }
 
         if let Some(song) = &self.state.current_song {
-            self.state.used_songs.insert(song.uri.clone());
+            self.state.used_songs.insert(song.spotify_uri.clone());
         }
 
         self.state.phase = GamePhase::Score;
@@ -538,7 +539,7 @@ impl GameEngine {
                 .state
                 .all_songs
                 .iter()
-                .filter(|s| !self.state.used_songs.contains(&s.uri))
+                .filter(|s| !self.state.used_songs.contains(&s.spotify_uri))
                 .cloned()
                 .collect();
 
@@ -650,14 +651,16 @@ mod tests {
                 id: 1,
                 song_name: "Test Song 1".to_string(),
                 artist: "Test Artist".to_string(),
-                uri: "test:song:1".to_string(),
+                youtube_id: "Xyzzzxyzz34".to_string(),
+                spotify_uri: "test:song:1".to_string(),
                 colors: vec!["Red".to_string()],
             },
             Song {
                 id: 2,
                 song_name: "Test Song 2".to_string(),
                 artist: "Test Artist".to_string(),
-                uri: "test:song:2".to_string(),
+                youtube_id: "Xyzzzxyzz34".to_string(),
+                spotify_uri: "test:song:1".to_string(),
                 colors: vec!["Blue".to_string()],
             },
         ];

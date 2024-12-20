@@ -177,6 +177,9 @@ function handleServerMessage(event) {
     case "GameClosed":
       handleGameClosed(data.reason);
       break;
+    case "AdminInfo":
+      handleAdminInfo(data.current_song_name, data.current_song_artist, data.current_song_youtube_id);
+      break;
     case "Error":
       showNotification(data.message, true);
       break;
@@ -263,6 +266,11 @@ function handleStateChanged(phase, newColors, scoreboard) {
     document.getElementById("leaderboard").style.display = "block";
     document.getElementById("roundResult").textContent = "";
     document.getElementById("answerStatusContainer").style.display = "none";
+    if (isAdmin) {
+      //clear when moving to score
+      document.getElementById("currentSong").innerHTML = "";
+      document.getElementById("youtubeEmbed").innerHTML = "";
+    }
   }
 }
 
@@ -470,6 +478,13 @@ function updateLeaderboard(players) {
     playerItem.appendChild(progressBar);
     leaderboard.appendChild(playerItem);
   });
+}
+
+function handleAdminInfo(song, artist, youtube_id) {
+  const song_el = document.getElementById("currentSong");
+  song_el.textContent = song + " by " + artist;
+  const youtube = document.getElementById("youtubeEmbed");
+  youtube.innerHTML = `<iframe width="560" height="315" src="https://www.youtube.com/embed/${youtube_id}?si=IWRIlVe5sKbRnysa&amp;controls=0&autoplay=1" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`;
 }
 
 function showNotification(message, isError = false) {
