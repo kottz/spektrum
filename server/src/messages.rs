@@ -73,6 +73,10 @@ pub enum ServerMessage {
         colors: Vec<ColorDef>,
         scoreboard: Vec<(String, i32)>,
     },
+    AdminInfo {
+        current_song_name: String,
+        current_song_artist: String,
+    }
 }
 
 /// Convert a generic `ResponsePayload` from the game logic into a `ServerMessage`.
@@ -125,6 +129,10 @@ pub fn convert_to_server_message(payload: &ResponsePayload) -> ServerMessage {
         },
         ResponsePayload::GameClosed { reason } => ServerMessage::GameClosed {
             reason: reason.clone(),
+        },
+        ResponsePayload::AdminInfo { current_song } => ServerMessage::AdminInfo {
+            current_song_name: current_song.song_name.clone(),
+            current_song_artist: current_song.artist.clone(),
         },
         ResponsePayload::Error { code, message } => ServerMessage::Error {
             message: format!("{:?}: {}", code, message),

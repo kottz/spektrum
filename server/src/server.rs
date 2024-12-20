@@ -15,7 +15,7 @@ use futures_util::{sink::SinkExt, stream::StreamExt};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, RwLock},
     time::Instant,
 };
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
@@ -29,7 +29,7 @@ use uuid::Uuid;
 #[derive(Clone)]
 pub struct AppState {
     pub manager: Arc<Mutex<GameManager>>,
-    pub connections: Arc<Mutex<HashMap<(Uuid, Uuid), UnboundedSender<ServerMessage>>>>,
+    pub connections: Arc<RwLock<HashMap<(Uuid, Uuid), UnboundedSender<ServerMessage>>>>,
     pub songs: Arc<Vec<Song>>,
 }
 
@@ -37,7 +37,7 @@ impl AppState {
     pub fn new(songs: Vec<Song>) -> Self {
         Self {
             manager: Arc::new(Mutex::new(GameManager::new())),
-            connections: Arc::new(Mutex::new(HashMap::new())),
+            connections: Arc::new(RwLock::new(HashMap::new())),
             songs: Arc::new(songs),
         }
     }
@@ -187,7 +187,7 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
                         if let Some(lobby) = &lobby_ref {
                             state
                                 .connections
-                                .lock()
+                                .write()
                                 .unwrap()
                                 .insert((*lobby_id, player_id), tx.clone());
                         }
@@ -222,7 +222,7 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
                             let responses = lobby.process_event(event);
                             state
                                 .connections
-                                .lock()
+                                .write()
                                 .unwrap()
                                 .remove(&(lobby_id, player_id));
                             responses
@@ -295,7 +295,7 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
         let lobby_id = lobby.id();
         state
             .connections
-            .lock()
+            .write()
             .unwrap()
             .remove(&(lobby_id, player_id));
 
@@ -310,7 +310,7 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
 }
 
 fn broadcast_responses(responses: Vec<GameResponse>, state: &AppState) {
-    let conns = state.connections.lock().unwrap();
+    let conns = state.connections.read().unwrap();
 
     for response in responses {
         let server_msg = convert_to_server_message(&response.payload);

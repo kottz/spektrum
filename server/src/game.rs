@@ -128,6 +128,9 @@ pub enum ResponsePayload {
     GameClosed {
         reason: String,
     },
+    AdminInfo {
+        current_song: Song,
+    },
     Error {
         code: ErrorCode,
         message: String,
@@ -418,15 +421,24 @@ impl GameEngine {
             Ok(()) => {
                 self.state.phase = GamePhase::Question;
                 self.state.round_start_time = Some(ctx.timestamp);
-
-                vec![GameResponse {
+                let mut outputs = Vec::new();
+                outputs.push(GameResponse {
                     recipients: Recipients::All,
                     payload: ResponsePayload::StateChanged {
                         phase: GamePhase::Question,
                         colors: self.state.colors.clone(),
                         scoreboard: self.get_scoreboard(),
                     },
-                }]
+                });
+
+                // Tell admin what song is playing
+                outputs.push(GameResponse {
+                    recipients: Recipients::Single(self.state.admin_id),
+                    payload: ResponsePayload::AdminInfo {
+                        current_song: self.state.current_song.clone().unwrap(),
+                    },
+                });
+                outputs
             }
             Err(msg) => vec![GameResponse {
                 recipients: Recipients::Single(ctx.sender_id),
