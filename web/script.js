@@ -169,9 +169,6 @@ function handleServerMessage(event) {
       handlePlayerAnswered(data.name, data.correct, data.new_score);
       break;
     case "StateChanged":
-      if (isAdmin) {
-        console.log(data.current_song_name, data.current_song_artist);
-      }
       handleStateChanged(data.phase, data.colors, data.scoreboard);
       break;
     case "GameOver":
