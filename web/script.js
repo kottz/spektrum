@@ -97,6 +97,13 @@ class YoutubeManager {
     this.initializeAPI();
   }
 
+  cleanup() {
+    if (this.gameState.youtubePlayer) {
+      this.gameState.youtubePlayer.destroy();
+      this.gameState.youtubePlayer = null;
+    }
+  }
+
   initializeAPI() {
     if (document.querySelector('script[src*="youtube.com/iframe_api"]')) return;
 
@@ -123,6 +130,44 @@ class YoutubeManager {
         onStateChange: this.onPlayerStateChange.bind(this)
       }
     });
+  }
+
+  /**
+     * Verifies if the correct video is loaded and updates if necessary
+     * @param {string} expectedVideoId The video ID that should be playing
+     * @returns {Promise<boolean>} Returns true if video was correct or successfully updated
+     */
+  async verifyAndUpdateVideo(expectedVideoId) {
+    if (!this.gameState.youtubePlayer || !expectedVideoId) return false;
+
+    try {
+      const currentVideoId = this.gameState.youtubePlayer.getVideoData()?.video_id;
+
+      if (currentVideoId !== expectedVideoId) {
+        console.log('Detected video mismatch, updating player...', {
+          current: currentVideoId,
+          expected: expectedVideoId
+        });
+
+        return new Promise((resolve) => {
+          // Set up one-time event listener for when video is ready
+          const onStateChange = (event) => {
+            if (event.data === YT.PlayerState.CUED) {
+              this.gameState.youtubePlayer.removeEventListener('onStateChange', onStateChange);
+              resolve(true);
+            }
+          };
+
+          this.gameState.youtubePlayer.addEventListener('onStateChange', onStateChange);
+          this.gameState.youtubePlayer.loadVideoById(expectedVideoId);
+        });
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error verifying YouTube video:', error);
+      return false;
+    }
   }
 
   /**
@@ -254,7 +299,7 @@ class WebSocketManager {
   /**
    * @param {MessageEvent} event 
    */
-  handleServerMessage(event) {
+  async handleServerMessage(event) {
     let data;
     try {
       data = JSON.parse(event.data);
@@ -281,7 +326,7 @@ class WebSocketManager {
         this.uiManager.handlePlayerAnswered(data);
         break;
       case "StateChanged":
-        this.uiManager.handleStateChanged(data);
+        await this.uiManager.handleStateChanged(data);
         break;
       case "GameOver":
         this.uiManager.handleGameOver(data);
@@ -526,13 +571,18 @@ class UIManager {
    * @param {Color[]} data.colors
    * @param {Array<[string, number]>} data.scoreboard
    */
-  handleStateChanged(data) {
+  async handleStateChanged(data) {
     document.getElementById("gameState").textContent = `Current Phase: ${data.phase}`;
     this.stopTimer();
 
     // Update game started state
     this.gameState.gameStarted = data.phase !== "lobby";
     this.updateGameControls(data.phase);
+
+    const currentPhaseElement = document.getElementById('currentPhase');
+    if (currentPhaseElement) {
+      currentPhaseElement.textContent = data.phase;
+    }
 
     switch (data.phase) {
       case "lobby":
@@ -542,11 +592,10 @@ class UIManager {
         this.handleScorePhase(data.scoreboard);
         break;
       case "question":
-        this.handleQuestionPhase(data.colors);
+        await this.handleQuestionPhase(data.colors);
         break;
     }
   }
-
   /**
    * @param {Object} data
    * @param {Array<[string, number]>} data.scores
@@ -718,7 +767,7 @@ class UIManager {
   /**
    * @param {Color[]} colors
    */
-  handleQuestionPhase(colors) {
+  async handleQuestionPhase(colors) {
     this.gameState.answeredPlayers = [];
     this.updateAnswerStatus();
 
@@ -727,12 +776,20 @@ class UIManager {
       this.gameState.colors = colors;
       document.getElementById("roundResult").textContent = "";
       document.getElementById("leaderboard").style.display = "none";
-      this.createColorButtons(colors);
+      this.createColorButtons(this.gameState.colors);
       document.getElementById("colorButtons").style.display = "grid";
     } else {
       document.getElementById("skipButtonContainer").style.display = "none";
       if (this.gameState.youtubePlayer) {
-        this.gameState.youtubePlayer.playVideo();
+        // Verify and update video if needed before playing
+        const videoVerified = await this.ytManager.verifyAndUpdateVideo(this.gameState.nextYoutubeId);
+        if (videoVerified) {
+          this.gameState.youtubePlayer.playVideo();
+        } else {
+          console.error('Failed to verify/update YouTube video');
+          // Optionally handle the error case, maybe skip to next song
+          this.gameController.skipCurrentSong();
+        }
       }
     }
 
@@ -845,15 +902,28 @@ class GameController {
   }
 
   setupEventListeners() {
-    // Create and Join Lobby buttons
-    document.getElementById('createLobbyBtn')?.addEventListener('click', () => this.createLobby());
-    document.getElementById('joinLobbyBtn')?.addEventListener('click', () => this.joinLobby());
-    document.getElementById('leaveLobbyBtn')?.addEventListener('click', () => this.leaveLobby());
+    const elements = {
+      createLobby: document.getElementById('createLobbyBtn'),
+      joinLobby: document.getElementById('joinLobbyBtn'),
+      leaveLobby: document.getElementById('leaveLobbyBtn'),
+      toggleRound: document.getElementById('toggleRoundBtn'),
+      toggleGame: document.getElementById('toggleGameBtn'),
+      skipSong: document.getElementById('skipCurrentSongBtn')
+    };
 
-    // Admin controls
-    document.getElementById('toggleRoundBtn')?.addEventListener('click', () => this.toggleRound());
-    document.getElementById('toggleGameBtn')?.addEventListener('click', () => this.toggleGame());
-    document.getElementById('skipCurrentSongBtn')?.addEventListener('click', () => this.skipCurrentSong());
+    // Log warning if any required elements are missing
+    Object.entries(elements).forEach(([name, element]) => {
+      if (!element) {
+        console.warn(`Required element ${name} not found`);
+      }
+    });
+
+    elements.createLobby?.addEventListener('click', () => this.createLobby());
+    elements.joinLobby?.addEventListener('click', () => this.joinLobby());
+    elements.leaveLobby?.addEventListener('click', () => this.leaveLobby());
+    elements.toggleRound?.addEventListener('click', () => this.toggleRound());
+    elements.toggleGame?.addEventListener('click', () => this.toggleGame());
+    elements.skipSong?.addEventListener('click', () => this.skipCurrentSong());
   }
 
   /**
@@ -875,12 +945,18 @@ class GameController {
 
   async createLobby() {
     try {
+      const lobbyNameInput = document.getElementById('newLobbyName');
+      const lobbyName = lobbyNameInput?.value.trim() || '';
+
       const response = await fetch("/api/lobbies", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ round_duration: CONFIG.ROUND_DURATION }),
+        body: JSON.stringify({
+          round_duration: CONFIG.ROUND_DURATION,
+          lobby_name: lobbyName
+        }),
       });
 
       if (!response.ok) {
@@ -966,6 +1042,7 @@ class GameController {
       this.wsManager.closeConnection();
       this.uiManager.resetGameState();
       this.gameState.currentLobbyId = null;
+      this.ytManager.cleanup();
       document.getElementById("lobbyInfo").style.display = "none";
       document.getElementById("lobbySelection").style.display = "block";
     }
@@ -1086,19 +1163,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const gameState = new GameState();
   const ytManager = new YoutubeManager(gameState);
 
-  // Create GameController first with null UIManager
   const gameController = new GameController(gameState, null, null, ytManager);
-
-  // Create UIManager with reference to GameController
   const uiManager = new UIManager(gameState, ytManager, gameController);
-
-  // Create WebSocketManager
   const wsManager = new WebSocketManager(gameState, uiManager);
 
-  // Now set the managers on GameController
   gameController.setManagers(wsManager, uiManager);
-
-  // Initialize the game
   gameController.initialize();
 
   // Create YouTube player container for admin
