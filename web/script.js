@@ -436,14 +436,46 @@ function toggleGame() {
   }
 }
 
-function handleGameOver(finalScores, reason) {
+function handleGameOver(scores, reason) {
   stopTimer();
   showNotification(`Game Over: ${reason}`, true);
-  updateLeaderboard(finalScores.map(([name, score]) => ({ name, score })));
-  gameStarted = false;
+
+  document.getElementById("colorButtons").style.display = "none";
+  document.getElementById("answerStatusContainer").style.display = "none";
+  document.getElementById("roundResult").textContent = "";
+
+  document.getElementById("leaderboard").style.display = "block";
+
+  const formattedScores = scores.map(([name, score]) => ({
+    name: name,
+    score: score
+  }));
+  updateLeaderboard(formattedScores);
+
   if (isAdmin) {
-    updateButtonTexts();
+    if (youtubePlayer) {
+      youtubePlayer.stopVideo();
+    }
+
+    const adminButtons = document.querySelectorAll('#adminControls button');
+    adminButtons.forEach(button => {
+      if (!button.classList.contains('leave-button')) {
+        button.style.display = 'none';
+      }
+    });
+
+    const skipButtonContainer = document.getElementById("skipButtonContainer");
+    if (skipButtonContainer) {
+      skipButtonContainer.style.display = "none";
+    }
+
+    document.getElementById("currentSong").innerHTML = "";
+    document.getElementById("youtubeEmbed").style.display = "none";
   }
+
+  // Update game state
+  gameStarted = false;
+  document.getElementById("gameState").textContent = "Game Over";
 }
 
 function handleGameClosed(reason) {
