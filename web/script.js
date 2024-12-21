@@ -14,6 +14,7 @@ let totalPlayers = 0;
 let answeredPlayers = [];
 let youtubePlayer = null;
 let nextYoutubeId = null;
+let isLoadingNextSong = false;
 
 // Load YouTube IFrame Player API
 const tag = document.createElement('script');
@@ -50,8 +51,12 @@ function onPlayerReady(event) {
   }
 }
 
+// Add onPlayerStateChange to track when video is ready
 function onPlayerStateChange(event) {
-  // we aren't using this right now, but it could be useful in the future
+  // YT.PlayerState.CUED = 5
+  if (event.data === 5) {
+    isLoadingNextSong = false;
+  }
 }
 
 async function createLobby() {
@@ -177,7 +182,7 @@ function connectToLobby(lobbyId, name) {
   socket.onmessage = handleServerMessage;
 
   socket.onclose = () => {
-    showNotification("Disconnected from lobby.", true);
+    //showNotification("Disconnected from lobby.", true);
   };
 
   socket.onerror = (error) => {
@@ -252,14 +257,7 @@ function handleAdminNextSongs(upcomingSongs) {
   if (isAdmin && upcomingSongs && upcomingSongs.length > 0) {
     const nextSong = upcomingSongs[0];
     nextYoutubeId = nextSong.youtube_id;
-
-    // If we're in score phase and the player is ready, preload the video
-    if (youtubePlayer && youtubePlayer.getPlayerState) {
-      const currentPhase = document.getElementById("gameState").textContent;
-      if (currentPhase.includes("score")) {
-        youtubePlayer.cueVideoById(nextYoutubeId);
-      }
-    }
+    isLoadingNextSong = true;
 
     // Update the upcoming songs list
     const songsList = document.getElementById("songsList");
@@ -274,6 +272,14 @@ function handleAdminNextSongs(upcomingSongs) {
       `;
       songsList.appendChild(songElement);
     });
+
+    // If we're in score phase and the player is ready, preload the video
+    if (youtubePlayer && youtubePlayer.getPlayerState) {
+      const currentPhase = document.getElementById("gameState").textContent;
+      if (currentPhase.includes("score")) {
+        youtubePlayer.cueVideoById(nextYoutubeId);
+      }
+    }
   }
 }
 
@@ -409,7 +415,13 @@ function updateButtonTexts() {
 
   if (roundButton) {
     const phase = document.getElementById("gameState").textContent;
-    roundButton.textContent = phase.includes("score") ? "Start Round" : "End Round";
+    if (phase.includes("score")) {
+      roundButton.textContent = isLoadingNextSong ? "Loading..." : "Start Round";
+      roundButton.disabled = isLoadingNextSong;
+    } else {
+      roundButton.textContent = "End Round";
+      roundButton.disabled = false;
+    }
   }
 }
 
@@ -572,13 +584,25 @@ function endRound() {
 }
 
 function toggleRound() {
-  if (socket && isAdmin) {
-    const currentPhase = document.getElementById("gameState").textContent;
-    if (currentPhase.includes("score")) {
-      startRound();
-    } else if (currentPhase.includes("question")) {
-      endRound();
+  if (!socket || !isAdmin) return;
+
+  const currentPhase = document.getElementById("gameState").textContent;
+
+  if (currentPhase.includes("score")) {
+    // Check if we have the next song ready
+    if (!nextYoutubeId) {
+      showNotification("Waiting for next song to load...", false);
+      return;
     }
+
+    if (isLoadingNextSong) {
+      showNotification("Please wait for next song to load...", false);
+      return;
+    }
+
+    startRound();
+  } else if (currentPhase.includes("question")) {
+    endRound();
   }
 }
 
@@ -591,17 +615,6 @@ function startGame() {
         type: "EndRound"
       }
     });
-  }
-}
-
-function toggleRound() {
-  if (socket && isAdmin) {
-    const currentPhase = document.getElementById("gameState").textContent;
-    if (currentPhase.includes("score")) {
-      startRound();
-    } else if (currentPhase.includes("question")) {
-      endRound();
-    }
   }
 }
 
