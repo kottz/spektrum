@@ -40,7 +40,6 @@ button:hover {
 
 button:disabled {
     opacity: 0.5;
-    cursor: not-allowed;
     transform: none;
 }
 
@@ -82,12 +81,69 @@ button:disabled {
     border: none;
     border-radius: 10px;
     cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
     transition: all 0.3s ease;
 }
 
-.color-button:hover {
-    transform: scale(1.05);
-    box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
+.metallic-gold {
+  background: linear-gradient(
+    45deg,
+    #B17F02 5%,
+    #FED851 10%,
+    #D4AF37 30%,
+    #FED851 50%,
+    #D4AF37 70%,
+    #FED851 80%,
+    #B17F02 95%
+  );
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+.metallic-silver {
+  background: linear-gradient(
+    45deg,
+    #999 5%,
+    #fff 10%,
+    #ccc 30%,
+    #ddd 50%,
+    #ccc 70%,
+    #fff 80%,
+    #999 95%
+  );
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+.color-button:not(:disabled):hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+}
+
+.metallic-gold:not(:disabled):hover {
+  background: linear-gradient(
+    45deg,
+    #FED851 5%,
+    #D4AF37 30%,
+    #FED851 50%,
+    #D4AF37 70%,
+    #FED851 95%
+  );
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
+}
+
+.metallic-silver:not(:disabled):hover {
+  background: linear-gradient(
+    45deg,
+    #fff 5%,
+    #ccc 30%,
+    #fff 50%,
+    #ccc 70%,
+    #fff 95%
+  );
+  box-shadow: 0 0 15px rgba(192, 192, 192, 0.4);
+}
+
+.color-button:disabled {
+  opacity: 0.7;
 }
 
 #gameState,
@@ -340,4 +396,25 @@ input[type="text"] {
 
 .song-info {
   color: rgba(255, 255, 255, 0.9);
+}
+
+.youtube-container {
+    position: relative;
+    width: 100%;
+    max-width: 560px;  /* Maximum width of the player */
+    margin: 0 auto;    /* Center the container */
+}
+
+.youtube-container::before {
+    content: "";
+    display: block;
+    padding-top: 56.25%;  /* 16:9 Aspect Ratio */
+}
+
+#youtubeEmbed {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
 }

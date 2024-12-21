@@ -1,4 +1,6 @@
+use rand::distributions::{Distribution, WeightedIndex};
 use rand::seq::SliceRandom;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
@@ -18,6 +20,13 @@ pub enum GamePhase {
 pub struct ColorDef {
     pub name: String,
     pub rgb: String,
+}
+
+#[derive(Debug, Clone)]
+struct ColorStats {
+    name: String,
+    frequency: f64,
+    song_count: usize,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -592,6 +601,7 @@ impl GameEngine {
         self.state.correct_colors.clear();
 
         if let Some(specs) = specified_colors {
+            // Handle manually specified colors
             let chosen: Vec<ColorDef> = specs
                 .iter()
                 .filter_map(|name| {
@@ -611,6 +621,7 @@ impl GameEngine {
             self.state.current_song = None;
             Ok(())
         } else {
+            // Handle song-based colors
             if self.state.current_song_index >= self.state.all_songs.len() {
                 return Err("No available songs".to_string());
             }
@@ -646,48 +657,107 @@ impl GameEngine {
         }
     }
 
+    fn calculate_color_weights(&self) -> HashMap<String, f64> {
+        let mut color_counts: HashMap<String, usize> = HashMap::new();
+        let total_songs = self.state.all_songs.len() as f64;
+
+        // Count how many songs each color appears in
+        for song in &self.state.all_songs {
+            for color in &song.colors {
+                *color_counts.entry(color.clone()).or_insert(0) += 1;
+            }
+        }
+
+        // Convert counts to adjusted weights using square root to boost rare colors
+        let mut color_weights: HashMap<String, f64> = HashMap::new();
+        for (color, count) in color_counts {
+            // Calculate base proportion
+            let base_proportion = count as f64 / total_songs;
+
+            // Apply square root transformation and add a minimum boost
+            // This compresses the range between common and rare colors
+            let adjusted_weight = base_proportion.sqrt() + 0.15;
+
+            color_weights.insert(color, adjusted_weight);
+        }
+
+        // Also ensure any colors in all_colors that haven't appeared in songs get a minimum weight
+        for color in &self.state.all_colors {
+            color_weights.entry(color.name.clone()).or_insert(0.15); // Minimum weight for colors that never appear
+        }
+
+        color_weights
+    }
+
     fn generate_round_colors(&self, correct_colors: Vec<ColorDef>) -> Vec<ColorDef> {
         let mut round_colors = correct_colors.clone();
-        let mut excluded = HashSet::new();
+        let mut rng = rand::thread_rng();
 
-        if correct_colors
-            .iter()
-            .any(|cc| ["Yellow", "Gold", "Orange"].contains(&cc.name.as_str()))
-        {
-            excluded.extend(["Yellow", "Gold", "Orange"]);
-        }
-        if correct_colors
-            .iter()
-            .any(|cc| ["Silver", "Gray"].contains(&cc.name.as_str()))
-        {
-            excluded.extend(["Silver", "Gray"]);
+        if round_colors.len() >= 6 {
+            round_colors.shuffle(&mut rng);
+            return round_colors;
         }
 
-        let mut available: Vec<_> = self
+        // Calculate weights for all colors
+        let color_weights = self.calculate_color_weights();
+
+        // Get available colors (not in correct_colors)
+        let mut available: Vec<ColorDef> = self
             .state
             .all_colors
             .iter()
             .filter(|col| !correct_colors.contains(col))
-            .filter(|col| !excluded.contains(col.name.as_str()))
             .cloned()
             .collect();
 
+        // Create initial weights for available colors
+        let mut weights: Vec<f64> = available
+            .iter()
+            .map(|color| color_weights.get(&color.name).copied().unwrap_or(0.15))
+            .collect();
+
+        // Select remaining colors
         while round_colors.len() < 6 && !available.is_empty() {
-            let idx = rand::random::<usize>() % available.len();
-            let chosen = available.remove(idx);
-
-            if ["Yellow", "Gold", "Orange"].contains(&chosen.name.as_str()) {
-                available.retain(|c| !["Yellow", "Gold", "Orange"].contains(&c.name.as_str()));
-            } else if ["Silver", "Gray"].contains(&chosen.name.as_str()) {
-                available.retain(|c| !["Silver", "Gray"].contains(&c.name.as_str()));
+            // Create distribution for current weights
+            if let Ok(dist) = WeightedIndex::new(&weights) {
+                let idx = dist.sample(&mut rng);
+                round_colors.push(available.remove(idx));
+                weights.remove(idx);
+            } else {
+                // Fallback to simple random if weights are invalid
+                let idx = rng.gen_range(0..available.len());
+                round_colors.push(available.remove(idx));
+                weights.remove(idx);
             }
-
-            round_colors.push(chosen);
         }
 
-        let mut rng = rand::thread_rng();
         round_colors.shuffle(&mut rng);
         round_colors
+    }
+
+    // Helper function to view the actual weights being used
+    fn get_color_statistics(&self) -> Vec<ColorStats> {
+        let color_weights = self.calculate_color_weights();
+        let mut stats: Vec<ColorStats> = color_weights
+            .into_iter()
+            .map(|(name, weight)| {
+                let song_count = self
+                    .state
+                    .all_songs
+                    .iter()
+                    .filter(|song| song.colors.contains(&name))
+                    .count();
+
+                ColorStats {
+                    name,
+                    frequency: weight,
+                    song_count,
+                }
+            })
+            .collect();
+
+        stats.sort_by(|a, b| b.frequency.partial_cmp(&a.frequency).unwrap());
+        stats
     }
 
     fn get_upcoming_songs(&self, count: usize) -> Vec<Song> {

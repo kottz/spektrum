@@ -30,8 +30,8 @@ function onYouTubeIframeAPIReady() {
 
 function initializeYoutubePlayer() {
   youtubePlayer = new YT.Player('youtubeEmbed', {
-    height: '315',
-    width: '560',
+    height: '100%',
+    width: '100%',
     playerVars: {
       'controls': 0,
       'playsinline': 1,
@@ -659,15 +659,26 @@ function createColorButtons(colors) {
   colors.forEach((color) => {
     const button = document.createElement("button");
     button.className = "color-button";
-    button.style.backgroundColor = color.rgb;
+
+    // Apply metallic effects for gold and silver
+    if (color.name.toLowerCase() === "gold") {
+      button.classList.add("metallic-gold");
+    } else if (color.name.toLowerCase() === "silver") {
+      button.classList.add("metallic-silver");
+    } else {
+      button.style.backgroundColor = color.rgb;
+    }
+
     button.onclick = () => selectColor(color.name);
     button.title = color.name;
+
     if (hasAnswered && playerAnswer === color.name) {
       button.style.border = "3px solid white";
     }
     if (hasAnswered) {
       button.disabled = true;
     }
+
     colorButtons.appendChild(button);
   });
 }
