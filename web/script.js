@@ -1,3 +1,4 @@
+// Socket and game state variables
 let socket = null;
 let playerName = "";
 let currentLobbyId = null;
@@ -10,6 +11,47 @@ let hasAnswered = false;
 let playerScore = 0;
 let totalPlayers = 0;
 let answeredPlayers = [];
+let youtubePlayer = null;
+let nextYoutubeId = null;
+
+// Load YouTube IFrame Player API
+const tag = document.createElement('script');
+tag.src = "https://www.youtube.com/iframe_api";
+const firstScriptTag = document.getElementsByTagName('script')[0];
+firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+// Called automatically by YouTube API when ready
+function onYouTubeIframeAPIReady() {
+  if (isAdmin) {
+    initializeYoutubePlayer();
+  }
+}
+
+function initializeYoutubePlayer() {
+  youtubePlayer = new YT.Player('youtubeEmbed', {
+    height: '315',
+    width: '560',
+    playerVars: {
+      'controls': 0,
+      'playsinline': 1,
+      'enablejsapi': 1
+    },
+    events: {
+      'onReady': onPlayerReady,
+      'onStateChange': onPlayerStateChange
+    }
+  });
+}
+
+function onPlayerReady(event) {
+  if (nextYoutubeId) {
+    event.target.cueVideoById(nextYoutubeId);
+  }
+}
+
+function onPlayerStateChange(event) {
+  // we aren't using this right now, but it could be useful in the future
+}
 
 async function createLobby() {
   try {
@@ -31,6 +73,10 @@ async function createLobby() {
     isAdmin = true;
     showAdminView(currentLobbyId);
     connectToLobby(currentLobbyId, playerName, isAdmin);
+
+    if (typeof YT !== 'undefined' && YT.Player) {
+      initializeYoutubePlayer();
+    }
   } catch (error) {
     console.error("Error creating lobby:", error);
     showNotification("Failed to create lobby", true);
@@ -105,20 +151,18 @@ function connectToLobby(lobbyId, name) {
 
   socket.onopen = () => {
     if (isAdmin) {
-      // Admin only needs to connect to control the game
       const joinMsg = {
         type: "JoinLobby",
         lobby_id: lobbyId,
-        admin_id: currentAdminId,  // This identifies them as admin
-        name: "Admin"  // We don't really need a name for admin
+        admin_id: currentAdminId,
+        name: "Admin"
       };
       socket.send(JSON.stringify(joinMsg));
     } else {
-      // Regular player join
       const joinMsg = {
         type: "JoinLobby",
         lobby_id: lobbyId,
-        admin_id: null,  // Explicitly set to null for players
+        admin_id: null,
         name: name,
       };
       socket.send(JSON.stringify(joinMsg));
@@ -180,6 +224,9 @@ function handleServerMessage(event) {
     case "AdminInfo":
       handleAdminInfo(data.current_song_name, data.current_song_artist, data.current_song_youtube_id);
       break;
+    case "AdminNextSongs":
+      handleAdminNextSongs(data.upcoming_songs);
+      break;
     case "Error":
       showNotification(data.message, true);
       break;
@@ -188,13 +235,26 @@ function handleServerMessage(event) {
   }
 }
 
+function handleAdminNextSongs(upcomingSongs) {
+  if (isAdmin && upcomingSongs && upcomingSongs.length > 0) {
+    const nextSong = upcomingSongs[0];
+    nextYoutubeId = nextSong.youtube_id;
+    
+    // If we're in score phase and the player is ready, preload the video
+    if (youtubePlayer && youtubePlayer.getPlayerState) {
+      const currentPhase = document.getElementById("gameState").textContent;
+      if (currentPhase.includes("score")) {
+        youtubePlayer.cueVideoById(nextYoutubeId);
+      }
+    }
+  }
+}
+
 function updateInitialPlayerList(players) {
   totalPlayers = players.length;
-  // The format of players has changed - now it's an object with name and players array
   if (players.players) {
     updateLeaderboard(players.players);
   } else {
-    // Handle directly passed array format
     updateLeaderboard(players.map(([name, score]) => ({ name, score })));
   }
 }
@@ -243,19 +303,9 @@ function handleStateChanged(phase, newColors, scoreboard) {
     document.getElementById("leaderboard").style.display = "none";
     document.getElementById("answerStatusContainer").style.display = "none";
     document.getElementById("roundResult").textContent = "";
-  } else if (phase === "question") {
-    answeredPlayers = [];
-    updateAnswerStatus(0, totalPlayers);
-    if (!isAdmin) {
-      hasAnswered = false;
-      colors = newColors;
-      document.getElementById("roundResult").textContent = "";
-      document.getElementById("leaderboard").style.display = "none";
-      createColorButtons(colors);
-      document.getElementById("colorButtons").style.display = "grid";
+    if (isAdmin && youtubePlayer) {
+      youtubePlayer.stopVideo();
     }
-    document.getElementById("answerStatusContainer").style.display = "flex";
-    startTimer(roundDuration * 1000);
   } else if (phase === "score") {
     const formattedScoreboard = scoreboard.map(([name, score]) => ({
       name,
@@ -266,11 +316,28 @@ function handleStateChanged(phase, newColors, scoreboard) {
     document.getElementById("leaderboard").style.display = "block";
     document.getElementById("roundResult").textContent = "";
     document.getElementById("answerStatusContainer").style.display = "none";
+    
     if (isAdmin) {
-      //clear when moving to score
       document.getElementById("currentSong").innerHTML = "";
-      document.getElementById("youtubeEmbed").innerHTML = "";
+      if (youtubePlayer && nextYoutubeId) {
+        youtubePlayer.cueVideoById(nextYoutubeId);
+      }
     }
+  } else if (phase === "question") {
+    answeredPlayers = [];
+    updateAnswerStatus(0, totalPlayers);
+    if (!isAdmin) {
+      hasAnswered = false;
+      colors = newColors;
+      document.getElementById("roundResult").textContent = "";
+      document.getElementById("leaderboard").style.display = "none";
+      createColorButtons(colors);
+      document.getElementById("colorButtons").style.display = "grid";
+    } else if (isAdmin && youtubePlayer) {
+      youtubePlayer.playVideo();
+    }
+    document.getElementById("answerStatusContainer").style.display = "flex";
+    startTimer(roundDuration * 1000);
   }
 }
 
@@ -371,7 +438,29 @@ function endRound() {
 
 function toggleRound() {
   if (socket && isAdmin) {
-    // If we're in score phase, start a round. If we're in question phase, end the round
+    const currentPhase = document.getElementById("gameState").textContent;
+    if (currentPhase.includes("score")) {
+      startRound();
+    } else if (currentPhase.includes("question")) {
+      endRound();
+    }
+  }
+}
+
+function startGame() {
+  if (socket && isAdmin) {
+    sendMessage({
+      type: "AdminAction",
+      lobby_id: currentLobbyId,
+      action: {
+        type: "EndRound"
+      }
+    });
+  }
+}
+
+function toggleRound() {
+  if (socket && isAdmin) {
     const currentPhase = document.getElementById("gameState").textContent;
     if (currentPhase.includes("score")) {
       startRound();
@@ -483,8 +572,16 @@ function updateLeaderboard(players) {
 function handleAdminInfo(song, artist, youtube_id) {
   const song_el = document.getElementById("currentSong");
   song_el.textContent = song + " by " + artist;
-  const youtube = document.getElementById("youtubeEmbed");
-  youtube.innerHTML = `<iframe width="560" height="315" src="https://www.youtube.com/embed/${youtube_id}?si=IWRIlVe5sKbRnysa&amp;controls=0&autoplay=1" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`;
+
+  nextYoutubeId = youtube_id;
+
+  // If we're in score phase and the player is ready, preload the video
+  if (isAdmin && youtubePlayer && youtubePlayer.getPlayerState) {
+    const currentPhase = document.getElementById("gameState").textContent;
+    if (currentPhase.includes("score")) {
+      youtubePlayer.cueVideoById(youtube_id);
+    }
+  }
 }
 
 function showNotification(message, isError = false) {
@@ -533,7 +630,6 @@ function startTimer(durationMs) {
     }
   }, 100);
 
-  // Store the interval ID so we can stop it later if needed
   timerElem.dataset.intervalId = interval;
 }
 
@@ -547,4 +643,16 @@ function stopTimer() {
   timerElem.textContent = "Answer Received!";
 }
 
-document.addEventListener("DOMContentLoaded", initializeApp);
+document.addEventListener("DOMContentLoaded", () => {
+  initializeApp();
+
+  // Create YouTube player container for admin
+  if (isAdmin) {
+    const youtubeContainer = document.getElementById("youtubeEmbed");
+    if (!youtubeContainer) {
+      const container = document.createElement("div");
+      container.id = "youtubeEmbed";
+      document.getElementById("adminControls").appendChild(container);
+    }
+  }
+});
