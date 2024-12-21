@@ -1,6 +1,7 @@
 use crate::game::{ColorDef, GamePhase, ResponsePayload};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use crate::game::Song;
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
@@ -77,7 +78,10 @@ pub enum ServerMessage {
         current_song_name: String,
         current_song_artist: String,
         current_song_youtube_id: String,
-    }
+    },
+    AdminNextSongs {
+        upcoming_songs: Vec<Song>,
+    },
 }
 
 /// Convert a generic `ResponsePayload` from the game logic into a `ServerMessage`.
@@ -135,6 +139,9 @@ pub fn convert_to_server_message(payload: &ResponsePayload) -> ServerMessage {
             current_song_name: current_song.song_name.clone(),
             current_song_artist: current_song.artist.clone(),
             current_song_youtube_id: current_song.youtube_id.clone(),
+        },
+        ResponsePayload::AdminNextSongs { upcoming_songs } => ServerMessage::AdminNextSongs {
+            upcoming_songs: upcoming_songs.clone(),
         },
         ResponsePayload::Error { code, message } => ServerMessage::Error {
             message: format!("{:?}: {}", code, message),

@@ -6,7 +6,6 @@ use std::{
 };
 use uuid::Uuid;
 
-// Core types
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub enum GamePhase {
     Lobby,
@@ -21,7 +20,7 @@ pub struct ColorDef {
     pub rgb: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Song {
     pub id: u32,
     pub song_name: String,
@@ -50,7 +49,6 @@ impl PlayerState {
     }
 }
 
-// Event system
 #[derive(Clone, Debug)]
 pub struct EventContext {
     pub lobby_id: Uuid,
@@ -132,6 +130,9 @@ pub enum ResponsePayload {
     AdminInfo {
         current_song: Song,
     },
+    AdminNextSongs {
+        upcoming_songs: Vec<Song>,
+    },
     Error {
         code: ErrorCode,
         message: String,
@@ -150,7 +151,6 @@ pub enum ErrorCode {
     LobbyNotFound,
 }
 
-// Game state and engine
 pub struct GameState {
     pub phase: GamePhase,
     pub players: HashMap<Uuid, PlayerState>,
@@ -163,6 +163,7 @@ pub struct GameState {
     pub used_songs: HashSet<String>,
     pub all_songs: Vec<Song>,
     pub all_colors: Vec<ColorDef>,
+    pub current_song_index: usize,
 }
 
 pub struct GameEngine {
@@ -172,10 +173,12 @@ pub struct GameEngine {
 impl GameEngine {
     pub fn new(
         admin_id: Uuid,
-        all_songs: Vec<Song>,
+        mut all_songs: Vec<Song>,
         all_colors: Vec<ColorDef>,
         round_duration: u64,
     ) -> Self {
+        let mut rng = rand::thread_rng();
+        all_songs.shuffle(&mut rng);
         Self {
             state: GameState {
                 phase: GamePhase::Lobby,
@@ -189,6 +192,7 @@ impl GameEngine {
                 used_songs: HashSet::new(),
                 all_songs,
                 all_colors,
+                current_song_index: 0,
             },
         }
     }
@@ -196,7 +200,6 @@ impl GameEngine {
     pub fn process_event(&mut self, event: GameEvent) -> Vec<GameResponse> {
         let GameEvent { context, action } = event;
 
-        // Admin check for admin-only actions
         match &action {
             GameAction::StartGame
             | GameAction::StartRound { .. }
@@ -354,7 +357,9 @@ impl GameEngine {
 
         let correct = self.state.correct_colors.contains(&color);
         let new_score = if correct {
-            let score_delta = ((self.state.round_duration as f64 * 100.0 - (elapsed.as_secs_f64() * 100.0)).max(0.0)) as i32;
+            let score_delta = ((self.state.round_duration as f64 * 100.0
+                - (elapsed.as_secs_f64() * 100.0))
+                .max(0.0)) as i32;
             player.score += score_delta;
             player.score
         } else {
@@ -387,14 +392,27 @@ impl GameEngine {
 
         self.state.phase = GamePhase::Score;
 
-        vec![GameResponse {
+        let mut responses = vec![GameResponse {
             recipients: Recipients::All,
             payload: ResponsePayload::StateChanged {
                 phase: GamePhase::Score,
                 colors: Vec::new(),
                 scoreboard: self.get_scoreboard(),
             },
-        }]
+        }];
+
+        // Send next songs to admin after transitioning to Score phase
+        let upcoming = self.get_upcoming_songs(3);
+        if !upcoming.is_empty() {
+            responses.push(GameResponse {
+                recipients: Recipients::Single(self.state.admin_id),
+                payload: ResponsePayload::AdminNextSongs {
+                    upcoming_songs: upcoming,
+                },
+            });
+        }
+
+        responses
     }
 
     fn handle_start_round(
@@ -412,7 +430,6 @@ impl GameEngine {
             }];
         }
 
-        // Reset player states
         for player in self.state.players.values_mut() {
             player.has_answered = false;
             player.answer = None;
@@ -432,13 +449,15 @@ impl GameEngine {
                     },
                 });
 
-                // Tell admin what song is playing
-                outputs.push(GameResponse {
-                    recipients: Recipients::Single(self.state.admin_id),
-                    payload: ResponsePayload::AdminInfo {
-                        current_song: self.state.current_song.clone().unwrap(),
-                    },
-                });
+                if let Some(song) = &self.state.current_song {
+                    outputs.push(GameResponse {
+                        recipients: Recipients::Single(self.state.admin_id),
+                        payload: ResponsePayload::AdminInfo {
+                            current_song: song.clone(),
+                        },
+                    });
+                }
+
                 outputs
             }
             Err(msg) => vec![GameResponse {
@@ -466,19 +485,34 @@ impl GameEngine {
             self.state.used_songs.insert(song.spotify_uri.clone());
         }
 
-        self.state.phase = GamePhase::Score;
+        // Move to next song for the next round
         self.state.current_song = None;
+        self.state.current_song_index += 1; // Increment index to use next song next time
         self.state.colors.clear();
         self.state.correct_colors.clear();
+        self.state.phase = GamePhase::Score;
 
-        vec![GameResponse {
+        let mut responses = vec![GameResponse {
             recipients: Recipients::All,
             payload: ResponsePayload::StateChanged {
                 phase: GamePhase::Score,
                 colors: Vec::new(),
                 scoreboard: self.get_scoreboard(),
             },
-        }]
+        }];
+
+        // Send next 3 upcoming songs to admin
+        let upcoming = self.get_upcoming_songs(3);
+        if !upcoming.is_empty() {
+            responses.push(GameResponse {
+                recipients: Recipients::Single(self.state.admin_id),
+                payload: ResponsePayload::AdminNextSongs {
+                    upcoming_songs: upcoming,
+                },
+            });
+        }
+
+        responses
     }
 
     fn handle_end_game(&mut self, _ctx: EventContext, reason: String) -> Vec<GameResponse> {
@@ -500,7 +534,6 @@ impl GameEngine {
         }]
     }
 
-    // Helper methods
     fn get_scoreboard(&self) -> Vec<(String, i32)> {
         self.state
             .players
@@ -514,7 +547,6 @@ impl GameEngine {
         self.state.correct_colors.clear();
 
         if let Some(specs) = specified_colors {
-            // Handle admin-specified colors
             let chosen: Vec<ColorDef> = specs
                 .iter()
                 .filter_map(|name| {
@@ -534,25 +566,15 @@ impl GameEngine {
             self.state.current_song = None;
             Ok(())
         } else {
-            // Pick a random unused song
-            let available_songs: Vec<_> = self
-                .state
-                .all_songs
-                .iter()
-                .filter(|s| !self.state.used_songs.contains(&s.spotify_uri))
-                .cloned()
-                .collect();
-
-            if available_songs.is_empty() {
+            if self.state.current_song_index >= self.state.all_songs.len() {
                 return Err("No available songs".to_string());
             }
 
-            let chosen_song = available_songs
-                .choose(&mut rand::thread_rng())
-                .ok_or_else(|| "Failed to choose song".to_string())?
-                .clone();
+            let chosen_song = self.state.all_songs[self.state.current_song_index].clone();
+            if self.state.used_songs.contains(&chosen_song.spotify_uri) {
+                return Err("No available songs".to_string());
+            }
 
-            // Gather correct colors from the chosen song
             let chosen_correct_colors: Vec<ColorDef> = chosen_song
                 .colors
                 .iter()
@@ -574,7 +596,6 @@ impl GameEngine {
                 .iter()
                 .map(|c| c.name.clone())
                 .collect();
-
             self.state.colors = self.generate_round_colors(chosen_correct_colors);
             Ok(())
         }
@@ -584,7 +605,6 @@ impl GameEngine {
         let mut round_colors = correct_colors.clone();
         let mut excluded = HashSet::new();
 
-        // Handle similar color groups
         if correct_colors
             .iter()
             .any(|cc| ["Yellow", "Gold", "Orange"].contains(&cc.name.as_str()))
@@ -598,7 +618,6 @@ impl GameEngine {
             excluded.extend(["Silver", "Gray"]);
         }
 
-        // Get available colors (not in correct colors or excluded groups)
         let mut available: Vec<_> = self
             .state
             .all_colors
@@ -608,12 +627,10 @@ impl GameEngine {
             .cloned()
             .collect();
 
-        // Add random colors until we reach 6 or run out
         while round_colors.len() < 6 && !available.is_empty() {
             let idx = rand::random::<usize>() % available.len();
             let chosen = available.remove(idx);
 
-            // Update excluded colors based on what we just added
             if ["Yellow", "Gold", "Orange"].contains(&chosen.name.as_str()) {
                 available.retain(|c| !["Yellow", "Gold", "Orange"].contains(&c.name.as_str()));
             } else if ["Silver", "Gray"].contains(&chosen.name.as_str()) {
@@ -623,10 +640,25 @@ impl GameEngine {
             round_colors.push(chosen);
         }
 
-        // Shuffle before returning
         let mut rng = rand::thread_rng();
         round_colors.shuffle(&mut rng);
         round_colors
+    }
+
+    fn get_upcoming_songs(&self, count: usize) -> Vec<Song> {
+        let start = self.state.current_song_index;
+        let end = std::cmp::min(start + count, self.state.all_songs.len());
+        let mut upcoming = Vec::new();
+        for i in start..end {
+            if !self
+                .state
+                .used_songs
+                .contains(&self.state.all_songs[i].spotify_uri)
+            {
+                upcoming.push(self.state.all_songs[i].clone());
+            }
+        }
+        upcoming
     }
 }
 
