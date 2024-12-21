@@ -4,20 +4,19 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Color Game Lobby</title>
+    <title>Music Quiz Game Lobby</title>
     <link rel="stylesheet" href="styles.css" />
 </head>
 
 <body>
     <div class="container">
-        <h1>Color Game</h1>
+        <h1>Music Quiz Game</h1>
 
-        <!-- Lobby Selection Screen -->
         <div id="lobbySelection">
             <div id="createLobby">
                 <h2>Create New Lobby</h2>
                 <input type="text" id="newLobbyName" placeholder="Enter lobby name (optional)" />
-                <button onclick="createLobby()">Create Lobby</button>
+                <button id="createLobbyBtn">Create Lobby</button>
             </div>
 
             <div id="joinExisting">
@@ -26,18 +25,16 @@
             </div>
         </div>
 
-        <!-- Player Name Entry -->
         <div id="joinForm" style="display: none">
             <h2>Join <span id="selectedLobbyName"></span></h2>
             <input type="text" id="playerName" placeholder="Enter your name" />
-            <button onclick="joinLobby()">Join Game</button>
+            <button id="joinLobbyBtn">Join Game</button>
         </div>
 
-        <!-- Game Interface -->
         <div id="lobbyInfo" style="display: none">
             <div id="lobbyHeader">
                 <h2>Lobby: <span id="currentLobbyName"></span></h2>
-                <button onclick="leaveLobby()" class="leave-button">
+                <button id="leaveLobbyBtn" class="leave-button">
                     Leave Lobby
                 </button>
             </div>
@@ -55,10 +52,10 @@
             <div id="leaderboard" style="display: none"></div>
             <div id="adminControls" style="display: none">
                 <h2>Admin Controls</h2>
-                <button onclick="toggleRound()" class="admin-button">
+                <button id="toggleRoundBtn" class="admin-button">
                     Toggle Round
                 </button>
-                <button onclick="toggleGame()" class="admin-button">
+                <button id="toggleGameBtn" class="admin-button">
                     Start Game
                 </button>
                 <div class="admin-info">
@@ -72,7 +69,7 @@
                     </div>
 
                     <div id="skipButtonContainer" style="margin-bottom: 10px;">
-                        <button onclick="skipCurrentSong()" class="admin-button">Skip Current Song</button>
+                        <button id="skipCurrentSongBtn" class="admin-button">Skip Current Song</button>
                     </div>
 
                     <div class="youtube-container">
@@ -93,12 +90,8 @@
                     lobby for all players.
                 </p>
                 <div class="modal-buttons">
-                    <button class="confirm" onclick="confirmAdminLeave()">
-                        Yes, Leave
-                    </button>
-                    <button class="cancel" onclick="closeModal()">
-                        Cancel
-                    </button>
+                    <button class="confirm">Yes, Leave</button>
+                    <button class="cancel">Cancel</button>
                 </div>
             </div>
         </div>
