@@ -244,7 +244,7 @@ impl GameEngine {
                 recipients: Recipients::Single(ctx.sender_id),
                 payload: ResponsePayload::Error {
                     code: ErrorCode::InvalidPhase,
-                    message: "Can only join during lobby phase".into(),
+                    message: "You can't join a game that has already started.".into(),
                 },
             }];
         }

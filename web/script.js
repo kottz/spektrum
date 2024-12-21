@@ -3,6 +3,7 @@ let socket = null;
 let playerName = "";
 let currentLobbyId = null;
 let currentAdminId = null;
+let gameStarted = false;
 let isAdmin = false;
 let colors = [];
 let playerAnswer = null;
@@ -324,7 +325,18 @@ function handleStateChanged(phase, newColors, scoreboard) {
   document.getElementById("gameState").textContent = `Current Phase: ${phase}`;
   stopTimer();
 
-  // Get skip button container
+  // Set game started state based on phase
+  if (phase !== "lobby") {
+    gameStarted = true;
+  } else {
+    gameStarted = false;
+  }
+
+  // Update button texts if we're admin
+  if (isAdmin) {
+    updateButtonTexts();
+  }
+
   const skipButtonContainer = document.getElementById("skipButtonContainer");
 
   if (phase === "lobby") {
@@ -343,6 +355,7 @@ function handleStateChanged(phase, newColors, scoreboard) {
       name,
       score
     }));
+    totalPlayers = formattedScoreboard.length;
     updateLeaderboard(formattedScoreboard);
     document.getElementById("colorButtons").style.display = "none";
     document.getElementById("leaderboard").style.display = "block";
@@ -377,10 +390,60 @@ function handleStateChanged(phase, newColors, scoreboard) {
   }
 }
 
+function updateGameButton() {
+  const gameButton = document.querySelector('button[onclick="toggleGame()"]');
+  if (gameButton) {
+    gameButton.textContent = gameStarted ? "End Game" : "Start Game";
+  }
+}
+
+function updateButtonTexts() {
+  if (!isAdmin) return;
+
+  const gameButton = document.querySelector('button[onclick="toggleGame()"]');
+  const roundButton = document.querySelector('button[onclick="toggleRound()"]');
+
+  if (gameButton) {
+    gameButton.textContent = gameStarted ? "End Game" : "Start Game";
+  }
+
+  if (roundButton) {
+    const phase = document.getElementById("gameState").textContent;
+    roundButton.textContent = phase.includes("score") ? "Start Round" : "End Round";
+  }
+}
+
+function toggleGame() {
+  if (socket && isAdmin) {
+    if (!gameStarted) {
+      sendMessage({
+        type: "AdminAction",
+        lobby_id: currentLobbyId,
+        action: {
+          type: "StartGame"
+        }
+      });
+    } else {
+      sendMessage({
+        type: "AdminAction",
+        lobby_id: currentLobbyId,
+        action: {
+          type: "EndGame",
+          reason: "Game ended by admin"
+        }
+      });
+    }
+  }
+}
+
 function handleGameOver(finalScores, reason) {
   stopTimer();
   showNotification(`Game Over: ${reason}`, true);
   updateLeaderboard(finalScores.map(([name, score]) => ({ name, score })));
+  gameStarted = false;
+  if (isAdmin) {
+    updateButtonTexts();
+  }
 }
 
 function handleGameClosed(reason) {
@@ -388,11 +451,13 @@ function handleGameClosed(reason) {
   closeConnection();
   resetUIState();
   isAdmin = false;
+  gameStarted = false;
   document.getElementById("lobbyInfo").style.display = "none";
   document.getElementById("adminControls").style.display = "none";
   document.getElementById("lobbySelection").style.display = "block";
   initializeApp();
 }
+
 
 function leaveLobby() {
   if (isAdmin) {
@@ -430,12 +495,14 @@ function closeConnection() {
   }
 }
 
+// Update showAdminView to set initial button text
 function showAdminView(lobbyId) {
   document.getElementById("lobbySelection").style.display = "none";
   document.getElementById("joinForm").style.display = "none";
   document.getElementById("lobbyInfo").style.display = "block";
   document.getElementById("adminControls").style.display = "block";
   document.getElementById("currentLobbyName").textContent = lobbyId;
+  updateButtonTexts();
 }
 
 function sendMessage(message) {
