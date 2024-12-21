@@ -11,32 +11,32 @@
 <body>
     <div class="container">
         <h1>Music Quiz Game</h1>
-
         <div id="lobbySelection">
             <div id="createLobby">
                 <h2>Create New Lobby</h2>
-                <input type="text" id="newLobbyName" placeholder="Enter lobby name (optional)" />
+                <input type="text" id="newLobbyName" placeholder="Enter lobby name (optional)" maxlength="20"
+                    pattern="[a-zA-Z0-9_\-\.\ ]{0,20}"
+                    title="Lobby name can only contain letters, numbers, spaces, and the symbols: _ - ."
+                    autocomplete="off" />
                 <button id="createLobbyBtn">Create Lobby</button>
             </div>
-
             <div id="joinExisting">
                 <h2>Join Lobby</h2>
                 <div id="lobbyList"></div>
             </div>
         </div>
-
         <div id="joinForm" style="display: none">
             <h2>Join <span id="selectedLobbyName"></span></h2>
-            <input type="text" id="playerName" placeholder="Enter your name" />
+            <input type="text" id="playerName" placeholder="Enter your name" required minlength="2" maxlength="16"
+                pattern="[a-zA-Z0-9_\-\.\ ]{2,16}"
+                title="Name must be 2-16 characters and can only contain letters, numbers, spaces, and the symbols: _ - ."
+                autocomplete="off" />
             <button id="joinLobbyBtn">Join Game</button>
         </div>
-
         <div id="lobbyInfo" style="display: none">
             <div id="lobbyHeader">
                 <h2>Lobby: <span id="currentLobbyName"></span></h2>
-                <button id="leaveLobbyBtn" class="leave-button">
-                    Leave Lobby
-                </button>
+                <button id="leaveLobbyBtn" class="leave-button">Leave Lobby</button>
             </div>
             <div id="gameState"></div>
             <div id="timer"></div>
@@ -52,30 +52,22 @@
             <div id="leaderboard" style="display: none"></div>
             <div id="adminControls" style="display: none">
                 <h2>Admin Controls</h2>
-                <button id="toggleRoundBtn" class="admin-button">
-                    Toggle Round
-                </button>
-                <button id="toggleGameBtn" class="admin-button">
-                    Start Game
-                </button>
+                <button id="toggleRoundBtn" class="admin-button">Toggle Round</button>
+                <button id="toggleGameBtn" class="admin-button">Start Game</button>
                 <div class="admin-info">
                     <p>Players connected: <span id="playerCount">0</span></p>
                     <p>Current phase: <span id="currentPhase">Score</span></p>
                     <p>Song: <span id="currentSong">none</span></p>
-
                     <div id="upcomingSongs">
                         <h3>Upcoming Songs</h3>
                         <div id="songsList"></div>
                     </div>
-
                     <div id="skipButtonContainer" style="margin-bottom: 10px;">
                         <button id="skipCurrentSongBtn" class="admin-button">Skip Current Song</button>
                     </div>
-
                     <div class="youtube-container">
                         <div id="youtubeEmbed"></div>
                     </div>
-
                 </div>
             </div>
         </div>
@@ -85,10 +77,7 @@
         <div class="modal-overlay">
             <div class="modal-content">
                 <h2>Confirm Action</h2>
-                <p>
-                    Are you sure you want to leave? This will close the
-                    lobby for all players.
-                </p>
+                <p>Are you sure you want to leave? This will close the lobby for all players.</p>
                 <div class="modal-buttons">
                     <button class="confirm">Yes, Leave</button>
                     <button class="cancel">Cancel</button>

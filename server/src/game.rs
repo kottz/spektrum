@@ -159,6 +159,53 @@ pub enum ErrorCode {
     AlreadyAnswered,
     TimeExpired,
     LobbyNotFound,
+    InvalidName,
+}
+
+#[derive(Debug)]
+pub enum NameValidationError {
+    TooShort,
+    TooLong,
+    InvalidCharacters,
+    AlreadyTaken,
+}
+
+impl NameValidationError {
+    fn to_message(&self) -> String {
+        match self {
+            Self::TooShort => "Name must be at least 2 characters long.".into(),
+            Self::TooLong => "Name cannot be longer than 16 characters.".into(),
+            Self::InvalidCharacters => {
+                "Name can only contain letters, numbers, spaces, and the symbols: _ - .".into()
+            }
+            Self::AlreadyTaken => "This name is already taken.".into(),
+        }
+    }
+}
+
+fn validate_player_name<'a>(
+    name: &str,
+    mut existing_names: impl Iterator<Item = &'a String>,
+) -> Result<(), NameValidationError> {
+    let name = name.trim();
+
+    if name.len() < 2 {
+        return Err(NameValidationError::TooShort);
+    }
+    if name.len() > 16 {
+        return Err(NameValidationError::TooLong);
+    }
+
+    let name_regex = regex::Regex::new(r"^[a-zA-Z0-9_\-\. ]+$").unwrap();
+    if !name_regex.is_match(name) {
+        return Err(NameValidationError::InvalidCharacters);
+    }
+
+    if existing_names.any(|existing_name| existing_name == name) {
+        return Err(NameValidationError::AlreadyTaken);
+    }
+
+    Ok(())
 }
 
 pub struct GameState {
@@ -248,6 +295,21 @@ impl GameEngine {
         if self.state.admin_id == ctx.sender_id {
             return vec![];
         }
+
+        let name = name.trim().to_string();
+
+        // Validate name
+        let existing_names = self.state.players.values().map(|p| &p.name);
+        if let Err(validation_error) = validate_player_name(&name, existing_names) {
+            return vec![GameResponse {
+                recipients: Recipients::Single(ctx.sender_id),
+                payload: ResponsePayload::Error {
+                    code: ErrorCode::InvalidName,
+                    message: validation_error.to_message(),
+                },
+            }];
+        }
+
         if self.state.phase != GamePhase::Lobby {
             return vec![GameResponse {
                 recipients: Recipients::Single(ctx.sender_id),
@@ -274,7 +336,7 @@ impl GameEngine {
                 recipients: Recipients::Single(ctx.sender_id),
                 payload: ResponsePayload::Joined {
                     player_id: ctx.sender_id,
-                    name: name.clone(),
+                    name,
                     round_duration: self.state.round_duration,
                     current_players,
                 },
@@ -870,5 +932,37 @@ mod tests {
         let responses = engine.process_event(event);
         assert!(!responses.is_empty());
         assert_eq!(engine.state.phase, GamePhase::Score);
+    }
+    #[test]
+    fn test_name_validation() {
+        let empty_names = std::iter::empty();
+
+        // Test valid names
+        assert!(validate_player_name("John", empty_names.clone()).is_ok());
+        assert!(validate_player_name("Player_1", empty_names.clone()).is_ok());
+        assert!(validate_player_name("Cool-Name.123", empty_names.clone()).is_ok());
+
+        // Test invalid names
+        assert!(matches!(
+            validate_player_name("a", empty_names.clone()),
+            Err(NameValidationError::TooShort)
+        ));
+
+        assert!(matches!(
+            validate_player_name("a".repeat(17).as_str(), empty_names.clone()),
+            Err(NameValidationError::TooLong)
+        ));
+
+        assert!(matches!(
+            validate_player_name("Invalid@Name", empty_names.clone()),
+            Err(NameValidationError::InvalidCharacters)
+        ));
+
+        // Test duplicate names
+        let existing_names = vec!["John".to_string()];
+        assert!(matches!(
+            validate_player_name("John", existing_names.iter()),
+            Err(NameValidationError::AlreadyTaken)
+        ));
     }
 }
