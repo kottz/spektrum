@@ -1,5 +1,5 @@
 [project]
-name = "spektrum"
+name = "spektrum-spotify-tests"
 version = "0.1.0"
 description = "A color music quiz game"
 readme = "README.md"
