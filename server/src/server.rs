@@ -246,6 +246,7 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
                                     specified_colors: colors,
                                 },
                                 AdminAction::EndRound => GameAction::EndRound,
+                                AdminAction::SkipSong => GameAction::SkipSong,
                                 AdminAction::EndGame { reason } => GameAction::EndGame { reason },
                                 AdminAction::CloseGame { reason } => {
                                     GameAction::CloseGame { reason }

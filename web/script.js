@@ -235,11 +235,23 @@ function handleServerMessage(event) {
   }
 }
 
+function skipCurrentSong() {
+  if (socket && isAdmin) {
+    sendMessage({
+      type: "AdminAction",
+      lobby_id: currentLobbyId,
+      action: {
+        type: "SkipSong"
+      }
+    });
+  }
+}
+
 function handleAdminNextSongs(upcomingSongs) {
   if (isAdmin && upcomingSongs && upcomingSongs.length > 0) {
     const nextSong = upcomingSongs[0];
     nextYoutubeId = nextSong.youtube_id;
-    
+
     // If we're in score phase and the player is ready, preload the video
     if (youtubePlayer && youtubePlayer.getPlayerState) {
       const currentPhase = document.getElementById("gameState").textContent;
@@ -247,6 +259,20 @@ function handleAdminNextSongs(upcomingSongs) {
         youtubePlayer.cueVideoById(nextYoutubeId);
       }
     }
+
+    // Update the upcoming songs list
+    const songsList = document.getElementById("songsList");
+    songsList.innerHTML = "";
+
+    upcomingSongs.forEach((song, index) => {
+      const songElement = document.createElement("div");
+      songElement.className = "upcoming-song";
+      songElement.innerHTML = `
+        <span class="song-number">${index + 1}.</span>
+        <span class="song-info">${song.song_name} - ${song.artist}</span>
+      `;
+      songsList.appendChild(songElement);
+    });
   }
 }
 
@@ -298,13 +324,19 @@ function handleStateChanged(phase, newColors, scoreboard) {
   document.getElementById("gameState").textContent = `Current Phase: ${phase}`;
   stopTimer();
 
+  // Get skip button container
+  const skipButtonContainer = document.getElementById("skipButtonContainer");
+
   if (phase === "lobby") {
     document.getElementById("colorButtons").style.display = "none";
     document.getElementById("leaderboard").style.display = "none";
     document.getElementById("answerStatusContainer").style.display = "none";
     document.getElementById("roundResult").textContent = "";
-    if (isAdmin && youtubePlayer) {
-      youtubePlayer.stopVideo();
+    if (isAdmin) {
+      skipButtonContainer.style.display = "none";
+      if (youtubePlayer) {
+        youtubePlayer.stopVideo();
+      }
     }
   } else if (phase === "score") {
     const formattedScoreboard = scoreboard.map(([name, score]) => ({
@@ -316,9 +348,10 @@ function handleStateChanged(phase, newColors, scoreboard) {
     document.getElementById("leaderboard").style.display = "block";
     document.getElementById("roundResult").textContent = "";
     document.getElementById("answerStatusContainer").style.display = "none";
-    
+
     if (isAdmin) {
       document.getElementById("currentSong").innerHTML = "";
+      skipButtonContainer.style.display = "block";
       if (youtubePlayer && nextYoutubeId) {
         youtubePlayer.cueVideoById(nextYoutubeId);
       }
@@ -333,8 +366,11 @@ function handleStateChanged(phase, newColors, scoreboard) {
       document.getElementById("leaderboard").style.display = "none";
       createColorButtons(colors);
       document.getElementById("colorButtons").style.display = "grid";
-    } else if (isAdmin && youtubePlayer) {
-      youtubePlayer.playVideo();
+    } else {
+      skipButtonContainer.style.display = "none";
+      if (youtubePlayer) {
+        youtubePlayer.playVideo();
+      }
     }
     document.getElementById("answerStatusContainer").style.display = "flex";
     startTimer(roundDuration * 1000);

@@ -85,6 +85,7 @@ pub enum GameAction {
         specified_colors: Option<Vec<String>>,
     },
     EndRound,
+    SkipSong,
     EndGame {
         reason: String,
     },
@@ -228,6 +229,7 @@ impl GameEngine {
                 self.handle_start_round(context, specified_colors)
             }
             GameAction::EndRound => self.handle_end_round(context),
+            GameAction::SkipSong => self.handle_skip_song(context),
             GameAction::EndGame { reason } => self.handle_end_game(context, reason),
             GameAction::CloseGame { reason } => self.handle_close_game(context, reason),
         }
@@ -491,6 +493,49 @@ impl GameEngine {
         self.state.colors.clear();
         self.state.correct_colors.clear();
         self.state.phase = GamePhase::Score;
+
+        let mut responses = vec![GameResponse {
+            recipients: Recipients::All,
+            payload: ResponsePayload::StateChanged {
+                phase: GamePhase::Score,
+                colors: Vec::new(),
+                scoreboard: self.get_scoreboard(),
+            },
+        }];
+
+        // Send next 3 upcoming songs to admin
+        let upcoming = self.get_upcoming_songs(3);
+        if !upcoming.is_empty() {
+            responses.push(GameResponse {
+                recipients: Recipients::Single(self.state.admin_id),
+                payload: ResponsePayload::AdminNextSongs {
+                    upcoming_songs: upcoming,
+                },
+            });
+        }
+
+        responses
+    }
+
+    fn handle_skip_song(&mut self, ctx: EventContext) -> Vec<GameResponse> {
+        if self.state.phase != GamePhase::Score {
+            return vec![GameResponse {
+                recipients: Recipients::Single(ctx.sender_id),
+                payload: ResponsePayload::Error {
+                    code: ErrorCode::InvalidPhase,
+                    message: "Can only skip song during scoreboard phase".into(),
+                },
+            }];
+        }
+
+        if let Some(song) = &self.state.current_song {
+            self.state.used_songs.insert(song.spotify_uri.clone());
+        }
+
+        self.state.current_song = None;
+        self.state.current_song_index += 1; // Increment index to use next song next time
+        self.state.colors.clear();
+        self.state.correct_colors.clear();
 
         let mut responses = vec![GameResponse {
             recipients: Recipients::All,

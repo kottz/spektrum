@@ -305,3 +305,39 @@ input[type="text"] {
         opacity: 0;
     }
 }
+
+#upcomingSongs {
+  margin: 15px 0;
+  max-height: 200px;
+  overflow-y: auto;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 10px;
+  color: white;
+}
+
+#upcomingSongs h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: white;
+}
+
+.upcoming-song {
+  padding: 8px;
+  margin-bottom: 5px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.upcoming-song:last-child {
+  border-bottom: none;
+}
+
+.song-number {
+  font-weight: bold;
+  margin-right: 10px;
+  color: #33ff57;
+}
+
+.song-info {
+  color: rgba(255, 255, 255, 0.9);
+}

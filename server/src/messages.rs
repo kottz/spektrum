@@ -30,6 +30,7 @@ pub enum AdminAction {
     StartGame,
     StartRound { colors: Option<Vec<String>> },
     EndRound,
+    SkipSong,
     EndGame { reason: String },
     CloseGame { reason: String },
 }
