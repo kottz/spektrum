@@ -31,14 +31,16 @@ pub struct AppState {
     pub manager: Arc<Mutex<GameManager>>,
     pub connections: Arc<RwLock<HashMap<(Uuid, Uuid), UnboundedSender<ServerMessage>>>>,
     pub songs: Arc<Vec<Song>>,
+    pub all_colors: Arc<Vec<ColorDef>>,
 }
 
 impl AppState {
-    pub fn new(songs: Vec<Song>) -> Self {
+    pub fn new(songs: Vec<Song>, all_colors: Vec<ColorDef>) -> Self {
         Self {
             manager: Arc::new(Mutex::new(GameManager::new())),
             connections: Arc::new(RwLock::new(HashMap::new())),
             songs: Arc::new(songs),
+            all_colors: Arc::new(all_colors),
         }
     }
 }
@@ -69,63 +71,8 @@ pub async fn create_lobby_handler(
 ) -> impl IntoResponse {
     let round_duration = req.round_duration.unwrap_or(60);
 
-    let all_colors = vec![
-        ColorDef {
-            name: "Red".into(),
-            rgb: "#FF0000".into(),
-        },
-        ColorDef {
-            name: "Green".into(),
-            rgb: "#00FF00".into(),
-        },
-        ColorDef {
-            name: "Blue".into(),
-            rgb: "#0000FF".into(),
-        },
-        ColorDef {
-            name: "Yellow".into(),
-            rgb: "#FFFF00".into(),
-        },
-        ColorDef {
-            name: "Purple".into(),
-            rgb: "#800080".into(),
-        },
-        ColorDef {
-            name: "Gold".into(),
-            rgb: "#FFD700".into(),
-        },
-        ColorDef {
-            name: "Silver".into(),
-            rgb: "#C0C0C0".into(),
-        },
-        ColorDef {
-            name: "Pink".into(),
-            rgb: "#FFC0CB".into(),
-        },
-        ColorDef {
-            name: "Black".into(),
-            rgb: "#000000".into(),
-        },
-        ColorDef {
-            name: "White".into(),
-            rgb: "#FFFFFF".into(),
-        },
-        ColorDef {
-            name: "Brown".into(),
-            rgb: "#3D251E".into(),
-        },
-        ColorDef {
-            name: "Orange".into(),
-            rgb: "#FFA500".into(),
-        },
-        ColorDef {
-            name: "Gray".into(),
-            rgb: "#808080".into(),
-        },
-    ];
-
     let mgr = state.manager.lock().unwrap();
-    let (lobby_id, admin_id) = mgr.create_lobby(state.songs.to_vec(), all_colors, round_duration);
+    let (lobby_id, admin_id) = mgr.create_lobby(state.songs.to_vec(), state.all_colors.to_vec(), round_duration);
 
     Json(CreateLobbyResponse { lobby_id, admin_id })
 }

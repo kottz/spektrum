@@ -14,7 +14,7 @@ mod game_manager;
 mod messages;
 mod server;
 
-use crate::game::Song;
+use crate::game::{Song, ColorDef};
 use crate::server::{create_lobby_handler, list_lobbies_handler, ws_handler, AppState};
 
 #[derive(Parser, Debug)]
@@ -168,7 +168,62 @@ async fn main() {
             std::process::exit(1);
         }
     };
-    let state = AppState::new(songs);
+
+    let all_colors = vec![
+        ColorDef {
+            name: "Red".into(),
+            rgb: "#FF0000".into(),
+        },
+        ColorDef {
+            name: "Green".into(),
+            rgb: "#00FF00".into(),
+        },
+        ColorDef {
+            name: "Blue".into(),
+            rgb: "#0000FF".into(),
+        },
+        ColorDef {
+            name: "Yellow".into(),
+            rgb: "#FFFF00".into(),
+        },
+        ColorDef {
+            name: "Purple".into(),
+            rgb: "#800080".into(),
+        },
+        ColorDef {
+            name: "Gold".into(),
+            rgb: "#FFD700".into(),
+        },
+        ColorDef {
+            name: "Silver".into(),
+            rgb: "#C0C0C0".into(),
+        },
+        ColorDef {
+            name: "Pink".into(),
+            rgb: "#FFC0CB".into(),
+        },
+        ColorDef {
+            name: "Black".into(),
+            rgb: "#000000".into(),
+        },
+        ColorDef {
+            name: "White".into(),
+            rgb: "#FFFFFF".into(),
+        },
+        ColorDef {
+            name: "Brown".into(),
+            rgb: "#3D251E".into(),
+        },
+        ColorDef {
+            name: "Orange".into(),
+            rgb: "#FFA500".into(),
+        },
+        ColorDef {
+            name: "Gray".into(),
+            rgb: "#808080".into(),
+        },
+    ];
+    let state = AppState::new(songs, all_colors);
 
     let app = Router::new()
         .route("/ws", get(ws_handler))
