@@ -291,7 +291,6 @@ class WebSocketManager {
    */
   sendMessage(message) {
     if (this.gameState.socket?.readyState === WebSocket.OPEN) {
-      console.log("sending:", message);
       this.gameState.socket.send(JSON.stringify(message));
     } else {
       this.uiManager.showNotification("Connection not available", true);
@@ -309,7 +308,6 @@ class WebSocketManager {
       console.error("Invalid message from server:", e);
       return;
     }
-    console.log("received:", data);
 
     switch (data.type) {
       case "JoinedLobby":
@@ -1015,7 +1013,6 @@ class GameController {
     }
 
     if (!joinCodeInput) {
-      console.log("joinCodeInput", joinCodeInput);
       this.uiManager.showNotification("No lobby selected", true);
       return;
     }
