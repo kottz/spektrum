@@ -1002,7 +1002,6 @@ class GameController {
     document.getElementById("joinForm").style.display = "none";
     document.getElementById("lobbyInfo").style.display = "block";
     document.getElementById("adminControls").style.display = "block";
-    document.getElementById("currentLobbyName").textContent = lobbyId;
     document.getElementById("currentJoinCode").textContent = joinCode;
     this.uiManager.updateGameControls(this.gameState.gameStarted ? "question" : "lobby");
   }
