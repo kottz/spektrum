@@ -3,7 +3,7 @@ use crate::game::{
     ResponsePayload, Song,
 };
 use crate::game_manager::{GameLobby, GameManager};
-use crate::messages::{convert_to_server_message, AdminAction, ClientMessage, ServerMessage};
+use crate::messages::{AdminAction, ClientMessage, ServerMessage};
 use axum::{
     extract::ws::{Message, WebSocket},
     extract::State,
@@ -14,11 +14,10 @@ use axum::{
 use futures_util::{sink::SinkExt, stream::StreamExt};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, Mutex},
     time::Instant,
 };
-use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
+use tokio::sync::mpsc::unbounded_channel;
 use tracing::*;
 use uuid::Uuid;
 
@@ -29,7 +28,6 @@ use uuid::Uuid;
 #[derive(Clone)]
 pub struct AppState {
     pub manager: Arc<Mutex<GameManager>>,
-    pub connections: Arc<RwLock<HashMap<(Uuid, Uuid), UnboundedSender<ServerMessage>>>>,
     pub songs: Arc<Vec<Song>>,
     pub all_colors: Arc<Vec<ColorDef>>,
 }
@@ -38,7 +36,6 @@ impl AppState {
     pub fn new(songs: Vec<Song>, all_colors: Vec<ColorDef>) -> Self {
         Self {
             manager: Arc::new(Mutex::new(GameManager::new())),
-            connections: Arc::new(RwLock::new(HashMap::new())),
             songs: Arc::new(songs),
             all_colors: Arc::new(all_colors),
         }
@@ -68,9 +65,17 @@ pub async fn create_lobby_handler(
     let round_duration = req.round_duration.unwrap_or(60);
 
     let mgr = state.manager.lock().unwrap();
-    let (lobby_id, join_code, admin_id) = mgr.create_lobby(state.songs.to_vec(), state.all_colors.to_vec(), round_duration);
+    let (lobby_id, join_code, admin_id) = mgr.create_lobby(
+        state.songs.to_vec(),
+        state.all_colors.to_vec(),
+        round_duration,
+    );
 
-    Json(CreateLobbyResponse { lobby_id, join_code, admin_id })
+    Json(CreateLobbyResponse {
+        lobby_id,
+        join_code,
+        admin_id,
+    })
 }
 
 //--------------------------------------------------------------------------------
@@ -80,8 +85,6 @@ pub async fn create_lobby_handler(
 pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
     ws.on_upgrade(move |socket| handle_socket(socket, state))
 }
-
-// Then modify the WebSocket handler to take advantage of this
 pub async fn handle_socket(socket: WebSocket, state: AppState) {
     let (mut ws_tx, mut ws_rx) = socket.split();
     let (tx, mut rx) = unbounded_channel::<ServerMessage>();
@@ -109,26 +112,23 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
                 if let ClientMessage::JoinLobby {
                     join_code,
                     admin_id,
-                    name,
+                    name: _,
                 } = &client_msg
                 {
                     if lobby_ref.is_none() {
                         let manager = state.manager.lock().unwrap();
-                        let lobby_id = manager.get_lobby_id_from_join_code(&join_code).unwrap();
-                        lobby_ref = manager.get_lobby(&lobby_id);
-                        drop(manager);
+                        if let Some(lobby_id) = manager.get_lobby_id_from_join_code(&join_code) {
+                            lobby_ref = manager.get_lobby(&lobby_id);
 
-                        // Set up player ID and add connection
-                        if let Some(aid) = admin_id {
-                            player_id = *aid;
+                            // Set up player ID and add connection to the lobby
+                            if let Some(aid) = admin_id {
+                                player_id = *aid;
+                            }
+                            if let Some(lobby) = &lobby_ref {
+                                lobby.add_connection(player_id, tx.clone());
+                            }
                         }
-                        if let Some(lobby) = &lobby_ref {
-                            state
-                                .connections
-                                .write()
-                                .unwrap()
-                                .insert((lobby_id, player_id), tx.clone());
-                        }
+                        drop(manager);
                     }
                 }
 
@@ -158,11 +158,7 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
                                 action: GameAction::Leave,
                             };
                             let responses = lobby.process_event(event);
-                            state
-                                .connections
-                                .write()
-                                .unwrap()
-                                .remove(&(lobby_id, player_id));
+                            lobby.remove_connection(&player_id);
                             responses
                         }
                         ClientMessage::Answer { lobby_id, color } => {
@@ -221,7 +217,9 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
                     }]
                 };
 
-                broadcast_responses(responses, &state);
+                if let Some(ref lobby) = lobby_ref {
+                    lobby.broadcast_responses(responses);
+                }
             }
             Err(e) => {
                 warn!("Failed to parse client message: {}", e);
@@ -231,58 +229,14 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
 
     // Cleanup on disconnect
     if let Some(lobby) = lobby_ref {
-        let lobby_id = lobby.id();
-        state
-            .connections
-            .write()
-            .unwrap()
-            .remove(&(lobby_id, player_id));
+        lobby.remove_connection(&player_id);
 
-        // Optional: Check if lobby is empty and remove it
+        // Check if lobby is empty and remove it
         if lobby.is_empty() {
-            state.manager.lock().unwrap().remove_lobby(&lobby_id);
+            state.manager.lock().unwrap().remove_lobby(&lobby.id());
         }
     }
 
     send_task.abort();
     info!("WebSocket closed");
-}
-
-fn broadcast_responses(responses: Vec<GameResponse>, state: &AppState) {
-    let conns = state.connections.read().unwrap();
-
-    for response in responses {
-        let server_msg = convert_to_server_message(&response.payload);
-
-        // Extract all recipients for this lobby from the connections map
-        let lobby_connections: Vec<_> = conns
-            .keys()
-            .filter(|(lobby, _)| true) // We might want to filter by lobby here
-            .collect();
-
-        let recipients = match &response.recipients {
-            Recipients::Single(id) => lobby_connections
-                .iter()
-                .filter(|(_, pid)| pid == id)
-                .copied()
-                .collect::<Vec<_>>(),
-            Recipients::Multiple(ids) => lobby_connections
-                .iter()
-                .filter(|(_, pid)| ids.contains(pid))
-                .copied()
-                .collect(),
-            Recipients::AllExcept(exclude_ids) => lobby_connections
-                .iter()
-                .filter(|(_, pid)| !exclude_ids.contains(pid))
-                .copied()
-                .collect(),
-            Recipients::All => lobby_connections,
-        };
-
-        for &key in &recipients {
-            if let Some(sender) = conns.get(key) {
-                let _ = sender.send(server_msg.clone());
-            }
-        }
-    }
 }

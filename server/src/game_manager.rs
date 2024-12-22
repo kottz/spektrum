@@ -155,7 +155,7 @@ impl GameManager {
         info!("Removed lobby {}", id);
     }
 
-    pub fn list_lobbies(&self) -> Vec<Uuid> {
+    fn _list_lobbies(&self) -> Vec<Uuid> {
         self.lobbies.read().unwrap().keys().cloned().collect()
     }
 

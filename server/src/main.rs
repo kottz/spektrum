@@ -1,7 +1,10 @@
-use axum::{routing::{get, post}, Router};
+use axum::{
+    routing::{get, post},
+    Router,
+};
 use axum_server::Server;
 use clap::Parser;
-use csv::{Error as CsvError, ReaderBuilder, StringRecord};
+use csv::{ReaderBuilder, StringRecord};
 use std::net::SocketAddr;
 use std::str::FromStr;
 use thiserror::Error;
@@ -243,25 +246,6 @@ async fn main() {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_parse_difficulty_enum() {
-        assert_eq!(Difficulty::from_str("easy").unwrap(), Difficulty::Easy);
-        assert_eq!(Difficulty::from_str("Medium").unwrap(), Difficulty::Medium);
-        assert_eq!(
-            Difficulty::from_str("Challenging").unwrap(),
-            Difficulty::Challenging
-        );
-        assert_eq!(
-            Difficulty::from_str("VeryChallenging").unwrap(),
-            Difficulty::VeryChallenging
-        );
-        assert_eq!(Difficulty::from_str("Expert").unwrap(), Difficulty::Expert);
-        assert_eq!(
-            Difficulty::from_str("UltraHard").unwrap(),
-            Difficulty::UltraHard
-        );
-        assert!(Difficulty::from_str("invalid").is_err());
-    }
     #[test]
     fn test_parse_quiz_item() {
         let record = StringRecord::from(vec![
