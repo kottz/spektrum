@@ -634,7 +634,7 @@ class UIManager {
    * @param {string} data.reason
    */
   handleGameClosed(data) {
-    this.showNotification(`Game Closed: ${data.reason}`, true);
+    //this.showNotification(`Game Closed: ${data.reason}`, true);
     this.resetGameState();
     document.getElementById("lobbyInfo").style.display = "none";
     document.getElementById("adminControls").style.display = "none";
@@ -642,6 +642,9 @@ class UIManager {
     document.getElementById("joinForm").style.display = "block";
     document.getElementById("createLobby").style.display = "block";
     document.getElementById("joinExisting").style.display = "block";
+
+    // hard reload to test if it fixes state issues
+    location.reload();
   }
 
   /**
@@ -1025,44 +1028,41 @@ class GameController {
 
   leaveLobby() {
     if (this.gameState.isAdmin) {
-      this.uiManager.showConfirmationModal(
-        "Are you sure you want to leave? This will close the lobby for all players.",
-        () => {
-          this.wsManager.sendMessage({
-            type: "AdminAction",
-            lobby_id: this.gameState.currentLobbyId,
-            action: {
-              type: "CloseGame",
-              reason: "Admin closed the lobby"
-            }
-          });
-          this.handleGameClosed("Admin closed the lobby");
-          this.uiManager.resetGameState();
+      this.wsManager.sendMessage({
+        type: "AdminAction",
+        lobby_id: this.gameState.currentLobbyId,
+        action: {
+          type: "CloseGame",
+          reason: "Admin closed the lobby"
         }
-      );
+      });
+      this.handleGameClosed("Admin closed the lobby");
+      this.uiManager.resetGameState();
     } else {
       this.wsManager.sendMessage({
         type: "Leave",
         lobby_id: this.gameState.currentLobbyId,
       });
-      this.wsManager.closeConnection();
-      this.gameState = new GameState();
-      this.ytManager.cleanup();
-      this.ytManager = new YoutubeManager(this.gameState);
-      this.uiManager = new UIManager(this.gameState, this.ytManager, this);
-      document.getElementById("lobbyInfo").style.display = "none";
-      document.getElementById("lobbySelection").style.display = "block";
-      document.getElementById("joinForm").style.display = "block";
-      document.getElementById("createLobby").style.display = "block";
-      document.getElementById("joinExisting").style.display = "block";
     }
+    this.wsManager.closeConnection();
+    this.gameState = new GameState();
+    this.ytManager.cleanup();
+    this.ytManager = new YoutubeManager(this.gameState);
+    this.uiManager = new UIManager(this.gameState, this.ytManager, this);
+    document.getElementById("lobbyInfo").style.display = "none";
+    document.getElementById("lobbySelection").style.display = "block";
+    document.getElementById("joinForm").style.display = "block";
+    document.getElementById("createLobby").style.display = "block";
+    document.getElementById("joinExisting").style.display = "block";
+    // hard reload to test if it fixes state issues
+    location.reload();
   }
 
   /**
    * @param {string} reason
    */
   handleGameClosed(reason) {
-    this.uiManager.showNotification(`Game Closed: ${reason}`, true);
+    //this.uiManager.showNotification(`Game Closed: ${reason}`, true);
     this.wsManager.closeConnection();
     this.uiManager.resetGameState();
     this.gameState.isAdmin = false;
