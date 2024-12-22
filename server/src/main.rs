@@ -1,4 +1,4 @@
-use axum::{routing::get, Router};
+use axum::{routing::{get, post}, Router};
 use axum_server::Server;
 use clap::Parser;
 use csv::{Error as CsvError, ReaderBuilder, StringRecord};
@@ -14,8 +14,8 @@ mod game_manager;
 mod messages;
 mod server;
 
-use crate::game::{Song, ColorDef};
-use crate::server::{create_lobby_handler, list_lobbies_handler, ws_handler, AppState};
+use crate::game::{ColorDef, Song};
+use crate::server::{create_lobby_handler, ws_handler, AppState};
 
 #[derive(Parser, Debug)]
 pub struct Args {
@@ -227,10 +227,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/ws", get(ws_handler))
-        .route(
-            "/api/lobbies",
-            get(list_lobbies_handler).post(create_lobby_handler),
-        )
+        .route("/api/lobbies", post(create_lobby_handler))
         .fallback_service(ServeDir::new("../web").append_index_html_on_directories(true))
         .with_state(state);
     let addr = SocketAddr::from(([0, 0, 0, 0], 8765));

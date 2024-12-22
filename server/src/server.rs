@@ -55,13 +55,9 @@ pub struct CreateLobbyRequest {
 }
 
 #[derive(Debug, Serialize)]
-struct ListLobbiesResponse {
-    lobbies: Vec<Uuid>,
-}
-
-#[derive(Debug, Serialize)]
 struct CreateLobbyResponse {
     lobby_id: Uuid,
+    join_code: String,
     admin_id: Uuid,
 }
 
@@ -72,15 +68,9 @@ pub async fn create_lobby_handler(
     let round_duration = req.round_duration.unwrap_or(60);
 
     let mgr = state.manager.lock().unwrap();
-    let (lobby_id, admin_id) = mgr.create_lobby(state.songs.to_vec(), state.all_colors.to_vec(), round_duration);
+    let (lobby_id, join_code, admin_id) = mgr.create_lobby(state.songs.to_vec(), state.all_colors.to_vec(), round_duration);
 
-    Json(CreateLobbyResponse { lobby_id, admin_id })
-}
-
-pub async fn list_lobbies_handler(State(state): State<AppState>) -> impl IntoResponse {
-    let mgr = state.manager.lock().unwrap();
-    let lobby_ids = mgr.list_lobbies();
-    Json(ListLobbiesResponse { lobbies: lobby_ids })
+    Json(CreateLobbyResponse { lobby_id, join_code, admin_id })
 }
 
 //--------------------------------------------------------------------------------
@@ -117,14 +107,15 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
 
                 // Handle join message specially to set up lobby_ref
                 if let ClientMessage::JoinLobby {
-                    lobby_id,
+                    join_code,
                     admin_id,
                     name,
                 } = &client_msg
                 {
                     if lobby_ref.is_none() {
                         let manager = state.manager.lock().unwrap();
-                        lobby_ref = manager.get_lobby(lobby_id);
+                        let lobby_id = manager.get_lobby_id_from_join_code(&join_code).unwrap();
+                        lobby_ref = manager.get_lobby(&lobby_id);
                         drop(manager);
 
                         // Set up player ID and add connection
@@ -136,7 +127,7 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
                                 .connections
                                 .write()
                                 .unwrap()
-                                .insert((*lobby_id, player_id), tx.clone());
+                                .insert((lobby_id, player_id), tx.clone());
                         }
                     }
                 }

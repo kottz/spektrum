@@ -7,7 +7,7 @@ use crate::game::Song;
 #[serde(tag = "type")]
 pub enum ClientMessage {
     JoinLobby {
-        lobby_id: Uuid,
+        join_code: String,
         admin_id: Option<Uuid>,
         name: String,
     },
@@ -40,6 +40,7 @@ pub enum AdminAction {
 pub enum ServerMessage {
     JoinedLobby {
         player_id: Uuid,
+        lobby_id: Uuid,
         name: String,
         round_duration: u64,
         players: Vec<(String, i32)>,
@@ -90,11 +91,13 @@ pub fn convert_to_server_message(payload: &ResponsePayload) -> ServerMessage {
     match payload {
         ResponsePayload::Joined {
             player_id,
+            lobby_id,
             name,
             round_duration,
             current_players,
         } => ServerMessage::JoinedLobby {
             player_id: *player_id,
+            lobby_id: *lobby_id,
             name: name.clone(),
             round_duration: *round_duration,
             players: current_players.clone(),

@@ -6,11 +6,9 @@ use tokio::sync::mpsc::UnboundedSender;
 use tracing::*;
 use uuid::Uuid;
 
-use crate::game::{
-    ColorDef, GameEngine, GameEvent, GameResponse, Recipients, Song
-};
+use crate::game::{ColorDef, GameEngine, GameEvent, GameResponse, Recipients, Song};
 
-use crate::messages::{ServerMessage, convert_to_server_message};
+use crate::messages::{convert_to_server_message, ServerMessage};
 /// A single lobby instance that manages its own connection pool and game engine
 pub struct GameLobby {
     id: Uuid,
@@ -88,12 +86,32 @@ impl GameLobby {
 /// The GameManager now focuses purely on lobby lifecycle management
 pub struct GameManager {
     pub lobbies: Arc<RwLock<HashMap<Uuid, Arc<GameLobby>>>>,
+    pub join_codes: Arc<RwLock<HashMap<String, Uuid>>>,
 }
 
 impl GameManager {
     pub fn new() -> Self {
         Self {
             lobbies: Arc::new(RwLock::new(HashMap::new())),
+            join_codes: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+
+    fn generate_join_code(&self, lobby_id: Uuid) -> String {
+        // First try 6-digit codes up to a limit.
+        for _ in 0..10_000 {
+            let code = format!("{:06}", fastrand::u32(0..1_000_000));
+            if !self.join_codes.read().unwrap().contains_key(&code) {
+                return code;
+            }
+        }
+
+        // If many collisions or lobbies, escalate to 7 digits.
+        loop {
+            let code = format!("{:07}", fastrand::u32(0..10_000_00));
+            if !self.join_codes.read().unwrap().contains_key(&code) {
+                return code;
+            }
         }
     }
 
@@ -102,7 +120,7 @@ impl GameManager {
         songs: Vec<Song>,
         colors: Vec<ColorDef>,
         round_duration: u64,
-    ) -> (Uuid, Uuid) {
+    ) -> (Uuid, String, Uuid) {
         let lobby_id = Uuid::new_v4();
         let admin_id = Uuid::new_v4();
 
@@ -113,13 +131,23 @@ impl GameManager {
             colors,
             round_duration,
         ));
+        let join_code = self.generate_join_code(lobby_id);
+        self.join_codes
+            .write()
+            .unwrap()
+            .insert(join_code.clone(), lobby_id);
 
         self.lobbies.write().unwrap().insert(lobby_id, lobby);
-        (lobby_id, admin_id)
+        (lobby_id, join_code, admin_id)
     }
 
     pub fn get_lobby(&self, id: &Uuid) -> Option<Arc<GameLobby>> {
         self.lobbies.read().unwrap().get(id).cloned()
+    }
+
+    pub fn get_lobby_id_from_join_code(&self, join_code: &str) -> Option<Uuid> {
+        let bind = self.join_codes.read().unwrap();
+        bind.get(join_code).copied()
     }
 
     pub fn remove_lobby(&self, id: &Uuid) {

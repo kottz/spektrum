@@ -113,6 +113,7 @@ pub struct GameResponse {
 pub enum ResponsePayload {
     Joined {
         player_id: Uuid,
+        lobby_id: Uuid,
         name: String,
         round_duration: u64,
         current_players: Vec<(String, i32)>,
@@ -336,6 +337,7 @@ impl GameEngine {
                 recipients: Recipients::Single(ctx.sender_id),
                 payload: ResponsePayload::Joined {
                     player_id: ctx.sender_id,
+                    lobby_id: ctx.lobby_id,
                     name,
                     round_duration: self.state.round_duration,
                     current_players,

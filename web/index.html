@@ -14,28 +14,26 @@
         <div id="lobbySelection">
             <div id="createLobby">
                 <h2>Create New Lobby</h2>
-                <input type="text" id="newLobbyName" placeholder="Enter lobby name (optional)" maxlength="20"
-                    pattern="[a-zA-Z0-9_\-\.\ ]{0,20}"
-                    title="Lobby name can only contain letters, numbers, spaces, and the symbols: _ - ."
-                    autocomplete="off" />
                 <button id="createLobbyBtn">Create Lobby</button>
             </div>
             <div id="joinExisting">
                 <h2>Join Lobby</h2>
-                <div id="lobbyList"></div>
+                <div id="joinForm">
+                    <input type="text" id="joinCode" placeholder="Enter lobby code" required minlength="6"
+                        maxlength="16" pattern="[0-9]{6,16}" title="Join Code must be 6-16 digits long"
+                        autocomplete="off" />
+                    <input type="text" id="playerName" placeholder="Enter your name" required minlength="2"
+                        maxlength="16" pattern="[a-zA-Z0-9_\-\.\ ]{2,16}"
+                        title="Name must be 2-16 characters and can only contain letters, numbers, spaces, and the symbols: _ - ."
+                        autocomplete="off" />
+                    <button id="joinLobbyBtn">Join Game</button>
+                </div>
             </div>
-        </div>
-        <div id="joinForm" style="display: none">
-            <h2>Join <span id="selectedLobbyName"></span></h2>
-            <input type="text" id="playerName" placeholder="Enter your name" required minlength="2" maxlength="16"
-                pattern="[a-zA-Z0-9_\-\.\ ]{2,16}"
-                title="Name must be 2-16 characters and can only contain letters, numbers, spaces, and the symbols: _ - ."
-                autocomplete="off" />
-            <button id="joinLobbyBtn">Join Game</button>
         </div>
         <div id="lobbyInfo" style="display: none">
             <div id="lobbyHeader">
                 <h2>Lobby: <span id="currentLobbyName"></span></h2>
+                <h2>Join Code: <span id="currentJoinCode"></span></h2>
                 <button id="leaveLobbyBtn" class="leave-button">Leave Lobby</button>
             </div>
             <div id="gameState"></div>

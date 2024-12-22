@@ -52,6 +52,8 @@ class GameState {
     /** @type {string|null} */
     this.currentLobbyId = null;
     /** @type {string|null} */
+    this.currentJoinCode = null;
+    /** @type {string|null} */
     this.currentAdminId = null;
     /** @type {boolean} */
     this.gameStarted = false;
@@ -237,10 +239,10 @@ class WebSocketManager {
   }
 
   /**
-   * @param {string} lobbyId
+   * @param {string} joinCode
    * @param {string} name
    */
-  connect(lobbyId, name) {
+  connect(joinCode, name) {
     this.closeConnection();
 
     const wsProtocol = window.location.protocol === "https:" ?
@@ -249,20 +251,20 @@ class WebSocketManager {
     const wsUrl = `${wsProtocol}//${window.location.host}/ws`;
 
     this.gameState.socket = new WebSocket(wsUrl);
-    this.setupSocketHandlers(lobbyId, name);
+    this.setupSocketHandlers(joinCode, name);
   }
 
   /**
-   * @param {string} lobbyId
+   * @param {string} joinCode
    * @param {string} name
    */
-  setupSocketHandlers(lobbyId, name) {
+  setupSocketHandlers(joinCode, name) {
     if (!this.gameState.socket) return;
 
     this.gameState.socket.onopen = () => {
       const joinMsg = {
         type: "JoinLobby",
-        lobby_id: lobbyId,
+        join_code: joinCode,
         admin_id: this.gameState.isAdmin ? this.gameState.currentAdminId : null,
         name: this.gameState.isAdmin ? "Admin" : name
       };
@@ -515,8 +517,11 @@ class UIManager {
      */
   handleJoinedLobby(data) {
     CONFIG.ROUND_DURATION = data.round_duration;
+    this.gameState.currentLobbyId = data.lobby_id;
     this.updateLeaderboard(data.players);
     document.getElementById("joinForm").style.display = "none";
+    document.getElementById("createLobby").style.display = "none";
+    document.getElementById("joinExisting").style.display = "none";
     document.getElementById("lobbyInfo").style.display = "block";
   }
 
@@ -634,6 +639,9 @@ class UIManager {
     document.getElementById("lobbyInfo").style.display = "none";
     document.getElementById("adminControls").style.display = "none";
     document.getElementById("lobbySelection").style.display = "block";
+    document.getElementById("joinForm").style.display = "block";
+    document.getElementById("createLobby").style.display = "block";
+    document.getElementById("joinExisting").style.display = "block";
   }
 
   /**
@@ -930,17 +938,7 @@ class GameController {
    * Initialize the game application
    */
   async initialize() {
-    try {
-      const response = await fetch("/api/lobbies");
-      if (!response.ok) throw new Error("Failed to fetch lobbies");
-
-      const data = await response.json();
-      this.uiManager.updateLobbyList(data.lobbies);
-    } catch (error) {
-      console.error("Error fetching lobbies:", error);
-      document.getElementById("lobbyList").innerHTML =
-        '<p class="error-message">Failed to load lobbies.</p>';
-    }
+    // not needed when we removed lobby list
   }
 
   async createLobby() {
@@ -965,11 +963,12 @@ class GameController {
 
       const data = await response.json();
       this.gameState.currentLobbyId = data.lobby_id;
+      this.gameState.currentJoinCode = data.join_code;
       this.gameState.currentAdminId = data.admin_id;
       this.gameState.isAdmin = true;
 
-      this.showAdminView(data.lobby_id);
-      this.wsManager.connect(data.lobby_id, "Admin");
+      this.showAdminView(data.lobby_id, data.join_code);
+      this.wsManager.connect(data.join_code, "Admin");
 
       if (typeof YT !== 'undefined' && YT.Player) {
         this.ytManager.initializePlayer('youtubeEmbed');
@@ -986,36 +985,42 @@ class GameController {
   showJoinForm(lobbyId) {
     this.gameState.currentLobbyId = lobbyId;
     document.getElementById("lobbySelection").style.display = "none";
-    document.getElementById("selectedLobbyName").textContent = lobbyId;
     document.getElementById("joinForm").style.display = "block";
+    document.getElementById("joinForm").style.display = "block";
+    document.getElementById("createLobby").style.display = "block";
+    document.getElementById("joinExisting").style.display = "block";
   }
 
   /**
    * @param {string} lobbyId 
    */
-  showAdminView(lobbyId) {
+  showAdminView(lobbyId, joinCode) {
     document.getElementById("lobbySelection").style.display = "none";
     document.getElementById("joinForm").style.display = "none";
     document.getElementById("lobbyInfo").style.display = "block";
     document.getElementById("adminControls").style.display = "block";
     document.getElementById("currentLobbyName").textContent = lobbyId;
+    document.getElementById("currentJoinCode").textContent = joinCode;
     this.uiManager.updateGameControls(this.gameState.gameStarted ? "question" : "lobby");
   }
 
   joinLobby() {
     const playerNameInput = document.getElementById("playerName").value.trim();
+    const joinCodeInput = document.getElementById("joinCode").value.trim();
     if (!playerNameInput) {
       this.uiManager.showNotification("Please enter your name", true);
       return;
     }
 
-    if (!this.gameState.currentLobbyId) {
+    if (!joinCodeInput) {
+      console.log("joinCodeInput", joinCodeInput);
       this.uiManager.showNotification("No lobby selected", true);
       return;
     }
 
     this.gameState.playerName = playerNameInput;
-    this.wsManager.connect(this.gameState.currentLobbyId, playerNameInput);
+    this.gameState.joinCode = joinCodeInput;
+    this.wsManager.connect(joinCodeInput, playerNameInput);
   }
 
   leaveLobby() {
@@ -1032,6 +1037,7 @@ class GameController {
             }
           });
           this.handleGameClosed("Admin closed the lobby");
+          this.uiManager.resetGameState();
         }
       );
     } else {
@@ -1040,11 +1046,15 @@ class GameController {
         lobby_id: this.gameState.currentLobbyId,
       });
       this.wsManager.closeConnection();
-      this.uiManager.resetGameState();
-      this.gameState.currentLobbyId = null;
+      this.gameState = new GameState();
       this.ytManager.cleanup();
+      this.ytManager = new YoutubeManager(this.gameState);
+      this.uiManager = new UIManager(this.gameState, this.ytManager, this);
       document.getElementById("lobbyInfo").style.display = "none";
       document.getElementById("lobbySelection").style.display = "block";
+      document.getElementById("joinForm").style.display = "block";
+      document.getElementById("createLobby").style.display = "block";
+      document.getElementById("joinExisting").style.display = "block";
     }
   }
 
@@ -1060,6 +1070,9 @@ class GameController {
     document.getElementById("lobbyInfo").style.display = "none";
     document.getElementById("adminControls").style.display = "none";
     document.getElementById("lobbySelection").style.display = "block";
+    document.getElementById("joinForm").style.display = "block";
+    document.getElementById("createLobby").style.display = "block";
+    document.getElementById("joinExisting").style.display = "block";
     this.initialize();
   }
 
