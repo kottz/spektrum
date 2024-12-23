@@ -2,13 +2,16 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use axum_server::tls_rustls::RustlsConfig;
 use axum_server::Server;
 use clap::Parser;
 use csv::{ReaderBuilder, StringRecord};
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::str::FromStr;
 use thiserror::Error;
 use tower_http::services::ServeDir;
+use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -28,6 +31,8 @@ pub struct Args {
     pub port: u16,
     #[arg(long, default_value_t = false)]
     pub no_spotify: bool,
+    #[arg(long, default_value_t = false)]
+    pub https: bool,
 }
 
 #[derive(Debug, Error)]
@@ -232,13 +237,31 @@ async fn main() {
         .route("/ws", get(ws_handler))
         .route("/api/lobbies", post(create_lobby_handler))
         .fallback_service(ServeDir::new("../web").append_index_html_on_directories(true))
-        .with_state(state);
+        .with_state(state)
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(DefaultMakeSpan::default().include_headers(true)),
+        );
     let addr = SocketAddr::from(([0, 0, 0, 0], 8765));
     info!("Starting server on http://{}", addr);
 
-    if let Err(e) = Server::bind(addr).serve(app.into_make_service()).await {
-        error!("Failed to start server: {}. Exiting.", e);
-        std::process::exit(1);
+    if args.https {
+        // configure certificate and private key used by https
+        let config = RustlsConfig::from_pem_file(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("localhost.pem"),
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("localhost-key.pem"),
+        )
+        .await
+        .unwrap();
+        let mut server = axum_server::bind_rustls(addr, config);
+        server.http_builder();
+
+        server.serve(app.into_make_service()).await.unwrap();
+    } else {
+        if let Err(e) = Server::bind(addr).serve(app.into_make_service()).await {
+            error!("Failed to start server: {}. Exiting.", e);
+            std::process::exit(1);
+        }
     }
 }
 

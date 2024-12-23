@@ -152,7 +152,6 @@ impl GameManager {
 
     pub fn remove_lobby(&self, id: &Uuid) {
         self.lobbies.write().unwrap().remove(id);
-        info!("Removed lobby {}", id);
     }
 
     fn _list_lobbies(&self) -> Vec<Uuid> {
