@@ -66,7 +66,7 @@ id,title,artist,color,spotify_uri,youtube_id
 65,Jag vet en dejlig rosa,Östergötlands Sinfonietta,Pink,7AaEsJxX8uD8UwGxwopwkB,NwseNcQcU2U
 66,American Idiot,Green Day,Green,6nTiIhLmQ3FWhvrGafw2zj,VyV54YwPAkk
 67,Let's Stay Together,Al Green,Green,63xdwScd1Ai1GigAwQxE8y,EKOcfZtKvYQ
-68,Fuck You,CeeLo Green,Green,3ydfhgIZIc2j39NLIhpJpq,-6srPIwiNCA
+68,Forget You,CeeLo Green,Green,3ydfhgIZIc2j39NLIhpJpq,bKxodgpyGec
 69,Green Onions,Booker T. & the M.G.'s,Green,4fQMGlCawbTkH9yPPZ49kP,WoxVv7kgv08
 70,Green Green Grass Of Home,Tom Jones,Green,5BFWQXNGPYadZxNKxY1UfU,EmT1ptv3VEc
 71,Håll om mig,Nanne,Green,6LjXwyNIh30VWsnvT8JHhz,6k_QqFl6IYQ
@@ -80,7 +80,7 @@ id,title,artist,color,spotify_uri,youtube_id
 79,I Got You (I Feel Good),James Brown,Brown,2LZdFnXIXuky0S0Jhdl4Qz,iSLwVaebsJg
 80,Brown Eyed Lover,Allen Stone,Brown,4nUUEqMxXVFbvvMuK1BS7R,I5_1SaOxaW0
 81,Just the Way You Are,Bruno Mars,Brown,47Slg6LuqLaX0VodpSCvPt,HBzyuCda2RI
-82,24K Magic,Bruno Mars,Gold,6b8Be6ljOzmkOmFslEb23P,r7-A9NqUjRI
+82,24K Magic,Bruno Mars,Gold;Brown,6b8Be6ljOzmkOmFslEb23P,r7-A9NqUjRI
 83,Leende guldbruna ögon,Vikingarna,Gold;Brown,1ln7runLcw91fAzCRfe8FS,p1d9aamYR1A
 84,All My Tears,Ane Brun,Brown,2UZ8C6abrCuhjelaK1MFz1,EmDCHD6Bnc4
 85,Purple Rain,Prince,Purple,54X78diSLoUDI3joC2bjMz,347vCib_lMs
