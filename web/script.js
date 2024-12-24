@@ -67,8 +67,8 @@ class GameState {
     this.hasAnswered = false;
     /** @type {number} */
     this.playerScore = 0;
-    /** @type {number} */
-    this.totalPlayers = 0;
+    /** @type {ConnectedPlayer[]} */
+    this.connectedPlayers = [];
     /** @type {AnsweredPlayer[]} */
     this.answeredPlayers = [];
     /** @type {YT.Player|null} */
@@ -585,7 +585,7 @@ class UIManager {
    * @param {Player[]} players 
    */
   updateInitialPlayerList(players) {
-    this.gameState.totalPlayers = players.length;
+    this.gameState.connectedPlayers = players.map(p => p.name);
     this.updateLeaderboard(Array.isArray(players.players) ? players.players : players.map(([name, score]) => ({ name, score })));
   }
 
@@ -595,7 +595,12 @@ class UIManager {
    * @param {number} data.current_score
    */
   handlePlayerJoined(data) {
-    this.gameState.totalPlayers += 1;
+    console.log("handleplayerjoined func");
+    this.gameState.connectedPlayers.push(data.player_name);
+    const playerList = document.getElementById("playerList").innerHTML;
+    // comma separated players name
+    playerList = this.gameState.connectedPlayers.join(", ");
+    playerList = "whhattt";
     this.showNotification(`${data.player_name} joined the game`);
   }
 
@@ -604,7 +609,9 @@ class UIManager {
    * @param {string} data.name
    */
   handlePlayerLeft(data) {
-    this.gameState.totalPlayers = Math.max(0, this.gameState.totalPlayers - 1);
+    this.gameState.connectedPlayers = this.gameState.connectedPlayers.filter(p => p !== data.player_name);
+    const playerList = document.getElementById("playerList").innerHTML;
+    playerList = this.gameState.connectedPlayers.join(", ");
     this.showNotification(`${data.name} left the game`);
   }
 
@@ -646,7 +653,7 @@ class UIManager {
 
     switch (data.phase) {
       case "lobby":
-        this.handleLobbyPhase();
+        this.handleLobbyPhase(data);
         break;
       case "score":
         this.handleScorePhase(data.scoreboard);
@@ -778,7 +785,7 @@ class UIManager {
 
   updateAnswerStatus() {
     const counterElement = document.getElementById("answerCounter");
-    counterElement.textContent = `${this.gameState.answeredPlayers.length}/${this.gameState.totalPlayers}`;
+    counterElement.textContent = `${this.gameState.answeredPlayers.length}/${this.gameState.connectedPlayers.length}`;
 
     const answeredPlayersElement = document.getElementById("answeredPlayers");
     answeredPlayersElement.innerHTML = "";
@@ -808,13 +815,16 @@ class UIManager {
     document.getElementById("answerStatusContainer").style.display = "none";
   }
 
-  handleLobbyPhase() {
+  handleLobbyPhase(data) {
     document.getElementById("colorButtons").style.display = "none";
     document.getElementById("leaderboard").style.display = "none";
     document.getElementById("answerStatusContainer").style.display = "none";
     document.getElementById("roundResult").textContent = "";
 
     if (this.gameState.isAdmin) {
+      this.gameState.connectedPlayers = data.scoreboard.map(([name, score]) => name);
+      const playerList = document.getElementById("playerList");
+      playerList.innerHTML = this.gameState.connectedPlayers.join(", ");
       document.getElementById("skipButtonContainer").style.display = "none";
       if (this.gameState.youtubePlayer) {
         this.gameState.youtubePlayer.stopVideo();
@@ -830,7 +840,7 @@ class UIManager {
       name,
       score
     }));
-    this.gameState.totalPlayers = formattedScoreboard.length;
+    this.gameState.connectedPlayers = formattedScoreboard.map(p => p.name);
     this.updateLeaderboard(formattedScoreboard);
 
     document.getElementById("colorButtons").style.display = "none";
