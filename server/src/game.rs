@@ -1,4 +1,4 @@
-use rand::distributions::{Distribution, WeightedIndex};
+use crate::question::{GameQuestion, Question};
 use rand::seq::SliceRandom;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -16,29 +16,7 @@ pub enum GamePhase {
     GameOver,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-pub struct ColorDef {
-    pub name: String,
-    pub rgb: String,
-}
-
-#[derive(Debug, Clone)]
-struct ColorStats {
-    name: String,
-    frequency: f64,
-    song_count: usize,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Song {
-    pub id: u32,
-    pub song_name: String,
-    pub artist: String,
-    pub colors: Vec<String>,
-    pub spotify_uri: String,
-    pub youtube_id: String,
-}
-
+// PlayerState remains mostly the same, just using String for answers
 #[derive(Clone, Debug)]
 pub struct PlayerState {
     pub name: String,
@@ -80,6 +58,7 @@ pub struct GameEvent {
     pub action: GameAction,
 }
 
+// Updated GameAction to be question-type agnostic
 #[derive(Clone, Debug)]
 pub enum GameAction {
     Join {
@@ -87,14 +66,14 @@ pub enum GameAction {
     },
     Leave,
     Answer {
-        color: String,
+        answer: String,
     },
     StartGame,
     StartRound {
-        specified_colors: Option<Vec<String>>,
+        specified_alternatives: Option<Vec<String>>,
     },
     EndRound,
-    SkipSong,
+    SkipQuestion,
     EndGame {
         reason: String,
     },
@@ -109,6 +88,7 @@ pub struct GameResponse {
     pub payload: ResponsePayload,
 }
 
+// Updated ResponsePayload to handle any question type
 #[derive(Clone, Debug)]
 pub enum ResponsePayload {
     Joined {
@@ -128,7 +108,8 @@ pub enum ResponsePayload {
     },
     StateChanged {
         phase: GamePhase,
-        colors: Vec<ColorDef>,
+        question_type: String,
+        alternatives: Vec<String>,
         scoreboard: Vec<(String, i32)>,
     },
     GameOver {
@@ -139,10 +120,10 @@ pub enum ResponsePayload {
         reason: String,
     },
     AdminInfo {
-        current_song: Song,
+        current_question: GameQuestion,
     },
-    AdminNextSongs {
-        upcoming_songs: Vec<Song>,
+    AdminNextQuestions {
+        upcoming_questions: Vec<GameQuestion>,
     },
     Error {
         code: ErrorCode,
@@ -215,13 +196,18 @@ pub struct GameState {
     pub admin_id: Uuid,
     pub round_start_time: Option<Instant>,
     pub round_duration: u64,
-    pub colors: Vec<ColorDef>,
-    pub correct_colors: Vec<String>,
-    pub current_song: Option<Song>,
-    pub used_songs: HashSet<String>,
-    pub all_songs: Vec<Song>,
-    pub all_colors: Vec<ColorDef>,
-    pub current_song_index: usize,
+    // Remove color specific fields:
+    // pub colors: Vec<ColorDef>,
+    // pub correct_colors: Vec<String>,
+    // pub all_colors: Vec<ColorDef>,
+
+    // Replace song fields with question fields:
+    pub current_alternatives: Vec<String>,
+    pub correct_answers: Option<Vec<String>>,
+    pub current_question: Option<GameQuestion>,
+    pub used_questions: HashSet<u32>, // Track by question ID instead of spotify_uri
+    pub all_questions: Vec<GameQuestion>, // Replace all_songs
+    pub current_question_index: usize, // Rename but same functionality
 }
 
 pub struct GameEngine {
@@ -229,14 +215,9 @@ pub struct GameEngine {
 }
 
 impl GameEngine {
-    pub fn new(
-        admin_id: Uuid,
-        mut all_songs: Vec<Song>,
-        all_colors: Vec<ColorDef>,
-        round_duration: u64,
-    ) -> Self {
+    pub fn new(admin_id: Uuid, mut questions: Vec<GameQuestion>, round_duration: u64) -> Self {
         let mut rng = rand::thread_rng();
-        all_songs.shuffle(&mut rng);
+        questions.shuffle(&mut rng);
         Self {
             state: GameState {
                 phase: GamePhase::Lobby,
@@ -244,13 +225,12 @@ impl GameEngine {
                 admin_id,
                 round_start_time: None,
                 round_duration,
-                colors: Vec::new(),
-                correct_colors: Vec::new(),
-                current_song: None,
-                used_songs: HashSet::new(),
-                all_songs,
-                all_colors,
-                current_song_index: 0,
+                current_alternatives: Vec::new(),
+                correct_answers: None,
+                current_question: None,
+                used_questions: HashSet::new(),
+                all_questions: questions,
+                current_question_index: 0,
             },
         }
     }
@@ -280,13 +260,13 @@ impl GameEngine {
         match action {
             GameAction::Join { name } => self.handle_join(context, name),
             GameAction::Leave => self.handle_leave(context),
-            GameAction::Answer { color } => self.handle_answer(context, color),
+            GameAction::Answer { answer } => self.handle_answer(context, answer),
             GameAction::StartGame => self.handle_start_game(context),
-            GameAction::StartRound { specified_colors } => {
-                self.handle_start_round(context, specified_colors)
-            }
+            GameAction::StartRound {
+                specified_alternatives,
+            } => self.handle_start_round(context, specified_alternatives),
             GameAction::EndRound => self.handle_end_round(context),
-            GameAction::SkipSong => self.handle_skip_song(context),
+            GameAction::SkipQuestion => self.handle_skip_question(context),
             GameAction::EndGame { reason } => self.handle_end_game(context, reason),
             GameAction::CloseGame { reason } => self.handle_close_game(context, reason),
         }
@@ -299,7 +279,6 @@ impl GameEngine {
 
         let name = name.trim().to_string();
 
-        // Validate name
         let existing_names = self.state.players.values().map(|p| &p.name);
         if let Err(validation_error) = validate_player_name(&name, existing_names) {
             return vec![GameResponse {
@@ -347,7 +326,8 @@ impl GameEngine {
                 recipients: Recipients::AllExcept(vec![ctx.sender_id]),
                 payload: ResponsePayload::StateChanged {
                     phase: self.state.phase,
-                    colors: self.state.colors.clone(),
+                    question_type: "".to_string(),
+                    alternatives: self.state.current_alternatives.clone(), // Changed from colors
                     scoreboard: self.get_scoreboard(),
                 },
             },
@@ -380,7 +360,7 @@ impl GameEngine {
         }
     }
 
-    fn handle_answer(&mut self, ctx: EventContext, color: String) -> Vec<GameResponse> {
+    fn handle_answer(&mut self, ctx: EventContext, answer: String) -> Vec<GameResponse> {
         if self.state.phase != GamePhase::Question {
             return vec![GameResponse {
                 recipients: Recipients::Single(ctx.sender_id),
@@ -430,7 +410,11 @@ impl GameEngine {
             }];
         }
 
-        let correct = self.state.correct_colors.contains(&color);
+        let correct = self
+            .state
+            .correct_answers
+            .as_ref()
+            .map_or(false, |answers| answers.contains(&answer));
         let new_score = if correct {
             let score_delta = ((self.state.round_duration as f64 * 100.0
                 - (elapsed.as_secs_f64() * 100.0))
@@ -442,7 +426,7 @@ impl GameEngine {
         };
 
         player.has_answered = true;
-        player.answer = Some(color);
+        player.answer = Some(answer);
 
         vec![GameResponse {
             recipients: Recipients::All,
@@ -471,18 +455,19 @@ impl GameEngine {
             recipients: Recipients::All,
             payload: ResponsePayload::StateChanged {
                 phase: GamePhase::Score,
-                colors: Vec::new(),
+                question_type: "".to_string(),
+                alternatives: Vec::new(),
                 scoreboard: self.get_scoreboard(),
             },
         }];
 
         // Send next songs to admin after transitioning to Score phase
-        let upcoming = self.get_upcoming_songs(3);
+        let upcoming = self.get_upcoming_questions(3);
         if !upcoming.is_empty() {
             responses.push(GameResponse {
                 recipients: Recipients::Single(self.state.admin_id),
-                payload: ResponsePayload::AdminNextSongs {
-                    upcoming_songs: upcoming,
+                payload: ResponsePayload::AdminNextQuestions {
+                    upcoming_questions: upcoming,
                 },
             });
         }
@@ -493,7 +478,7 @@ impl GameEngine {
     fn handle_start_round(
         &mut self,
         ctx: EventContext,
-        specified_colors: Option<Vec<String>>,
+        specified_alternatives: Option<Vec<String>>,
     ) -> Vec<GameResponse> {
         if self.state.phase != GamePhase::Score {
             return vec![GameResponse {
@@ -505,30 +490,42 @@ impl GameEngine {
             }];
         }
 
+        // Reset all players' answer state
         for player in self.state.players.values_mut() {
             player.has_answered = false;
             player.answer = None;
         }
 
-        match self.setup_round_colors(specified_colors) {
+        // Setup the round with the current question or specified alternatives
+        match self.setup_round(specified_alternatives) {
             Ok(()) => {
                 self.state.phase = GamePhase::Question;
                 self.state.round_start_time = Some(ctx.timestamp);
+                // find if questoins are color or character
+
                 let mut outputs = Vec::new();
                 outputs.push(GameResponse {
                     recipients: Recipients::All,
                     payload: ResponsePayload::StateChanged {
                         phase: GamePhase::Question,
-                        colors: self.state.colors.clone(),
+                        question_type: self
+                            .state
+                            .current_question
+                            .as_ref()
+                            .unwrap()
+                            .get_question_type()
+                            .to_string(),
+                        alternatives: self.state.current_alternatives.clone(),
                         scoreboard: self.get_scoreboard(),
                     },
                 });
 
-                if let Some(song) = &self.state.current_song {
+                // If there's a current question, send it to the admin
+                if let Some(question) = &self.state.current_question {
                     outputs.push(GameResponse {
                         recipients: Recipients::Single(self.state.admin_id),
                         payload: ResponsePayload::AdminInfo {
-                            current_song: song.clone(),
+                            current_question: question.clone(),
                         },
                     });
                 }
@@ -546,6 +543,7 @@ impl GameEngine {
     }
 
     fn handle_end_round(&mut self, ctx: EventContext) -> Vec<GameResponse> {
+        // Phase check remains the same
         if self.state.phase != GamePhase::Question {
             return vec![GameResponse {
                 recipients: Recipients::Single(ctx.sender_id),
@@ -556,33 +554,35 @@ impl GameEngine {
             }];
         }
 
-        if let Some(song) = &self.state.current_song {
-            self.state.used_songs.insert(song.spotify_uri.clone());
+        // Mark current question as used
+        if let Some(question) = &self.state.current_question {
+            self.state.used_questions.insert(question.get_id());
         }
 
-        // Move to next song for the next round
-        self.state.current_song = None;
-        self.state.current_song_index += 1; // Increment index to use next song next time
-        self.state.colors.clear();
-        self.state.correct_colors.clear();
+        // Reset state for next round
+        self.state.current_question = None;
+        self.state.current_question_index += 1;
+        self.state.current_alternatives.clear();
+        self.state.correct_answers = None;
         self.state.phase = GamePhase::Score;
 
         let mut responses = vec![GameResponse {
             recipients: Recipients::All,
             payload: ResponsePayload::StateChanged {
                 phase: GamePhase::Score,
-                colors: Vec::new(),
+                question_type: "".to_string(),
+                alternatives: Vec::new(),
                 scoreboard: self.get_scoreboard(),
             },
         }];
 
-        // Send next 3 upcoming songs to admin
-        let upcoming = self.get_upcoming_songs(3);
+        // Send next 3 upcoming questions to admin
+        let upcoming = self.get_upcoming_questions(3);
         if !upcoming.is_empty() {
             responses.push(GameResponse {
                 recipients: Recipients::Single(self.state.admin_id),
-                payload: ResponsePayload::AdminNextSongs {
-                    upcoming_songs: upcoming,
+                payload: ResponsePayload::AdminNextQuestions {
+                    upcoming_questions: upcoming,
                 },
             });
         }
@@ -590,42 +590,45 @@ impl GameEngine {
         responses
     }
 
-    fn handle_skip_song(&mut self, ctx: EventContext) -> Vec<GameResponse> {
+    fn handle_skip_question(&mut self, ctx: EventContext) -> Vec<GameResponse> {
         if self.state.phase != GamePhase::Score {
             return vec![GameResponse {
                 recipients: Recipients::Single(ctx.sender_id),
                 payload: ResponsePayload::Error {
                     code: ErrorCode::InvalidPhase,
-                    message: "Can only skip song during scoreboard phase".into(),
+                    message: "Can only skip question during scoreboard phase".into(),
                 },
             }];
         }
 
-        if let Some(song) = &self.state.current_song {
-            self.state.used_songs.insert(song.spotify_uri.clone());
+        // Mark current question as used if it exists
+        if let Some(question) = &self.state.current_question {
+            self.state.used_questions.insert(question.get_id());
         }
 
-        self.state.current_song = None;
-        self.state.current_song_index += 1; // Increment index to use next song next time
-        self.state.colors.clear();
-        self.state.correct_colors.clear();
+        // Reset state for next question
+        self.state.current_question = None;
+        self.state.current_question_index += 1;
+        self.state.current_alternatives.clear();
+        self.state.correct_answers = None;
 
         let mut responses = vec![GameResponse {
             recipients: Recipients::All,
             payload: ResponsePayload::StateChanged {
                 phase: GamePhase::Score,
-                colors: Vec::new(),
+                question_type: "".to_string(),
+                alternatives: Vec::new(),
                 scoreboard: self.get_scoreboard(),
             },
         }];
 
-        // Send next 3 upcoming songs to admin
-        let upcoming = self.get_upcoming_songs(3);
+        // Send next 3 upcoming questions to admin
+        let upcoming = self.get_upcoming_questions(3);
         if !upcoming.is_empty() {
             responses.push(GameResponse {
                 recipients: Recipients::Single(self.state.admin_id),
-                payload: ResponsePayload::AdminNextSongs {
-                    upcoming_songs: upcoming,
+                payload: ResponsePayload::AdminNextQuestions {
+                    upcoming_questions: upcoming,
                 },
             });
         }
@@ -660,181 +663,235 @@ impl GameEngine {
             .collect()
     }
 
-    fn setup_round_colors(&mut self, specified_colors: Option<Vec<String>>) -> Result<(), String> {
-        self.state.colors.clear();
-        self.state.correct_colors.clear();
+    fn setup_round(&mut self, specified_alternatives: Option<Vec<String>>) -> Result<(), String> {
+        println!(
+            "Setting up round with specified alternatives: {:?}",
+            specified_alternatives
+        );
+        if self.state.current_question_index >= self.state.all_questions.len() {
+            return Err("No more questions available".to_string());
+        }
 
-        if let Some(specs) = specified_colors {
-            // Handle manually specified colors
-            let chosen: Vec<ColorDef> = specs
-                .iter()
-                .filter_map(|name| {
-                    self.state
-                        .all_colors
-                        .iter()
-                        .find(|c| c.name.eq_ignore_ascii_case(name))
-                        .cloned()
-                })
-                .collect();
+        let next_question = &self.state.all_questions[self.state.current_question_index];
 
-            if chosen.is_empty() {
-                return Err("No valid specified colors".to_string());
-            }
-            self.state.colors = chosen.clone();
-            self.state.correct_colors = chosen.iter().map(|c| c.name.clone()).collect();
-            self.state.current_song = None;
-            Ok(())
+        if self.state.used_questions.contains(&next_question.get_id()) {
+            // This should ideally not happen if the index is managed correctly,
+            // but adding a safeguard.
+            return Err("This question has already been used".to_string());
+        }
+
+        self.state.current_question = Some(next_question.clone());
+        self.state.correct_answers = Some(next_question.get_correct_answer());
+
+        if let Some(alts) = specified_alternatives {
+            println!("Using specified alternatives: {:?}", alts);
+            self.state.current_alternatives = alts;
         } else {
-            // Handle song-based colors
-            if self.state.current_song_index >= self.state.all_songs.len() {
-                return Err("No available songs".to_string());
-            }
-
-            let chosen_song = self.state.all_songs[self.state.current_song_index].clone();
-            if self.state.used_songs.contains(&chosen_song.spotify_uri) {
-                return Err("No available songs".to_string());
-            }
-
-            let chosen_correct_colors: Vec<ColorDef> = chosen_song
-                .colors
-                .iter()
-                .filter_map(|cname| {
-                    self.state
-                        .all_colors
-                        .iter()
-                        .find(|c| c.name.eq_ignore_ascii_case(cname))
-                        .cloned()
-                })
-                .collect();
-
-            if chosen_correct_colors.is_empty() {
-                return Err("Song has no valid colors".to_string());
-            }
-
-            self.state.current_song = Some(chosen_song);
-            self.state.correct_colors = chosen_correct_colors
-                .iter()
-                .map(|c| c.name.clone())
-                .collect();
-            self.state.colors = self.generate_round_colors(chosen_correct_colors);
-            Ok(())
-        }
-    }
-
-    fn calculate_color_weights(&self) -> HashMap<String, f64> {
-        let mut color_counts: HashMap<String, usize> = HashMap::new();
-        let total_songs = self.state.all_songs.len() as f64;
-
-        // Count how many songs each color appears in
-        for song in &self.state.all_songs {
-            for color in &song.colors {
-                *color_counts.entry(color.clone()).or_insert(0) += 1;
-            }
-        }
-
-        // Convert counts to adjusted weights using square root to boost rare colors
-        let mut color_weights: HashMap<String, f64> = HashMap::new();
-        for (color, count) in color_counts {
-            // Calculate base proportion
-            let base_proportion = count as f64 / total_songs;
-
-            // Apply square root transformation and add a minimum boost
-            // This compresses the range between common and rare colors
-            let adjusted_weight = base_proportion.sqrt() + 0.15;
-
-            color_weights.insert(color, adjusted_weight);
-        }
-
-        // Also ensure any colors in all_colors that haven't appeared in songs get a minimum weight
-        for color in &self.state.all_colors {
-            color_weights.entry(color.name.clone()).or_insert(0.15); // Minimum weight for colors that never appear
-        }
-
-        color_weights
-    }
-
-    fn generate_round_colors(&self, correct_colors: Vec<ColorDef>) -> Vec<ColorDef> {
-        let mut round_colors = correct_colors.clone();
-        let mut rng = rand::thread_rng();
-
-        if round_colors.len() >= 6 {
-            round_colors.shuffle(&mut rng);
-            return round_colors;
-        }
-
-        // Calculate weights for all colors
-        let color_weights = self.calculate_color_weights();
-
-        // Get available colors (not in correct_colors)
-        let mut available: Vec<ColorDef> = self
-            .state
-            .all_colors
-            .iter()
-            .filter(|col| !correct_colors.contains(col))
-            .cloned()
-            .collect();
-
-        // Create initial weights for available colors
-        let mut weights: Vec<f64> = available
-            .iter()
-            .map(|color| color_weights.get(&color.name).copied().unwrap_or(0.15))
-            .collect();
-
-        // Select remaining colors
-        while round_colors.len() < 6 && !available.is_empty() {
-            // Create distribution for current weights
-            if let Ok(dist) = WeightedIndex::new(&weights) {
-                let idx = dist.sample(&mut rng);
-                round_colors.push(available.remove(idx));
-                weights.remove(idx);
-            } else {
-                // Fallback to simple random if weights are invalid
-                let idx = rng.gen_range(0..available.len());
-                round_colors.push(available.remove(idx));
-                weights.remove(idx);
-            }
-        }
-
-        round_colors.shuffle(&mut rng);
-        round_colors
-    }
-
-    // Helper function to view the actual weights being used
-    fn get_color_statistics(&self) -> Vec<ColorStats> {
-        let color_weights = self.calculate_color_weights();
-        let mut stats: Vec<ColorStats> = color_weights
-            .into_iter()
-            .map(|(name, weight)| {
-                let song_count = self
-                    .state
-                    .all_songs
-                    .iter()
-                    .filter(|song| song.colors.contains(&name))
-                    .count();
-
-                ColorStats {
-                    name,
-                    frequency: weight,
-                    song_count,
+            self.state.current_alternatives = next_question.get_all_possible_alternatives();
+            // Ensure all correct answers are included and alternatives are unique, then shuffle
+            if let Some(correct_answers) = self.state.correct_answers.clone() {
+                for answer in correct_answers {
+                    if !self.state.current_alternatives.contains(&answer) {
+                        self.state.current_alternatives.push(answer);
+                    }
                 }
-            })
-            .collect();
+            }
+            self.state.current_alternatives.dedup();
+            let mut rng = rand::thread_rng();
+            self.state.current_alternatives.shuffle(&mut rng);
+        }
 
-        stats.sort_by(|a, b| b.frequency.partial_cmp(&a.frequency).unwrap());
-        stats
+        println!(
+            "Round setup current_question: {:?}",
+            self.state.current_question
+        );
+        println!(
+            "Round setup current answers: {:?}",
+            self.state.correct_answers
+        );
+        println!(
+            "Round setup complete alternatives: {:?}",
+            self.state.current_alternatives
+        );
+
+        Ok(())
     }
+    // fn setup_round_colors(&mut self, specified_colors: Option<Vec<String>>) -> Result<(), String> {
+    //     self.state.colors.clear();
+    //     self.state.correct_colors.clear();
+    //
+    //     if let Some(specs) = specified_colors {
+    //         // Handle manually specified colors
+    //         let chosen: Vec<ColorDef> = specs
+    //             .iter()
+    //             .filter_map(|name| {
+    //                 self.state
+    //                     .all_colors
+    //                     .iter()
+    //                     .find(|c| c.name.eq_ignore_ascii_case(name))
+    //                     .cloned()
+    //             })
+    //             .collect();
+    //
+    //         if chosen.is_empty() {
+    //             return Err("No valid specified colors".to_string());
+    //         }
+    //         self.state.colors = chosen.clone();
+    //         self.state.correct_colors = chosen.iter().map(|c| c.name.clone()).collect();
+    //         self.state.current_song = None;
+    //         Ok(())
+    //     } else {
+    //         // Handle song-based colors
+    //         if self.state.current_song_index >= self.state.all_songs.len() {
+    //             return Err("No available songs".to_string());
+    //         }
+    //
+    //         let chosen_song = self.state.all_songs[self.state.current_song_index].clone();
+    //         if self.state.used_songs.contains(&chosen_song.spotify_uri) {
+    //             return Err("No available songs".to_string());
+    //         }
+    //
+    //         let chosen_correct_colors: Vec<ColorDef> = chosen_song
+    //             .colors
+    //             .iter()
+    //             .filter_map(|cname| {
+    //                 self.state
+    //                     .all_colors
+    //                     .iter()
+    //                     .find(|c| c.name.eq_ignore_ascii_case(cname))
+    //                     .cloned()
+    //             })
+    //             .collect();
+    //
+    //         if chosen_correct_colors.is_empty() {
+    //             return Err("Song has no valid colors".to_string());
+    //         }
+    //
+    //         self.state.current_song = Some(chosen_song);
+    //         self.state.correct_colors = chosen_correct_colors
+    //             .iter()
+    //             .map(|c| c.name.clone())
+    //             .collect();
+    //         self.state.colors = self.generate_round_colors(chosen_correct_colors);
+    //         Ok(())
+    //     }
+    // }
+    //
+    // fn calculate_color_weights(&self) -> HashMap<String, f64> {
+    //     let mut color_counts: HashMap<String, usize> = HashMap::new();
+    //     let total_songs = self.state.all_songs.len() as f64;
+    //
+    //     // Count how many songs each color appears in
+    //     for song in &self.state.all_songs {
+    //         for color in &song.colors {
+    //             *color_counts.entry(color.clone()).or_insert(0) += 1;
+    //         }
+    //     }
+    //
+    //     // Convert counts to adjusted weights using square root to boost rare colors
+    //     let mut color_weights: HashMap<String, f64> = HashMap::new();
+    //     for (color, count) in color_counts {
+    //         // Calculate base proportion
+    //         let base_proportion = count as f64 / total_songs;
+    //
+    //         // Apply square root transformation and add a minimum boost
+    //         // This compresses the range between common and rare colors
+    //         let adjusted_weight = base_proportion.sqrt() + 0.15;
+    //
+    //         color_weights.insert(color, adjusted_weight);
+    //     }
+    //
+    //     // Also ensure any colors in all_colors that haven't appeared in songs get a minimum weight
+    //     for color in &self.state.all_colors {
+    //         color_weights.entry(color.name.clone()).or_insert(0.15); // Minimum weight for colors that never appear
+    //     }
+    //
+    //     color_weights
+    // }
+    //
+    // fn generate_round_colors(&self, correct_colors: Vec<ColorDef>) -> Vec<ColorDef> {
+    //     let mut round_colors = correct_colors.clone();
+    //     let mut rng = rand::thread_rng();
+    //
+    //     if round_colors.len() >= 6 {
+    //         round_colors.shuffle(&mut rng);
+    //         return round_colors;
+    //     }
+    //
+    //     // Calculate weights for all colors
+    //     let color_weights = self.calculate_color_weights();
+    //
+    //     // Get available colors (not in correct_colors)
+    //     let mut available: Vec<ColorDef> = self
+    //         .state
+    //         .all_colors
+    //         .iter()
+    //         .filter(|col| !correct_colors.contains(col))
+    //         .cloned()
+    //         .collect();
+    //
+    //     // Create initial weights for available colors
+    //     let mut weights: Vec<f64> = available
+    //         .iter()
+    //         .map(|color| color_weights.get(&color.name).copied().unwrap_or(0.15))
+    //         .collect();
+    //
+    //     // Select remaining colors
+    //     while round_colors.len() < 6 && !available.is_empty() {
+    //         // Create distribution for current weights
+    //         if let Ok(dist) = WeightedIndex::new(&weights) {
+    //             let idx = dist.sample(&mut rng);
+    //             round_colors.push(available.remove(idx));
+    //             weights.remove(idx);
+    //         } else {
+    //             // Fallback to simple random if weights are invalid
+    //             let idx = rng.gen_range(0..available.len());
+    //             round_colors.push(available.remove(idx));
+    //             weights.remove(idx);
+    //         }
+    //     }
+    //
+    //     round_colors.shuffle(&mut rng);
+    //     round_colors
+    // }
+    //
+    // // Helper function to view the actual weights being used
+    // fn get_color_statistics(&self) -> Vec<ColorStats> {
+    //     let color_weights = self.calculate_color_weights();
+    //     let mut stats: Vec<ColorStats> = color_weights
+    //         .into_iter()
+    //         .map(|(name, weight)| {
+    //             let song_count = self
+    //                 .state
+    //                 .all_songs
+    //                 .iter()
+    //                 .filter(|song| song.colors.contains(&name))
+    //                 .count();
+    //
+    //             ColorStats {
+    //                 name,
+    //                 frequency: weight,
+    //                 song_count,
+    //             }
+    //         })
+    //         .collect();
+    //
+    //     stats.sort_by(|a, b| b.frequency.partial_cmp(&a.frequency).unwrap());
+    //     stats
+    // }
 
-    fn get_upcoming_songs(&self, count: usize) -> Vec<Song> {
-        let start = self.state.current_song_index;
-        let end = std::cmp::min(start + count, self.state.all_songs.len());
+    fn get_upcoming_questions(&self, count: usize) -> Vec<GameQuestion> {
+        let start = self.state.current_question_index;
+        let end = std::cmp::min(start + count, self.state.all_questions.len());
         let mut upcoming = Vec::new();
+
         for i in start..end {
             if !self
                 .state
-                .used_songs
-                .contains(&self.state.all_songs[i].spotify_uri)
+                .used_questions
+                .contains(&self.state.all_questions[i].get_id())
             {
-                upcoming.push(self.state.all_songs[i].clone());
+                upcoming.push(self.state.all_questions[i].clone());
             }
         }
         upcoming
@@ -844,54 +901,59 @@ impl GameEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::question::character::{CharacterQuestion, Difficulty};
+    use crate::question::color::{Color, ColorQuestion};
 
-    fn setup_test_data() -> (Vec<Song>, Vec<ColorDef>) {
-        let colors = vec![
-            ColorDef {
-                name: "Red".to_string(),
-                rgb: "#FF0000".to_string(),
-            },
-            ColorDef {
-                name: "Blue".to_string(),
-                rgb: "#0000FF".to_string(),
-            },
+    fn setup_test_data() -> Vec<GameQuestion> {
+        let color_questions = vec![
+            GameQuestion::Color(ColorQuestion::new(
+                1,
+                "Test Song 1".to_string(),
+                "Test Artist".to_string(),
+                vec![Color::Red],
+                "test:song:1".to_string(),
+                "xyz123".to_string(),
+            )),
+            GameQuestion::Color(ColorQuestion::new(
+                2,
+                "Test Song 2".to_string(),
+                "Test Artist".to_string(),
+                vec![Color::Blue],
+                "test:song:2".to_string(),
+                "xyz456".to_string(),
+            )),
         ];
 
-        let songs = vec![
-            Song {
-                id: 1,
-                song_name: "Test Song 1".to_string(),
-                artist: "Test Artist".to_string(),
-                youtube_id: "Xyzzzxyzz34".to_string(),
-                spotify_uri: "test:song:1".to_string(),
-                colors: vec!["Red".to_string()],
-            },
-            Song {
-                id: 2,
-                song_name: "Test Song 2".to_string(),
-                artist: "Test Artist".to_string(),
-                youtube_id: "Xyzzzxyzz34".to_string(),
-                spotify_uri: "test:song:1".to_string(),
-                colors: vec!["Blue".to_string()],
-            },
-        ];
+        let character_questions = vec![GameQuestion::Character(CharacterQuestion::new(
+            3,
+            Difficulty::Easy,
+            "Test Song 3".to_string(),
+            "Character A".to_string(),
+            vec!["Character B".to_string(), "Character C".to_string()],
+            "test:song:3".to_string(),
+            "xyz789".to_string(),
+        ))];
 
-        (songs, colors)
+        let mut questions = color_questions;
+        questions.extend(character_questions);
+        questions
     }
 
     #[test]
     fn test_game_initialization() {
-        let (songs, colors) = setup_test_data();
+        let questions = setup_test_data();
         let admin_id = Uuid::new_v4();
-        let engine = GameEngine::new(admin_id, songs, colors, 30);
+        let engine = GameEngine::new(admin_id, questions, 30);
         assert_eq!(engine.state.phase, GamePhase::Lobby);
+        assert!(engine.state.current_alternatives.is_empty());
+        assert!(engine.state.correct_answer.is_none());
     }
 
     #[test]
     fn test_join_game() {
-        let (songs, colors) = setup_test_data();
+        let questions = setup_test_data();
         let admin_id = Uuid::new_v4();
-        let mut engine = GameEngine::new(admin_id, songs, colors, 30);
+        let mut engine = GameEngine::new(admin_id, questions, 30);
         let player_id = Uuid::new_v4();
 
         let ctx = EventContext {
@@ -911,13 +973,27 @@ mod tests {
         let responses = engine.process_event(event);
         assert!(!responses.is_empty());
         assert!(engine.state.players.contains_key(&player_id));
+
+        // Verify response structure
+        if let ResponsePayload::Joined { name, .. } = &responses[0].payload {
+            assert_eq!(name, "TestPlayer");
+        } else {
+            panic!("Expected Joined response");
+        }
+
+        // Verify StateChanged has empty alternatives in lobby
+        if let ResponsePayload::StateChanged { alternatives, .. } = &responses[1].payload {
+            assert!(alternatives.is_empty());
+        } else {
+            panic!("Expected StateChanged response");
+        }
     }
 
     #[test]
     fn test_game_start() {
-        let (songs, colors) = setup_test_data();
+        let questions = setup_test_data();
         let admin_id = Uuid::new_v4();
-        let mut engine = GameEngine::new(admin_id, songs, colors, 30);
+        let mut engine = GameEngine::new(admin_id, questions, 30);
 
         let ctx = EventContext {
             lobby_id: Uuid::new_v4(),
@@ -934,7 +1010,59 @@ mod tests {
         let responses = engine.process_event(event);
         assert!(!responses.is_empty());
         assert_eq!(engine.state.phase, GamePhase::Score);
+
+        // Verify admin gets upcoming questions
+        if let Some(response) = responses
+            .iter()
+            .find(|r| matches!(r.payload, ResponsePayload::AdminNextQuestions { .. }))
+        {
+            if let ResponsePayload::AdminNextQuestions { upcoming_questions } = &response.payload {
+                assert!(!upcoming_questions.is_empty());
+            }
+        } else {
+            panic!("Expected AdminNextQuestions response");
+        }
     }
+
+    #[test]
+    fn test_answer_handling() {
+        let questions = setup_test_data();
+        let admin_id = Uuid::new_v4();
+        let mut engine = GameEngine::new(admin_id, questions, 30);
+        let player_id = Uuid::new_v4();
+
+        // Setup game state
+        engine.state.phase = GamePhase::Question;
+        engine.state.round_start_time = Some(Instant::now());
+        engine.state.correct_answer = Some("RED".to_string());
+        engine.state.current_alternatives = vec!["RED".to_string(), "BLUE".to_string()];
+        engine
+            .state
+            .players
+            .insert(player_id, PlayerState::new("TestPlayer".to_string()));
+
+        let ctx = EventContext {
+            lobby_id: Uuid::new_v4(),
+            sender_id: player_id,
+            timestamp: Instant::now(),
+            is_admin: false,
+        };
+
+        let event = GameEvent {
+            context: ctx,
+            action: GameAction::Answer {
+                answer: "RED".to_string(),
+            },
+        };
+
+        let responses = engine.process_event(event);
+        if let ResponsePayload::PlayerAnswered { correct, .. } = &responses[0].payload {
+            assert!(correct);
+        } else {
+            panic!("Expected PlayerAnswered response");
+        }
+    }
+
     #[test]
     fn test_name_validation() {
         let empty_names = std::iter::empty();
@@ -949,12 +1077,10 @@ mod tests {
             validate_player_name("a", empty_names.clone()),
             Err(NameValidationError::TooShort)
         ));
-
         assert!(matches!(
             validate_player_name("a".repeat(17).as_str(), empty_names.clone()),
             Err(NameValidationError::TooLong)
         ));
-
         assert!(matches!(
             validate_player_name("Invalid@Name", empty_names.clone()),
             Err(NameValidationError::InvalidCharacters)

@@ -59,8 +59,8 @@ class GameState {
     this.gameStarted = false;
     /** @type {boolean} */
     this.isAdmin = false;
-    /** @type {Color[]} */
-    this.colors = [];
+    this.currentQuestionType = null;
+    this.currentAlternatives = [];
     /** @type {string|null} */
     this.playerAnswer = null;
     /** @type {boolean} */
@@ -84,7 +84,8 @@ class GameState {
     this.hasAnswered = false;
     this.playerAnswer = null;
     this.answeredPlayers = [];
-    this.colors = [];
+    this.currentQuestionType = null;
+    this.currentAlternatives = [];
     this.gameStarted = false;
   }
 }
@@ -309,6 +310,7 @@ class WebSocketManager {
       return;
     }
 
+    console.log(data);
     switch (data.type) {
       case "JoinedLobby":
         this.uiManager.handleJoinedLobby(data);
@@ -337,8 +339,8 @@ class WebSocketManager {
       case "AdminInfo":
         this.uiManager.handleAdminInfo(data);
         break;
-      case "AdminNextSongs":
-        this.uiManager.handleAdminNextSongs(data);
+      case "AdminNextQuestions":
+        this.uiManager.handleAdminNextQuestions(data);
         break;
       case "Error":
         this.uiManager.showNotification(data.message, true);
@@ -474,37 +476,93 @@ class UIManager {
     });
   }
 
+  createQuestionInterface(questionInfo) {
+    console.log("createquestion interface func");
+    console.log(questionInfo);
+    const container = document.getElementById("colorButtons"); // We should rename this
+    container.innerHTML = "";
+
+    if (questionInfo.question_type === "color") {
+      this.createColorButtons(questionInfo.alternatives);
+    } else if (questionInfo.question_type === "character") {
+      this.createCharacterButtons(questionInfo.alternatives);
+    }
+  }
   /**
    * @param {Color[]} colors
    */
   createColorButtons(colors) {
-    const colorButtons = document.getElementById("colorButtons");
-    colorButtons.innerHTML = "";
-
-    colors.forEach((color) => {
+    console.log("createcolorbuttons func");
+    console.log("colors: ", colors);
+    const container = document.getElementById("colorButtons");
+    colors.forEach(color => {
       const button = document.createElement("button");
       button.className = "color-button";
-
-      if (color.name.toLowerCase() === "gold") {
+      if (color.toLowerCase() === "gold") {
         button.classList.add("metallic-gold");
-      } else if (color.name.toLowerCase() === "silver") {
+      } else if (color.toLowerCase() === "silver") {
         button.classList.add("metallic-silver");
       } else {
-        button.style.backgroundColor = color.rgb;
+        button.style.backgroundColor = this.getColorHex(color);
+      }
+      button.addEventListener('click', () => this.gameController.submitAnswer(color));
+      button.title = color;
+      if (this.gameState.hasAnswered && this.gameState.playerAnswer === color) {
+        button.style.border = "3px solid white";
+      }
+      if (this.gameState.hasAnswered) {
+        console.log("disabled button");
+        button.disabled = true;
+      }
+      container.appendChild(button);
+    });
+  }
+
+  getColorHex(colorName) {
+    const colorMap = {
+      'Red': '#FF0000',
+      'Green': '#00FF00',
+      'Blue': '#0000FF',
+      'Yellow': '#FFFF00',
+      'Purple': '#800080',
+      'Gold': '#FFD700',
+      'Silver': '#C0C0C0',
+      'Pink': '#FFC0CB',
+      'Black': '#000000',
+      'White': '#FFFFFF',
+      'Brown': '#3D251E',
+      'Orange': '#FFA500',
+      'Gray': '#808080'
+    };
+    return colorMap[colorName] || '#000000';
+  }
+
+  createCharacterButtons(characters) {
+    const container = document.getElementById("colorButtons");
+    characters.forEach(character => {
+      const button = document.createElement("button");
+      button.className = "character-button";
+
+      if (character.image_url) {
+        const img = document.createElement("img");
+        img.src = character.image_url;
+        img.alt = character.name;
+        button.appendChild(img);
       }
 
-      // Use the gameController reference instead of window.game
-      button.addEventListener('click', () => this.gameController.selectColor(color.name));
-      button.title = color.name;
+      const name = document.createElement("span");
+      name.textContent = character.name;
+      button.appendChild(name);
 
-      if (this.gameState.hasAnswered && this.gameState.playerAnswer === color.name) {
-        button.style.border = "3px solid white";
+      button.addEventListener('click', () => this.gameController.submitAnswer(character.name));
+
+      if (this.gameState.hasAnswered && this.gameState.playerAnswer === character.name) {
+        button.classList.add("selected");
       }
       if (this.gameState.hasAnswered) {
         button.disabled = true;
       }
-
-      colorButtons.appendChild(button);
+      container.appendChild(button);
     });
   }
 
@@ -578,7 +636,6 @@ class UIManager {
     document.getElementById("gameState").textContent = `Current Phase: ${data.phase}`;
     this.stopTimer();
 
-    // Update game started state
     this.gameState.gameStarted = data.phase !== "lobby";
     this.updateGameControls(data.phase);
 
@@ -595,7 +652,7 @@ class UIManager {
         this.handleScorePhase(data.scoreboard);
         break;
       case "question":
-        await this.handleQuestionPhase(data.colors);
+        await this.handleQuestionPhase(data);
         break;
     }
   }
@@ -667,38 +724,55 @@ class UIManager {
 
   /**
    * @param {Object} data
-   * @param {Song[]} data.upcoming_songs
+   * @param {Song[]} data.upcoming_questions
    */
-  handleAdminNextSongs(data) {
-    if (!this.gameState.isAdmin || !data.upcoming_songs?.length) return;
+  handleAdminNextQuestions(data) {
+    if (!this.gameState.isAdmin || !data.upcoming_questions?.length) return;
 
-    const nextSong = data.upcoming_songs[0];
-    this.gameState.nextYoutubeId = nextSong.youtube_id;
+    const nextQuestion = data.upcoming_questions[0];
+    console.log("Next question:", nextQuestion);
+    switch (nextQuestion.type) {
+      case "color":
+        this.gameState.nextYoutubeId = nextQuestion.youtube_id;
+        break;
+      case "character":
+        this.gameState.nextYoutubeId = nextQuestion.youtube_id;
+        break;
+    }
+
     this.gameState.isLoadingNextSong = true;
+    this.updateUpcomingQuestionsList(data.upcoming_questions);
 
-    this.updateUpcomingSongsList(data.upcoming_songs);
-
-    const currentPhase = document.getElementById("gameState").textContent;
-    if (currentPhase.includes("score")) {
-      this.ytManager.loadVideo(nextSong.youtube_id);
+    if (document.getElementById("gameState").textContent.includes("score")) {
+      this.ytManager.loadVideo(this.gameState.nextYoutubeId);
     }
   }
 
   /**
    * @param {Song[]} songs
    */
-  updateUpcomingSongsList(songs) {
-    const songsList = document.getElementById("songsList");
-    songsList.innerHTML = "";
+  updateUpcomingQuestionsList(questions) {
+    const list = document.getElementById("songsList");
+    list.innerHTML = "";
 
-    songs.forEach((song, index) => {
-      const songElement = document.createElement("div");
-      songElement.className = "upcoming-song";
-      songElement.innerHTML = `
-        <span class="song-number">${index + 1}.</span>
-        <span class="song-info">${song.song_name} - ${song.artist}</span>
-      `;
-      songsList.appendChild(songElement);
+    questions.forEach((question, index) => {
+      const elem = document.createElement("div");
+      elem.className = "upcoming-song";
+
+      let title, artist;
+      if (question.type === "color") {
+        title = question.song;
+        artist = question.artist;
+      } else if (question.type === "character") {
+        title = question.song;
+        artist = question.correct_character; // TODO proper field instead of artist reuse
+      }
+
+      elem.innerHTML = `
+            <span class="song-number">${index + 1}.</span>
+            <span class="song-info">${title}${artist ? ` - ${artist}` : ''}</span>
+        `;
+      list.appendChild(elem);
     });
   }
 
@@ -776,27 +850,28 @@ class UIManager {
   /**
    * @param {Color[]} colors
    */
-  async handleQuestionPhase(colors) {
+  async handleQuestionPhase(questionInfo) {
+    console.log("questionInfo func");
+    console.log(questionInfo);
     this.gameState.answeredPlayers = [];
+    this.gameState.currentQuestionType = questionInfo.question_type;
+    this.gameState.currentAlternatives = questionInfo.alternatives;
     this.updateAnswerStatus();
 
     if (!this.gameState.isAdmin) {
       this.gameState.hasAnswered = false;
-      this.gameState.colors = colors;
       document.getElementById("roundResult").textContent = "";
       document.getElementById("leaderboard").style.display = "none";
-      this.createColorButtons(this.gameState.colors);
+      this.createQuestionInterface(questionInfo);
       document.getElementById("colorButtons").style.display = "grid";
     } else {
       document.getElementById("skipButtonContainer").style.display = "none";
       if (this.gameState.youtubePlayer) {
-        // Verify and update video if needed before playing
         const videoVerified = await this.ytManager.verifyAndUpdateVideo(this.gameState.nextYoutubeId);
         if (videoVerified) {
           this.gameState.youtubePlayer.playVideo();
         } else {
           console.error('Failed to verify/update YouTube video');
-          // Optionally handle the error case, maybe skip to next song
           this.gameController.skipCurrentSong();
         }
       }
@@ -917,7 +992,7 @@ class GameController {
       leaveLobby: document.getElementById('leaveLobbyBtn'),
       toggleRound: document.getElementById('toggleRoundBtn'),
       toggleGame: document.getElementById('toggleGameBtn'),
-      skipSong: document.getElementById('skipCurrentSongBtn')
+      skipQuestion: document.getElementById('skipCurrentQuestionBtn')
     };
 
     // Log warning if any required elements are missing
@@ -932,7 +1007,7 @@ class GameController {
     elements.leaveLobby?.addEventListener('click', () => this.leaveLobby());
     elements.toggleRound?.addEventListener('click', () => this.toggleRound());
     elements.toggleGame?.addEventListener('click', () => this.toggleGame());
-    elements.skipSong?.addEventListener('click', () => this.skipCurrentSong());
+    elements.skipQuestion?.addEventListener('click', () => this.skipQuestion());
   }
 
   /**
@@ -1112,6 +1187,23 @@ class GameController {
     }
   }
 
+  submitAnswer(answer) {
+    if (!this.gameState.hasAnswered) {
+      this.wsManager.sendMessage({
+        type: "Answer",
+        lobby_id: this.gameState.currentLobbyId,
+        answer: answer,
+      });
+      this.gameState.hasAnswered = true;
+      this.gameState.playerAnswer = answer;
+      this.uiManager.stopTimer();
+      this.uiManager.createQuestionInterface({
+        type: this.gameState.currentQuestionType,
+        alternatives: this.gameState.currentAlternatives
+      });
+    }
+  }
+
   startRound() {
     if (this.gameState.socket && this.gameState.isAdmin) {
       this.wsManager.sendMessage({
@@ -1119,7 +1211,7 @@ class GameController {
         lobby_id: this.gameState.currentLobbyId,
         action: {
           type: "StartRound",
-          colors: null
+          specified_alternatives: null
         }
       });
     }
@@ -1137,13 +1229,13 @@ class GameController {
     }
   }
 
-  skipCurrentSong() {
+  skipQuestion() {
     if (this.gameState.socket && this.gameState.isAdmin) {
       this.wsManager.sendMessage({
         type: "AdminAction",
         lobby_id: this.gameState.currentLobbyId,
         action: {
-          type: "SkipSong"
+          type: "SkipQuestion"
         }
       });
     }

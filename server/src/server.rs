@@ -1,7 +1,7 @@
 use crate::game::{
-    ColorDef, ErrorCode, EventContext, GameAction, GameEvent, GameResponse, Recipients,
-    ResponsePayload, Song,
+    ErrorCode, EventContext, GameAction, GameEvent, GameResponse, Recipients, ResponsePayload,
 };
+use crate::question::GameQuestion;
 use crate::game_manager::{GameLobby, GameManager};
 use crate::messages::{AdminAction, ClientMessage, ServerMessage};
 use axum::{
@@ -28,16 +28,16 @@ use uuid::Uuid;
 #[derive(Clone)]
 pub struct AppState {
     pub manager: Arc<Mutex<GameManager>>,
-    pub songs: Arc<Vec<Song>>,
-    pub all_colors: Arc<Vec<ColorDef>>,
+    pub questions: Arc<Vec<GameQuestion>>,
+    // pub songs: Arc<Vec<Song>>,
+    // pub all_colors: Arc<Vec<ColorDef>>,
 }
 
 impl AppState {
-    pub fn new(songs: Vec<Song>, all_colors: Vec<ColorDef>) -> Self {
+    pub fn new(questions: Vec<GameQuestion>) -> Self {
         Self {
             manager: Arc::new(Mutex::new(GameManager::new())),
-            songs: Arc::new(songs),
-            all_colors: Arc::new(all_colors),
+            questions: Arc::new(questions),
         }
     }
 }
@@ -66,8 +66,7 @@ pub async fn create_lobby_handler(
 
     let mgr = state.manager.lock().unwrap();
     let (lobby_id, join_code, admin_id) = mgr.create_lobby(
-        state.songs.to_vec(),
-        state.all_colors.to_vec(),
+        state.questions.to_vec(),
         round_duration,
     );
 
@@ -161,7 +160,7 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
                             lobby.remove_connection(&player_id);
                             responses
                         }
-                        ClientMessage::Answer { lobby_id, color } => {
+                        ClientMessage::Answer { lobby_id, answer } => {
                             let event = GameEvent {
                                 context: EventContext {
                                     lobby_id,
@@ -169,18 +168,18 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
                                     timestamp: now,
                                     is_admin: false,
                                 },
-                                action: GameAction::Answer { color },
+                                action: GameAction::Answer { answer },
                             };
                             lobby.process_event(event)
                         }
                         ClientMessage::AdminAction { lobby_id, action } => {
                             let game_action = match action {
                                 AdminAction::StartGame => GameAction::StartGame,
-                                AdminAction::StartRound { colors } => GameAction::StartRound {
-                                    specified_colors: colors,
+                                AdminAction::StartRound { specified_alternatives } => GameAction::StartRound {
+                                    specified_alternatives
                                 },
                                 AdminAction::EndRound => GameAction::EndRound,
-                                AdminAction::SkipSong => GameAction::SkipSong,
+                                AdminAction::SkipQuestion => GameAction::SkipQuestion,
                                 AdminAction::EndGame { reason } => GameAction::EndGame { reason },
                                 AdminAction::CloseGame { reason } => {
                                     GameAction::CloseGame { reason }

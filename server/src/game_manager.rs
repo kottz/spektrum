@@ -6,9 +6,10 @@ use tokio::sync::mpsc::UnboundedSender;
 use tracing::*;
 use uuid::Uuid;
 
-use crate::game::{ColorDef, GameEngine, GameEvent, GameResponse, Recipients, Song};
-
+use crate::game::{GameEngine, GameEvent, GameResponse, Recipients};
 use crate::messages::{convert_to_server_message, ServerMessage};
+use crate::question::GameQuestion;
+
 /// A single lobby instance that manages its own connection pool and game engine
 pub struct GameLobby {
     id: Uuid,
@@ -20,16 +21,14 @@ impl GameLobby {
     pub fn new(
         id: Uuid,
         admin_id: Uuid,
-        songs: Vec<Song>,
-        colors: Vec<ColorDef>,
+        questions: Vec<GameQuestion>,
         round_duration: u64,
     ) -> Self {
         Self {
             id,
             engine: Arc::new(RwLock::new(GameEngine::new(
                 admin_id,
-                songs,
-                colors,
+                questions,
                 round_duration,
             ))),
             connections: Arc::new(RwLock::new(HashMap::new())),
@@ -117,8 +116,7 @@ impl GameManager {
 
     pub fn create_lobby(
         &self,
-        songs: Vec<Song>,
-        colors: Vec<ColorDef>,
+        questions: Vec<GameQuestion>,
         round_duration: u64,
     ) -> (Uuid, String, Uuid) {
         let lobby_id = Uuid::new_v4();
@@ -127,8 +125,7 @@ impl GameManager {
         let lobby = Arc::new(GameLobby::new(
             lobby_id,
             admin_id,
-            songs,
-            colors,
+            questions,
             round_duration,
         ));
         let join_code = self.generate_join_code(lobby_id);

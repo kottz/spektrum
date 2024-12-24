@@ -1,8 +1,24 @@
-use crate::game::{ColorDef, GamePhase, ResponsePayload};
+use crate::game::{GamePhase, ResponsePayload};
+use crate::question::GameQuestion;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use crate::game::Song;
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "type")]
+enum QuestionInfo {
+    Color {
+        alternatives: Vec<String>, // Just the color names that clients can map to their color scheme
+    },
+    Character {
+        alternatives: Vec<CharacterOption>,
+    },
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct CharacterOption {
+    name: String,
+    image_url: Option<String>,
+}
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
 pub enum ClientMessage {
@@ -16,7 +32,7 @@ pub enum ClientMessage {
     },
     Answer {
         lobby_id: Uuid,
-        color: String,
+        answer: String,
     },
     AdminAction {
         lobby_id: Uuid,
@@ -28,11 +44,32 @@ pub enum ClientMessage {
 #[serde(tag = "type")]
 pub enum AdminAction {
     StartGame,
-    StartRound { colors: Option<Vec<String>> },
+    StartRound {
+        specified_alternatives: Option<Vec<String>>,
+    },
     EndRound,
-    SkipSong,
-    EndGame { reason: String },
-    CloseGame { reason: String },
+    SkipQuestion,
+    EndGame {
+        reason: String,
+    },
+    CloseGame {
+        reason: String,
+    },
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "type")]
+pub enum AdminQuestion {
+    ColorQuestion {
+        song_name: String,
+        artist: String,
+        youtube_id: String,
+    },
+    CharacterQuestion {
+        song: String,
+        youtube_id: String,
+        character_context: String,
+    },
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -63,7 +100,6 @@ pub enum ServerMessage {
     Error {
         message: String,
     },
-    // Variants unique to second snippet
     InitialPlayerList {
         players: Vec<(String, i32)>,
     },
@@ -73,16 +109,15 @@ pub enum ServerMessage {
     },
     StateChanged {
         phase: String,
-        colors: Vec<ColorDef>,
+        question_type: String,
+        alternatives: Vec<String>,
         scoreboard: Vec<(String, i32)>,
     },
     AdminInfo {
-        current_song_name: String,
-        current_song_artist: String,
-        current_song_youtube_id: String,
+        question: AdminQuestion,
     },
-    AdminNextSongs {
-        upcoming_songs: Vec<Song>,
+    AdminNextQuestions {
+        upcoming_questions: Vec<GameQuestion>,
     },
 }
 
@@ -114,7 +149,8 @@ pub fn convert_to_server_message(payload: &ResponsePayload) -> ServerMessage {
         },
         ResponsePayload::StateChanged {
             phase,
-            colors,
+            question_type,
+            alternatives,
             scoreboard,
         } => {
             let phase_str = match phase {
@@ -125,7 +161,8 @@ pub fn convert_to_server_message(payload: &ResponsePayload) -> ServerMessage {
             };
             ServerMessage::StateChanged {
                 phase: phase_str.to_string(),
-                colors: colors.clone(),
+                question_type: question_type.clone(),
+                alternatives: alternatives.clone(),
                 scoreboard: scoreboard.clone(),
             }
         }
@@ -139,14 +176,26 @@ pub fn convert_to_server_message(payload: &ResponsePayload) -> ServerMessage {
         ResponsePayload::GameClosed { reason } => ServerMessage::GameClosed {
             reason: reason.clone(),
         },
-        ResponsePayload::AdminInfo { current_song } => ServerMessage::AdminInfo {
-            current_song_name: current_song.song_name.clone(),
-            current_song_artist: current_song.artist.clone(),
-            current_song_youtube_id: current_song.youtube_id.clone(),
-        },
-        ResponsePayload::AdminNextSongs { upcoming_songs } => ServerMessage::AdminNextSongs {
-            upcoming_songs: upcoming_songs.clone(),
-        },
+        ResponsePayload::AdminInfo { current_question } => {
+            let question = match current_question {
+                GameQuestion::Color(q) => AdminQuestion::ColorQuestion {
+                    song_name: q.song.clone(),
+                    artist: q.artist.clone(),
+                    youtube_id: q.youtube_id.clone(),
+                },
+                GameQuestion::Character(q) => AdminQuestion::CharacterQuestion {
+                    song: q.song.clone(),
+                    youtube_id: q.youtube_id.clone(),
+                    character_context: "TODO".to_string(),
+                },
+            };
+            ServerMessage::AdminInfo { question }
+        }
+        ResponsePayload::AdminNextQuestions { upcoming_questions } => {
+            ServerMessage::AdminNextQuestions {
+                upcoming_questions: upcoming_questions.clone(),
+            }
+        }
         ResponsePayload::Error { code, message } => ServerMessage::Error {
             message: format!("{:?}: {}", code, message),
         },

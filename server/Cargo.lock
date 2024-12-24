@@ -1714,6 +1714,7 @@ dependencies = [
  "csv",
  "fastrand",
  "futures-util",
+ "lazy_static",
  "rand",
  "regex",
  "reqwest",
