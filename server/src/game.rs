@@ -687,7 +687,7 @@ impl GameEngine {
             println!("Using specified alternatives: {:?}", alts);
             self.state.current_alternatives = alts;
         } else {
-            self.state.current_alternatives = next_question.get_all_possible_alternatives();
+            self.state.current_alternatives = next_question.generate_round_alternatives();
             // Ensure all correct answers are included and alternatives are unique, then shuffle
             if let Some(correct_answers) = self.state.correct_answers.clone() {
                 for answer in correct_answers {
