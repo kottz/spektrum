@@ -104,10 +104,7 @@ impl Question for CharacterQuestion {
     fn get_all_possible_alternatives(&self) -> Vec<String> {
         let mut alternatives = vec![self.correct_character.clone()];
         alternatives.extend(self.other_characters.clone());
-        alternatives
-            .into_iter()
-            .map(|c| serde_json::to_string(&c).unwrap())
-            .collect()
+        alternatives.into_iter().map(|c| c.to_string()).collect()
     }
 
     fn generate_round_alternatives(&self) -> Vec<String> {
@@ -115,7 +112,8 @@ impl Question for CharacterQuestion {
         // are predefined in the CSV
         self.generate_character_alternatives()
             .into_iter()
-            .map(|c| serde_json::to_string(&c).unwrap())
+            .filter(|c| !self.correct_character.eq(c))
+            .map(|c| c.to_string())
             .collect()
     }
 
@@ -129,7 +127,7 @@ impl Question for CharacterQuestion {
 }
 
 pub fn load_from_record(record: &StringRecord) -> QuestionResult<CharacterQuestion> {
-    if record.len() < 5 {
+    if record.len() < 7 {
         return Err(QuestionError::InvalidFormat(
             "Record does not have enough fields".into(),
         ));
@@ -152,8 +150,8 @@ pub fn load_from_record(record: &StringRecord) -> QuestionResult<CharacterQuesti
         song: record[2].trim().to_string(),
         correct_character: record[3].trim().to_string(),
         other_characters,
-        spotify_uri: "c913b3f191eb4412".to_string(), // add this hadrcoded to test
-        youtube_id: "wtHra9tFISY".to_string(),       // add this hadrcoded to test
+        spotify_uri: record[5].to_string(),
+        youtube_id: record[6].to_string(),
     };
 
     question.validate_alternatives()?;

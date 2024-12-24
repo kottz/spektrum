@@ -541,31 +541,28 @@ class UIManager {
     const container = document.getElementById("colorButtons");
     characters.forEach(character => {
       const button = document.createElement("button");
-      button.className = "character-button";
+      button.className = "color-button";
 
-      if (character.image_url) {
-        const img = document.createElement("img");
-        img.src = character.image_url;
-        img.alt = character.name;
-        button.appendChild(img);
+      const img = document.createElement("img");
+      img.src = `img/${character}.png`;
+      img.alt = character;
+      img.className = "character-img";
+      button.appendChild(img);
+
+      button.addEventListener('click', () => this.gameController.submitAnswer(character));
+      button.title = character;
+
+      if (this.gameState.hasAnswered && this.gameState.playerAnswer === character) {
+        button.style.border = "3px solid white";
       }
 
-      const name = document.createElement("span");
-      name.textContent = character.name;
-      button.appendChild(name);
-
-      button.addEventListener('click', () => this.gameController.submitAnswer(character.name));
-
-      if (this.gameState.hasAnswered && this.gameState.playerAnswer === character.name) {
-        button.classList.add("selected");
-      }
       if (this.gameState.hasAnswered) {
         button.disabled = true;
       }
+
       container.appendChild(button);
     });
   }
-
   /**
      * @param {Object} data
      * @param {number} data.round_duration

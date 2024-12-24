@@ -162,7 +162,7 @@ fn determine_question_type(headers: &csv::StringRecord) -> QuestionResult<Questi
     let headers: Vec<_> = headers.iter().collect();
     match headers.as_slice() {
         ["id", "title", "artist", "color", "spotify_uri", "youtube_id"] => Ok(QuestionType::Color),
-        ["id", "difficulty", "song", "correct_character", "other_characters"] => {
+        ["id", "difficulty", "song", "correct_character", "other_characters", "spotify_uri", "youtube_id"] => {
             Ok(QuestionType::Character)
         }
         _ => Err(QuestionError::InvalidFormat("Unknown CSV format".into())),
