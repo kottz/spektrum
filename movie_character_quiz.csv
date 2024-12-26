@@ -1,333 +1,162 @@
-id,difficulty,song,correct_character,other_characters
-1,easy,"Hedwig's Theme","Dumbledore","Gandalf;Merlin (BBC's Merlin);Doctor Strange;Saruman;Rasputin (Anastasia)"
-2,easy,"Imperial March","Darth Vader","Doctor Doom;Sauron;Thanos;Black Adam;Megatron"
-3,easy,"He's a Pirate","Jack Sparrow","Long John Silver (Treasure Planet);Hook (Once Upon a Time);Blackbeard (Pan);Sinbad;Erik Killmonger"
-4,easy,"Main Theme  (Spider-Man: Into the Spider-Verse)","Miles Morales","Static Shock;Blue Beetle;Black Lightning;Cyborg;Black Panther"
-5,easy,"Avatar Theme","Neytiri","Gamora;Ahsoka Tano;Nebula;Mantis;Okoye"
-6,easy,"Let It Go","Elsa","Storm;Ice King (Adventure Time);Sub-Zero;Killer Frost;White Witch (Narnia)"
-7,easy,"Ghostbusters Theme","Peter Venkman","Tony Stark;Doctor Strange;Stephen King;Indiana Jones;Han Solo"
-8,easy,"Jaws Theme","Chief Brody","Nathan Drake;John McClane;Owen Grady;Rick Grimes;Jack Shephard"
-9,easy,"Superman Theme","Lois Lane","Mary Jane Watson;Pepper Potts;Rachel Dawes;Jane Foster;April O'Neil"
-10,easy,"Back to the Future Theme","Doc Brown","Rick Sanchez;Tony Stark;Bruce Banner;Dr. Walter Bishop (Fringe);Dr. House"
-11,easy,"Wonder Woman Theme  (1970s TV Show)","Linda Carter Wonder Woman","Xena;Captain Marvel;She-Ra;Black Widow;Supergirl"
-12,easy,"Pink Panther Theme","Inspector Clouseau","Sherlock Holmes;Hercule Poirot;Adrian Monk;Jim Gordon;Jacques Cousteau"
-13,easy,"Jurassic World Theme","Claire Dearing","Dr. Ellie Sattler;Lara Croft;Rey Skywalker;Sarah Connor;Marion Ravenwood"
-14,easy,"Batman: The Animated Series Theme","Commissioner Gordon","J. Jonah Jameson;Agent Coulson;Chief Hopper;Detective Bullock;Perry White"
-15,easy,"Pokemon Theme","Ash Ketchum","Steven Universe;Aang;Ben 10;Robin (Teen Titans);Beast Boy"
-16,easy,"The Matrix Theme","Agent Smith","Terminator;Darth Vader;Thanos;Ultron;HAL 9000"
-17,easy,"E.T. Theme","Elliott","Luke Skywalker;Harry Potter;Peter Pan;Charlie Bucket;Jim Hawkins"
-18,easy,"Mission Impossible Theme","Ethan Hunt","James Bond;Jason Bourne;John Wick;Batman;Black Widow"
-19,easy,"Terminator Theme","Sarah Connor","Ellen Ripley;Princess Leia;Wonder Woman;Black Widow;Captain Marvel"
-20,easy,"Home Alone Theme","Kevin McCallister","Dennis the Menace;Bart Simpson;Malcolm (Malcolm in the Middle);Steve Urkel;Richie Rich"
-21,easy,"The Addams Family Theme","Morticia Addams","Lily Munster;Elvira;Bellatrix Lestrange;Evil Queen;Maleficent"
-22,easy,"Teenage Mutant Ninja Turtles Theme  (1987)","April O'Neil","Lois Lane;Vicki Vale;Mary Jane Watson;Barbara Gordon;Iris West"
-23,easy,"The Flintstones Theme","Fred Flintstone","Homer Simpson;Peter Griffin;Randy Marsh;Bob Belcher;Stan Smith"
-24,easy,"Star Wars: Clone Wars Theme","Ahsoka Tano","Rey Skywalker;Princess Leia;Padme Amidala;Black Widow;Wonder Woman"
-25,easy,"The Office Theme","Michael Scott","Leslie Knope;Phil Dunphy;Ted Lasso;Jack Donaghy;Ron Swanson"
-26,easy,"Doctor Who Theme  (2010s)","River Song","Amy Pond;Clara Oswald;Rose Tyler;Martha Jones;Donna Noble"
-27,easy,"Transformers Theme  (1980s)","Optimus Prime","Voltron;Iron Giant;WALL-E;Baymax;Vision"
-28,easy,"The Bionic Woman Theme","Jamie Sommers","Wonder Woman;Black Widow;Sarah Connor;Ellen Ripley;Captain Marvel"
-29,easy,"Charmed Theme","Piper Halliwell","Willow Rosenberg;Sabrina Spellman;Wanda Maximoff;Jean Grey;Storm"
-30,easy,"The Munsters Theme","Herman Munster","Frankenstein's Monster;Lurch;Groot;The Thing;Solomon Grundy"
-31,easy,"Futurama Theme","Philip J. Fry","Rick Sanchez;Homer Simpson;Peter Griffin;Jake the Dog;Finn the Human"
-32,easy,"The Batman Theme  (2022)","Catwoman","Black Widow;Trinity;Sarah Connor;Ellen Ripley;Lara Croft"
-33,easy,"Gravity Falls Theme","Grunkle Stan","Rick Sanchez;Doc Brown;Professor Frink;Walter Bishop;Tony Stark"
-34,easy,"The Lord of the Rings Theme","Aragorn","Ned Stark;Geralt of Rivia;Obi-Wan Kenobi;Doctor Strange;Jon Snow"
-35,easy,"Spider-Man Theme  (Raimi Trilogy)","Norman Osborn","Doctor Octopus;Lex Luthor;Doctor Doom;Wilson Fisk;Baron Zemo"
-36,easy,"The Little Mermaid Theme","Ursula","Maleficent;Evil Queen;Cruella De Vil;Queen of Hearts;Mother Gothel"
-37,easy,"Avatar: The Last Airbender Theme","Aang","Harry Potter;Luke Skywalker;Peter Parker;Steven Universe;Percy Jackson"
-38,easy,"The Goonies Theme","Mikey Walsh","Kevin McCallister;Elliott (E.T.);Jim Hawkins;Harry Potter;Peter Pan"
-39,easy,"Buffy Theme","Spike","Edward Cullen;Angel;Blade;Eric Northman;Lestat"
-40,easy,"Teenage Mutant Ninja Turtles Theme  (1987)","April O'Neil","Lois Lane;Vicki Vale;Mary Jane Watson;Barbara Gordon;Iris West"
-41,easy,"The Flintstones Theme","Fred Flintstone","Homer Simpson;Peter Griffin;Randy Marsh;Bob Belcher;Stan Smith"
-42,easy,"Star Wars: Clone Wars Theme","Ahsoka Tano","Rey Skywalker;Princess Leia;Padme Amidala;Black Widow;Wonder Woman"
-43,easy,"You've Got a Friend in Me","Woody","Baloo;Genie;Timon;Mushu;Olaf"
-44,easy,"Into the Unknown","Anna","Moana;Merida;Rapunzel;Belle;Tiana"
-45,easy,"When You Wish Upon a Star","Blue Fairy","Fairy Godmother;Flora;Fauna;Merryweather;Tinker Bell"
-46,easy,"Now We Are Free","Maximus","Leonidas (300);William Wallace (Braveheart);Aragorn (LOTR);King Arthur;Conan"
-47,easy,"Colors of the Wind","Pocahontas","Moana;Mulan;Merida;Elsa;Ariel"
-48,easy,"Part of Your World","Ariel","Belle;Jasmine;Rapunzel;Tiana;Snow White"
-49,easy,"Be Our Guest","Lumiere","Genie;Mushu;Olaf;Sebastian;Timon"
-50,easy,"Let It Go","Elsa","Storm (X-Men);Jean Grey;Scarlet Witch;Crystal (Inhumans);Emma Frost"
-51,easy,"How Far I'll Go","Moana","Ariel;Mulan;Pocahontas;Merida;Rapunzel"
-52,easy,"Under the Sea","Sebastian","Timon;Pumba;Mushu;Genie;Olaf"
-53,easy,"The Lion King Theme","Mufasa","Aslan;King Triton;Zeus (Hercules);Lord Denethor;King Theoden"
-54,easy,"The Flash Theme  (CW Series)","Iris West","Lois Lane;Mary Jane Watson;Betty Ross;Jane Foster;April O'Neil"
-55,easy,"The Incredibles Theme","Mr. Incredible","Superman;Captain America;All Might;Homelander;Omni-Man"
-56,medium,"Concerning Hobbits","Samwise Gamgee","Tyrion Lannister;Willow Ufgood;Griphook;Professor Flitwick;Gimli"
-57,medium,"Jurassic Park Theme","Dr. Alan Grant","Indiana Jones;Owen Grady;Rick O'Connell (The Mummy);Steve Irwin (crocodile hunter);Nathan Drake"
-58,medium,"The Mandalorian Theme","Din Djarin","Master Chief (Halo);Boba Fett;Iron Man;Samus Aran (Metroid);Judge Dredd"
-59,medium,"The Avengers Theme","Nick Fury","Amanda Waller;Commissioner Gordon;Agent Coulson;M (James Bond);Alfred Pennyworth"
-60,medium,"Opening Theme  (Stranger Things)","Eleven","Jean Grey;Carrie White;Wanda Maximoff;Raven (Teen Titans);Dark Phoenix"
-61,medium,"Main Theme  (Vikings)","Ragnar Lothbrok","Geralt of Rivia;Aragorn;Jon Snow;Ned Stark;Jaime Lannister"
-62,medium,"The Dark Crystal Theme","Jen","Frodo;Willow;Dorothy;Alice (Wonderland);Lucy Pevensie"
-63,medium,"Blade Runner Theme","Rick Deckard","John Connor;Neo;Malcolm Reynolds;Snake Plissken;Ellen Ripley"
-64,medium,"The X-Files Theme","Dana Scully","Clarice Starling;Sarah Connor;Jessica Jones;Olivia Dunham;Agent Carter"
-65,medium,"Buffy the Vampire Slayer Theme","Buffy Summers","River Tam (Firefly);Sydney Bristow (Alias);Black Widow;Jessica Jones;Sarah Connor"
-66,medium,"The Witcher Theme","Yennefer","Melisandre;Morgana (Merlin);Zatanna;Scarlet Witch;Dark Phoenix"
-67,medium,"The Last of Us Theme","Joel","Logan;Rick Grimes;Din Djarin;Nathan Drake;Jim Hopper"
-68,medium,"Firefly Theme","Kaylee Frye","Rose Tico;Penny Robinson;Amy Pond;Martha Jones;Dr. Crusher"
-69,medium,"Futurama Theme","Fry","Rick Sanchez;Homer Simpson;Peter Griffin;Stan Smith;Sterling Archer"
-70,medium,"The Orville Theme","Captain Ed Mercer","Jean-Luc Picard;James T. Kirk;Malcolm Reynolds;Commander Adama;Benjamin Sisko"
-71,medium,"Stargate Theme","Daniel Jackson","Dr. Malcolm;Ian Malcolm;Peter Venkman;Indiana Jones;Rick O'Connell"
-72,medium,"Battlestar Galactica Theme  (Original)","Apollo","Luke Skywalker;Han Solo;Buck Rogers;Flash Gordon;Peter Quill"
-73,medium,"Doctor Who Theme  (2005)","Martha Jones","Amy Pond;Sarah Jane Smith;Rose Tyler;Clara Oswald;Donna Noble"
-74,medium,"Smallville Theme","Lex Luthor","Norman Osborn;Wilson Fisk;Doctor Doom;Baron Zemo;Sebastian Shaw"
-75,medium,"Dexter Theme","Debra Morgan","Sarah Connor;Rita Bennett;Agent Scully;Clarice Starling;Detective Kate Beckett"
-76,medium,"Quantum Leap Theme","Al Calavicci","Doc Brown;Rick Sanchez;Walter Bishop;Doctor Who;The Doctor"
-77,medium,"Andor Theme","Cassian Andor","Han Solo;Malcolm Reynolds;Peter Quill;Jake Sully;John Carter"
-78,medium,"Arcane Theme","Jinx","Harley Quinn;Nebula;Gamora;Black Widow;Domino"
-79,medium,"For All Mankind Theme","Ed Baldwin","Jim Lovell;Neil Armstrong;John Glenn;Buzz Aldrin;Mark Watney"
-80,medium,"Stargate: Atlantis Theme","Rodney McKay","Tony Stark;Bruce Banner;Reed Richards;Walter Bishop;Peter Bishop"
-81,medium,"American Gods Theme","Mr. Wednesday","Loki;Doctor Strange;Constantine;Harry Dresden;Dream of the Endless"
-82,medium,"Babylon 5 Theme","John Sheridan","Jean-Luc Picard;James T. Kirk;Han Solo;Malcolm Reynolds;Commander Adama"
-83,medium,"The Last Kingdom Theme","Uhtred","Ragnar Lothbrok;Jon Snow;Geralt of Rivia;Aragorn;Jamie Lannister"
-84,medium,"The Expanse Theme","Chrisjen Avasarala","M (James Bond);Amanda Waller;Mon Mothma;President Roslin;Director Piggot"
-85,medium,"Lost in Space Theme  (Netflix)","Maureen Robinson","Ellen Ripley;Dr. Ryan Stone;Commander Lewis;Dr. Brand;Dr. Shaw"
-86,medium,"Earth","Lucilla","Cersei Lannister;Gorgo (300);Eowyn;Lady Macbeth;Cleopatra"
-87,medium,"Strength and Honor","Proximo","Morpheus;Obi-Wan Kenobi;Gandalf;Master Shifu;Mickey (Rocky)"
-88,medium,"Circle of Life","Rafiki","Grandmother Willow;Mama Odie;Merlin;Fairy Godmother;Jiminy Cricket"
-89,medium,"A Whole New World","Jasmine","Megara;Belle;Aurora;Cinderella;Tiana"
-90,medium,"Reflection","Mulan","Pocahontas;Merida;Moana;Raya;Elsa"
-91,medium,"I'll Make a Man Out of You","Shang","Hercules;Aladdin;Prince Philip;Flynn Rider;Kristoff"
-92,medium,"Can You Feel the Love Tonight","Zazu","Iago;Sebastian;Archimedes (Sword in the Stone);Mushu;Pascal"
-93,medium,"Tale As Old As Time","Mrs. Potts","Fairy Godmother;Blue Fairy;Flora;Fauna;Merryweather"
-94,medium,"Arabian Nights","Peddler","Clopin;Jiminy Cricket;Sebastian;Lumiere;Mushu"
-95,medium,"Go the Distance","Hercules","Tarzan;Aladdin;Flynn Rider;Jim Hawkins;Milo Thatch"
-96,medium,"I Won't Say I'm in Love","Megara","Esmeralda;Jane Porter;Sally (Nightmare);Nala;Jessica Rabbit"
-97,medium,"Heroes Theme","Peter Petrelli","Clark Kent;Jean Grey;Professor X;Doctor Strange;Eleven"
-98,medium,"Stargate SG-1 Theme","Jack O'Neill","Han Solo;Malcolm Reynolds;Captain Kirk;Buck Rogers;Flash Gordon"
-99,medium,"Supernatural Theme","Bobby Singer","Rupert Giles;John Constantine;Van Helsing;Alfred Pennyworth;Nick Fury"
-100,medium,"Snowpiercer Theme","Andre Layton","John Connor;Neo;Thomas (Maze Runner);Katniss Everdeen;Guy Montag"
-101,medium,"The Good Place Theme","Michael","Death (Sandman);Lucifer Morningstar;Crowley (Good Omens);Q (Star Trek);Metatron"
-102,medium,"Upload Theme","Nathan Brown","Sam Bell (Moon);Cooper (Interstellar);Neo;Joe Blake;Theodore (Her)"
-103,medium,"The Umbrella Academy Theme","Number Five","Doctor Strange;Doctor Who;Doctor Manhattan;Rick Sanchez;Cable"
-104,medium,"Agents of SHIELD Theme","Melinda May","Black Widow;Trinity;Sarah Connor;Ellen Ripley;Agent Scully"
-105,medium,"Warehouse 13 Theme","Myka Bering","Agent Scully;Lara Croft;Sydney Bristow;River Song;Amy Pond"
-106,medium,"True Blood Theme","Bill Compton","Edward Cullen;Angel;Spike;Lestat;Blade"
-107,medium,"The Boys Theme","Starlight","Jessica Jones;Black Widow;Supergirl;Batgirl;Captain Marvel"
-108,medium,"Merlin Theme","Morgana","Evil Queen;Maleficent;Bellatrix Lestrange;Wanda Maximoff;Hela"
-109,medium,"Quantum Leap Theme","Sam Beckett","Doctor Who;The Doctor;Doctor Strange;Rick Sanchez;Walter Bishop"
-110,medium,"Fringe Theme","Olivia Dunham","Dana Scully;Sarah Connor;Trinity;River Tam;Agent Carter"
-111,medium,"Wynonna Earp Theme","Doc Holliday","John Constantine;Van Helsing;Blade;Solomon Kane;Harry Dresden"
-112,medium,"The Battle","Marcus Aurelius","King Theoden;Ned Stark;Mufasa;Odin;King Triton"
-113,medium,"You've Got a Friend in Me","Woody","Baloo;Genie;Timon;Mushu;Olaf"
-114,medium,"Into the Unknown","Anna","Moana;Merida;Rapunzel;Belle;Tiana"
-115,medium,"When You Wish Upon a Star","Blue Fairy","Fairy Godmother;Flora;Fauna;Merryweather;Tinker Bell"
-116,challenging,"The King's Arrival","Tywin Lannister","Emperor Palpatine;King Theoden;Baron Harkonnen;Count Dooku;Cardinal Richelieu"
-117,challenging,"The Woman","Irene Adler","Catwoman;Black Widow;River Song (Doctor Who);Mystique;Carmen Sandiego"
-118,challenging,"Time","Arthur","Neo (Matrix);Doctor Strange;John Constantine;Adam Warlock;Dream (Sandman)"
-119,challenging,"Davy Jones Theme","Davy Jones","Thanos;Voldemort;Vecna;Kraken (Clash of Titans);King Night King"
-120,challenging,"Wonder Woman Theme","Hippolyta","Frigga (Thor);Queen Ramonda;Ancient One;Lady Galadriel;Queen Atlanna"
-121,challenging,"Opening Theme  (Westworld)","Maeve Millay","Trinity (Matrix);Major Kusanagi (Ghost in the Shell);Dolores;Cameron (Terminator);Ava (Ex Machina)"
-122,challenging,"Pacific Rim Theme","Marshal Pentecost","Nick Fury;General Ross;Commander Adama;General Hammond;Admiral Pike"
-123,challenging,"Interstellar Theme","Dr. Brand","Dr. Elizabeth Shaw (Prometheus);Dr. Ryan Stone (Gravity);Ellen Ripley;Sarah Connor;Trinity"
-124,challenging,"Arrival Theme","Dr. Louise Banks","Dr. Ellie Arroway (Contact);Dr. Elizabeth Shaw;Dana Scully;Dr. Grace Augustine;Sarah Connor"
-125,challenging,"Outlander Theme","Claire Fraser","River Song;Diana Prince;Peggy Carter;Sarah Connor;Marion Ravenwood"
-126,challenging,"Tron Legacy Theme","Quorra","Trinity;Major Kusanagi;Cameron (Terminator);Seven of Nine;Echo (Dollhouse)"
-127,challenging,"Hellboy Theme","Abe Sapien","Vision;Nightcrawler;Beast;Drax;Thane"
-128,challenging,"Person of Interest Theme","Harold Finch","Bruce Wayne;Tony Stark;Doctor Strange;Reed Richards;Professor X"
-129,challenging,"Dead Space Theme","Isaac Clarke","Gordon Freeman;Commander Shepard;Master Chief;Marcus Fenix;Sam Fisher"
-130,challenging,"Death Note Theme","L","Sherlock Holmes;Patrick Jane;Adrian Monk;Will Graham;Light Yagami"
-131,challenging,"Constantine Theme","Papa Midnite","Baron Samedi;Brother Voodoo;Calypso;Doctor Facilier;Shadow Man"
-132,challenging,"Warehouse 13 Theme","Artie Nielsen","Rupert Giles;Henry Jones Sr.;Alfred Pennyworth;Winston Zeddemore;Marcus Brody"
-133,challenging,"Final Space Theme","Gary Goodspeed","Peter Quill;Fry;Rick Sanchez;Han Solo;Malcolm Reynolds"
-134,challenging,"True Detective Season 1 Theme","Rust Cohle","Fox Mulder;Dale Cooper;John Luther;Sherlock Holmes;Will Graham"
-135,challenging,"Eureka Theme","Jack Carter","Rick Castle;Fox Mulder;Peter Bishop;Nathan Stark;Henry Deacon"
-136,challenging,"The 100 Theme","Bellamy Blake","John Connor;Thomas (Maze Runner);Neo;Kyle Reese;Jake Sully"
-137,challenging,"Foundation Theme","Gaal Dornick","River Tam;Dana Scully;Dr. Brand;Dr. Ryan Stone;Trinity"
-138,challenging,"Raised by Wolves Theme","Mother","Ava (Ex Machina);David (Prometheus);Roy Batty;Agent Smith;Vision"
-139,challenging,"Severance Theme","Mark Scout","Joe Blake;Thomas Anderson;Cooper (Interstellar);Joel (Eternal Sunshine);Leonard Shelby"
-140,challenging,"The Wheel of Time Theme","Moiraine","Gandalf;Doctor Strange;Dumbledore;Galadriel;Ancient One"
-141,challenging,"Carnival Row Theme","Philo Philostrate","John Constantine;Harry Dresden;Geralt of Rivia;Van Helsing;Solomon Kane"
-142,challenging,"Foundation Theme","Demerzel","Data (Star Trek);Vision;David (Prometheus);Ava (Ex Machina);Agent Smith"
-143,challenging,"Shadow and Bone Theme","General Kirigan","Kylo Ren;Snape;Loki;Doctor Doom;Prince Zuko"
-144,challenging,"Black Mirror Theme","Lacie Pound","Martha Jones;Amy Pond;River Song;Sarah Connor;Trinity"
-145,challenging,"Dune Theme  (2021)","Lady Jessica","Galadriel;Mother Abigail;Ancient One;Oracle (Matrix);Professor McGonagall"
-146,challenging,"Westworld Theme","Bernard Lowe","Vision;Data;David (Prometheus);Roy Batty;Agent Smith"
-147,challenging,"Senators","Senator Gracchus","Chancellor Palpatine;Lord Varys;Littlefinger;Cardinal Richelieu;Baron Harkonnen"
-148,challenging,"The Might of Rome","Quintus","Jaime Lannister;Boromir;Theoden;Faramir;Marcus Brutus"
-149,challenging,"Friends on the Other Side","Dr. Facilier","Jafar;Ursula;Maleficent;Hades;Scar"
-150,challenging,"Poor Unfortunate Souls","Ursula","Maleficent;Evil Queen;Mother Gothel;Lady Tremaine;Queen of Hearts"
-151,challenging,"Be Prepared","Scar","Jafar;Dr. Facilier;Governor Ratcliffe;Frollo;Gaston"
-152,challenging,"Prince Ali","Sultan","Maurice (Beauty and Beast);King Triton;King Stefan;King Hubert;Grand Duke"
-153,challenging,"Mother Knows Best","Mother Gothel","Lady Tremaine;Evil Queen;Queen of Hearts;Maleficent;Ursula"
-154,challenging,"Remember Me","Héctor","Lumiere;Genie;Sebastian;Mushu;Ray"
-155,challenging,"The Witcher Theme","Vesemir","Gandalf;Dumbledore;Obi-Wan Kenobi;Master Splinter;Ancient One"
-156,challenging,"12 Monkeys Theme  (TV Series)","Jennifer Goines","River Tam;Luna Lovegood;Harley Quinn;Helena (Orphan Black);Echo"
-157,challenging,"The Magicians Theme","Dean Fogg","Dumbledore;Professor X;Ancient One;Doctor Strange;Gandalf"
-158,challenging,"Altered Carbon Theme","Quellcrist Falconer","Trinity;Major Kusanagi;Agent Scully;Sarah Connor;Ellen Ripley"
-159,challenging,"The Outer Limits Theme  (1995)","Control Voice","Rod Serling;Alfred Hitchcock;The Narrator (Twilight Zone);HAL 9000;GLaDOS"
-160,challenging,"Farscape Theme","Zhaan","Seven of Nine;Spock;Data;Vision;Ava (Ex Machina)"
-161,challenging,"Person of Interest Theme","Samantha Groves","Trinity;Agent Smith;Oracle (Matrix);Seven of Nine;Major Kusanagi"
-162,challenging,"Orphan Black Theme","Cosima Niehaus","Dana Scully;Dr. Brand;Dr. Ryan Stone;Trinity;Major Kusanagi"
-163,challenging,"Penny Dreadful Theme","Vanessa Ives","River Song;Constantine;Doctor Strange;Harry Dresden;Dream of the Endless"
-164,challenging,"Travelers Theme","Marcy Ward","River Tam;Eleven;Jean Grey;Trinity;Major Kusanagi"
-165,challenging,"Black Mirror: San Junipero Theme","Kelly","Trinity;Major Kusanagi;Ava (Ex Machina);Cameron (Terminator);Seven of Nine"
-166,challenging,"Inside Job Theme","Reagan Ridley","Rick Sanchez;Walter Bishop;Bruce Banner;Tony Stark;Reed Richards"
-167,challenging,"The Sandman Theme","Lucienne","Alfred Pennyworth;Wong;Oracle;Agent Coulson;Mycroft Holmes"
-168,challenging,"Dark Theme  (Netflix)","Adam","Doctor Strange;Doctor Who;Bruce Banner;Walter Bishop;Rick Sanchez"
-169,challenging,"Killjoys Theme","Dutch","River Tam;Sarah Connor;Ellen Ripley;Black Widow;Furiosa"
-170,challenging,"The Witcher Theme","Vesemir","Gandalf;Dumbledore;Obi-Wan Kenobi;Master Splinter;Ancient One"
-171,challenging,"12 Monkeys Theme  (TV Series)","Jennifer Goines","River Tam;Luna Lovegood;Harley Quinn;Helena (Orphan Black);Echo"
-172,challenging,"The Magicians Theme","Dean Fogg","Dumbledore;Professor X;Ancient One;Doctor Strange;Gandalf"
-173,challenging,"Claymore Theme","Teresa","Wonder Woman;Red Sonja;Xena;Brienne of Tarth;Arya Stark"
-174,challenging,"Gantz Theme","Reika","Major Kusanagi;Trinity;Battle Angel Alita;Seven of Nine;River Tam"
-175,challenging,"The Outer Limits Theme  (1995)","Control Voice","Rod Serling;Alfred Hitchcock;The Narrator (Twilight Zone);HAL 9000;GLaDOS"
-176,challenging,"Farscape Theme","Zhaan","Seven of Nine;Spock;Data;Vision;Ava (Ex Machina)"
-177,challenging,"Travelers Theme","Marcy Ward","River Tam;Eleven;Jean Grey;Trinity;Major Kusanagi"
-178,challenging,"Black Mirror: San Junipero Theme","Kelly","Trinity;Major Kusanagi;Ava (Ex Machina);Cameron (Terminator);Seven of Nine"
-179,challenging,"Inside Job Theme","Reagan Ridley","Rick Sanchez;Walter Bishop;Bruce Banner;Tony Stark;Reed Richards"
-180,very challenging,"Light of the Seven","High Sparrow","Ra's Al Ghul;The Ancient One;Saruman;Grand Maester Pycelle;Pope Sixtus IV (Da Vinci's Demons)"
-181,very challenging,"Binary Sunset","Aunt Beru","Martha Kent;May Parker;Aunt May;Linda Hamilton;Sarah Connor"
-182,very challenging,"Arrival to Earth","Sam Witwicky","Peter Parker;John Connor;Will Lennox;Jake Sully;Steve Rogers"
-183,very challenging,"Duel of the Fates","Qui-Gon Jinn","Doctor Strange;Gandalf;Merlin;Dumbledore;Wong"
-184,very challenging,"Mad Max: Fury Road Suite","The People Eater","Baron Harkonnen;Immortan Joe;General Zod;Red Skull;The Governor"
-185,very challenging,"Opening Theme  (Foundation)","Hari Seldon","Doctor Manhattan;Reed Richards;Tony Stark;Bruce Banner;Walter White"
-186,very challenging,"Children of Dune Theme","Leto II Atreides","Jon Snow;Aragorn;Paul Atreides;Kylo Ren;Prince Zuko"
-187,very challenging,"Battlestar Galactica Theme  (Bear McCreary version)","Number Six","Seven of Nine;Cameron (Terminator);Ava (Ex Machina);River (Firefly);Dana Scully"
-188,very challenging,"Akira Theme","Tetsuo","Eleven;Jean Grey;Professor X;Doctor Manhattan;Franklin Richards"
-189,very challenging,"Penny Dreadful Theme","Victor Frankenstein","Dr. Jekyll;Dr. Moreau;Dr. West (Re-Animator);Dr. Pretorius;Dr. Caligari"
-190,very challenging,"Altered Carbon Theme","Takeshi Kovacs","William Gibson (Tron);Flynn (Tron);Case (Neuromancer);Neo;Roy Batty"
-191,very challenging,"Event Horizon Theme","Dr. Weir","Dr. Mann (Interstellar);Kane (Alien);David (Prometheus);Ash (Alien);Dr. Reinhardt (Black Hole)"
-192,very challenging,"The OA Theme","Prairie Johnson","River Tam;Eleven;Jean Grey;Elizabeth Harvest;Dana Scully"
-193,very challenging,"Annihilation Theme","Dr. Ventress","Dr. Elizabeth Shaw;Dr. Grace Augustine;Dr. Brand;Dr. Ryan Stone;Dr. Susan Tyler"
-194,very challenging,"Gattaca Theme","Vincent Freeman","Sam Bell;Theodore (Her);Joe Blake;Arthur (Inception);Cooper"
-195,very challenging,"The Man in the High Castle Theme","John Smith","Philip Blake;Negan;Grand Admiral Thrawn;Baron Harkonnen;Wilson Fisk"
-196,very challenging,"Dark Matter Theme","Portia Lin","River Tam;Seven of Nine;Number Six;Agent May;Nebula"
-197,very challenging,"Mr. Robot Theme","Darlene","Trinity;Kate Libby (Hackers);Lisbeth Salander;Cameron (Halt and Catch Fire);Root (Person of Interest)"
-198,very challenging,"Serenity Theme","Shepherd Book","Obi-Wan Kenobi;Gandalf;Professor X;Alfred Pennyworth;Uncle Ben"
-199,very challenging,"Dollhouse Theme","Adelle DeWitt","Amanda Waller;M (James Bond);Miranda Priestly;Admiral Cain;Judi Dench's M"
-200,very challenging,"Defiance Theme","Joshua Nolan","Malcolm Reynolds;Han Solo;Rick Deckard;Snake Plissken;John Crichton"
-201,very challenging,"Devs Theme","Forest","Dr. Manhattan;Walter Bishop;Nathan Stark;Tony Stark;Reed Richards"
-202,very challenging,"The Leftovers Theme","Kevin Garvey","Rick Grimes;Jack Shephard;Joel Miller;John Locke;Will Graham"
-203,very challenging,"Dark Theme  (Netflix)","Jonas Kahnwald","Donnie Darko;Sam Bell;Bruce Banner;Peter Bishop;Walter Bishop"
-204,very challenging,"Am I Not Merciful?","Commodus","Joffrey Baratheon;Prince Joaquin (El Dorado);Prince John (Robin Hood);Caligula;Nero"
-205,very challenging,"Barbarian Horde","Cicero","Tyrion Lannister;Varys;Grand Maester Pycelle;Master of Coin;Lord Chamberlain"
-206,very challenging,"God Help the Outcasts","Esmeralda","Jane Porter;Meg;Sally (Nightmare Before Christmas);Kidagakash (Atlantis);Nani"
-207,very challenging,"Almost There","Charlotte LaBouff","Jane Porter;Wendy Darling;Alice;Eilonwy;Penny (Rescuers)"
-208,very challenging,"When Will My Life Begin","Mother Gothel","Lady Tremaine;Queen of Hearts;Cruella De Vil;Madame Medusa;Yzma"
-209,very challenging,"Once Upon a Dream","Flora","Grandmother Willow;Fairy Godmother;Blue Fairy;Mama Odie;Merryweather"
-210,very challenging,"You'll Be in My Heart","Kala","Sarabi;Eudora (Princess and Frog);Queen Athena;Mrs. Hawkins (Treasure Planet);Perdita"
-211,very challenging,"I Just Can't Wait to Be King","Zazu","Cogsworth;Sebastian;Iago;Archimedes;Pascal"
-212,very challenging,"My Last Hope","Phil","Ray;Louis;Archimedes;Cogsworth;Zazu"
-213,very challenging,"Lost in the Woods","Kristoff","Flynn Rider;Naveen;Li Shang;John Smith;Phoebus"
-214,very challenging,"How Does a Moment Last Forever","Maurice","Gepetto;Professor Porter;Maurice;King Triton;Sultan"
-215,very challenging,"Sense8 Theme","Jonas Maliki","Morpheus;Ancient One;Professor X;Doctor Strange;Oracle (Matrix)"
-216,very challenging,"Humans Theme","Dr. George Millican","Walter Bishop;Tony Stark;Reed Richards;Dr. Emmett Brown;Dr. Henry Jekyll"
-217,very challenging,"Dark Matter Theme","Android","Data;Vision;Ava (Ex Machina);Cameron (Terminator);David (Prometheus)"
-218,very challenging,"Midnight Mass Theme","Father Paul","John Constantine;Father Karras;Father Merrin;Father Brown;Father Lantom"
-219,very challenging,"Maniac Theme  (Netflix)","Dr. James Mantleray","Dr. Strange;Dr. Manhattan;Walter Bishop;Rick Sanchez;Doc Brown"
-220,very challenging,"Legion Theme","Syd Barrett","River Tam;Eleven;Jean Grey;Carrie White;Lucy (Elfen Lied)"
-221,very challenging,"Ghost in the Shell Theme  (1995)","Batou","Agent Smith;Roy Batty;Vision;Cable;Winter Soldier"
-222,very challenging,"Akira Theme","Colonel Shikishima","Nick Fury;Agent Smith;Commander Adama;General Ross;Baron Harkonnen"
-223,very challenging,"Childhood's End Theme","Karellen","Q (Star Trek);Doctor Manhattan;Galactus;The Monitor;The Stranger"
-224,very challenging,"Continuum Theme","Kiera Cameron","Sarah Connor;River Tam;Trinity;Agent Scully;Major Kusanagi"
-225,very challenging,"The Man From Earth Theme","John Oldman","Doctor Who;Duncan MacLeod;Vandal Savage;Ra's Al Ghul;Wolverine"
-226,very challenging,"Utopia Theme  (UK Series)","Jessica Hyde","River Tam;Trinity;Sydney Bristow;Nikita;Sarah Connor"
-227,very challenging,"Babylon 5 Theme","Susan Ivanova","Captain Janeway;Commander Adama;Colonel Carter;Major Kira;Number One"
-228,very challenging,"The Prisoner Theme","Number Two","Agent Smith;The Architect;HAL 9000;GLaDOS;AM (I Have No Mouth)"
-229,very challenging,"Centaurworld Theme","Rider","She-Ra;Korra;Steven Universe;Star Butterfly;Marco Diaz"
-230,very challenging,"Hellraiser Theme","Kirsty Cotton","Nancy Thompson;Sidney Prescott;Laurie Strode;Ellen Ripley;Sarah Connor"
-231,very challenging,"Tron: Legacy Theme","Gem","Seven of Nine;Ava (Ex Machina);Major Kusanagi;Trinity;Agent Smith"
-232,very challenging,"A Discovery of Witches Theme","Matthew Clairmont","Edward Cullen;Angel;Spike;Bill Compton;Eric Northman"
-233,very challenging,"The Bells of Notre Dame","Quasimodo","Beast;Tarzan;John Smith;Prince Adam;Erik (Phantom)"
-234,very challenging,"Something There","Chip","Abu;Pascal;Meeko;Cri-Kee;Flounder"
-235,very challenging,"Touch the Sky","Queen Elinor","Queen Iduna;Queen Arianna;Eudora;Sarabi;Kala"
-236,very challenging,"The Madrigal Family","Abuela Alma","Grandmother Willow;Mama Odie;Fairy Godmother;Flora;Queen Elinor"
-237,very challenging,"Surface Pressure","Luisa","Nani;Kida;Helen Parr;GoGo Tomago;Sergeant Calhoun"
-238,very challenging,"Shiny","Tamatoa","Oogie Boogie;Hades;Dr. Facilier;Captain Hook;Scar"
-239,very challenging,"Erased Theme","Gaku Yashiro","Hannibal Lecter;Dexter Morgan;Light Yagami;Walter White;Joe Carroll"
-240,very challenging,"Time of Eve Theme","Nagi","Major Kusanagi;Ava (Ex Machina);Seven of Nine;River Tam;Cameron (Terminator)"
-241,very challenging,"Vivy: Fluorite Eye's Song Theme","Matsumoto","HAL 9000;JARVIS;GLaDOS;Vision;Ultron"
-242,very challenging,"Yokohama Kaidashi Kikou Theme","Alpha","Major Kusanagi;Ava (Ex Machina);Data;Vision;Wall-E"
-243,very challenging,"Key the Metal Idol Theme","Sergei Sergeevich","Doctor Manhattan;Tony Stark;Reed Richards;Bruce Banner;Walter Bishop"
-244,very challenging,"Tetsuo II: Body Hammer Theme","Doctor Kanno","Doctor Manhattan;Walter Bishop;Rick Sanchez;Reed Richards;Doctor Strange"
-245,expert,"The Dark Knight Theme","Jim Gordon","Agent Phil Coulson;Chief Jim Hopper;Owen Grady;Agent K (Men in Black);Rick Grimes"
-246,expert,"Main Theme  (Blade Runner 2049)","Lieutenant Joshi","Amanda Waller;Mon Mothma;Miranda Lawson (Mass Effect);Director Orson Krennic;Agent Maria Hill"
-247,expert,"Powell's Journey","Gobber","Hagrid;Balin;Gimli;Tormund Giantsbane;Grunkle Stan"
-248,expert,"Ghost in the Shell Theme  (1995)","Togusa","Officer K;Agent Smith;Agent Coulson;John Blake;Rick Deckard"
-249,expert,"Cowboy Bebop Opening Theme","Jet Black","Malcolm Reynolds;Han Solo;Star-Lord;Captain Harlock;Jayne Cobb"
-250,expert,"Legend Theme","Lord of Darkness","Darkness (Legend);Balrog;Hellboy;Vision;Red Skull"
-251,expert,"Neon Genesis Evangelion Theme","Gendo Ikari","Dr. Breen (Half-Life);Commander Adama;General Zod;Baron Harkonnen;Admiral Marcus"
-252,expert,"Serial Experiments Lain Theme","Lain Iwakura","Major Kusanagi;Trinity;Aeon Flux;Agent Smith;The Oracle"
-253,expert,"Donnie Darko Theme","Frank (The Rabbit)","The Babadook;Pennywise;Black Phillip;The Pale Man;Candyman"
-254,expert,"Ghost in the Shell: Stand Alone Complex Theme","Togusa","Rick Deckard;Officer K;Agent Smith;Neo;Roy Batty"
-255,expert,"The Prisoner Theme  (1967)","Number Six","Thomas Anderson;Edward Snowden;Winston Smith;Josef K;Guy Montag"
-256,expert,"Cyberpunk: Edgerunners Theme","Lucy","Major Kusanagi;Trinity;Aeon Flux;Alita;Agent Scully"
-257,expert,"Planetes Theme","Hachirota Hachimaki Hoshino","Cooper (Interstellar);Sam Bell (Moon);David Bowman;Mark Watney;Roy McBride"
-258,expert,"Steins;Gate Theme","Kurisu Makise","Dr. Louise Banks;River Song;Dana Scully;Amy Pond;Dr. Brand"
-259,expert,"Psycho-Pass Theme","Akane Tsunemori","Judge Anderson;Sarah Connor;Trinity;Major Kusanagi;Agent Scully"
-260,expert,"Space Battleship Yamato Theme","Captain Okita","Jean-Luc Picard;Commander Adama;James T. Kirk;John Sheridan;Malcolm Reynolds"
-261,expert,"Metropolis Theme  (Anime)","Duke Red","Norman Osborn;Lex Luthor;Baron Zemo;Wilson Fisk;Doctor Doom"
-262,expert,"Gankutsuou Theme","Albert de Morcerf","Light Yagami;Lelouch Lamperouge;Jonathan Joestar;Simon Belmont;Alucard"
-263,expert,"Made in Abyss Theme","Bondrewd","Doctor Strange;Doctor Doom;Walter Bishop;Rick Sanchez;Victor Frankenstein"
-264,expert,"Trigun Theme","Nicholas D. Wolfwood","Han Solo;Malcolm Reynolds;Spike Spiegel;The Man with No Name;Roland Deschain"
-265,expert,"Planetes Theme","Fee Carmichael","Ellen Ripley;Dr. Ryan Stone;Commander Lewis;Dr. Brand;Naomi Nagata"
-266,expert,"Darker Than Black Theme","Hei","Spike Spiegel;Vash the Stampede;Ghost Rider;Constantine;Shadow Moon"
-267,expert,"Dennou Coil Theme","Yasako","Aether (Genshin Impact);Major Kusanagi;Trinity;Battle Angel Alita;Eleven"
-268,expert,"Monster Theme  (Naoki Urasawa)","Dr. Kenzo Tenma","Dr. House;Dr. Strange;Hannibal Lecter;Will Graham;Dexter Morgan"
-269,expert,"Code Geass Theme","C.C.","Major Kusanagi;River Tam;Trinity;Jean Grey;Eleven"
-270,expert,"Last Exile Theme","Alex Row","Captain Harlock;Malcolm Reynolds;Han Solo;James T. Kirk;Jean-Luc Picard"
-271,expert,"Mushi-shi Theme","Adashino","John Constantine;Doctor Strange;Harry Dresden;Dream of the Endless;Baron Samedi"
-272,expert,"RahXephon Theme","Haruka Shitow","Major Kusanagi;Trinity;Seven of Nine;Commander Lewis;Dr. Brand"
-273,expert,"Serial Experiments Lain Theme","Yasuo Iwakura","Walter Bishop;Dr. Manhattan;Tony Stark;Reed Richards;Bruce Banner"
-274,expert,"Wolf's Rain Theme","Cheza","River Tam;Eleven;Lucy (Elfen Lied);Major Kusanagi;Trinity"
-275,expert,"Parasyte Theme","Reiko Tamura","Mystique;Phoenix;Jean Grey;Emma Frost;Black Widow"
-276,expert,"Psycho-Pass Theme","Masaoka","Nick Fury;Commissioner Gordon;Agent Coulson;Agent K;Rick Deckard"
-277,expert,"Steins;Gate Theme","Suzuha Amane","River Song;River Tam;Sarah Connor;Trinity;Agent Scully"
-278,expert,"The Madrigal Family","Abuela Alma","Grandmother Willow;Mama Odie;Fairy Godmother;Flora;Queen Elinor"
-279,expert,"Surface Pressure","Luisa","Nani;Kida;Helen Parr;GoGo Tomago;Sergeant Calhoun"
-280,ultra hard,"The Thing Theme","Palmer","Ash (Alien);Bishop (Aliens);David (Prometheus);Roy Batty;Agent Smith"
-281,ultra hard,"Solaris Theme  (2002 version)","Dr. Gordon","Dr. Mann (Interstellar);Dr. Elizabeth Shaw;Dr. Grace Augustine;Dr. Brand;Dr. Ryan Stone"
-282,ultra hard,"Silent Running Theme","Freeman Lowell","Sam Bell (Moon);Cooper (Interstellar);David Bowman (2001);Mark Watney;Dr. Ryan Stone"
-283,ultra hard,"Perfect Blue Theme","Mima Kirigoe","Nina (Black Swan);Betty Elms (Mulholland Drive);Diane Selwyn;Sarah Connor;Ellen Ripley"
-284,ultra hard,"Paprika Theme","Dr. Atsuko Chiba","Dream (Sandman);Morpheus (Matrix);Doctor Strange;Freddy Krueger;Inception's Ariadne"
-285,ultra hard,"The Fountain Theme","Tomas Verde","Dr. Manhattan;Morpheus;Doctor Strange;John Constantine;Neo"
-286,ultra hard,"Texhnolyze Theme","Ichise","Tetsuo;Kaneda;Neo;Case (Neuromancer);Adam Jensen"
-287,ultra hard,"Upstream Color Theme","Kris","Louise Banks;Amy (Ex Machina);Sarah Connor;Dolores (Westworld);Trinity"
-288,ultra hard,"Angel's Egg Theme","The Girl","San (Princess Mononoke);Nausicaa;Major Kusanagi;Aeon Flux;Leeloo"
-289,ultra hard,"Paranoia Agent Theme","Detective Ikari","L (Death Note);Will Graham;Rust Cohle;Dale Cooper;Frank Black"
-290,ultra hard,"RahXephon Theme","Ayato Kamina","Shinji Ikari;Simon (Gurren Lagann);Amuro Ray;Roger Smith;Van Fanel"
-291,ultra hard,"Memories: Magnetic Rose Theme","Eva Friedel","Ellen Ripley;Dr. Ryan Stone;Commander Lewis;Dr. Brand;Elizabeth Shaw"
-292,ultra hard,"Kaiba Theme","Warp","Doctor Manhattan;Q (Star Trek);The Doctor;John Constantine;Doctor Strange"
-293,ultra hard,"Ergo Proxy Theme","Vincent Law","Spike Spiegel;Vash the Stampede;Malcolm Reynolds;Han Solo;Peter Quill"
-294,ultra hard,"Blame! Theme","Killy","Judge Dredd;RoboCop;Major Kusanagi;Adam Jensen;Cable"
-295,ultra hard,"Primer Theme","Aaron","Sam Bell (Moon);Donnie Darko;Cooper (Interstellar);Bowman (2001);Dr. Louise Banks"
-296,ultra hard,"Under the Skin Theme","The Female","Ava (Ex Machina);Rachael (Blade Runner);Roy Batty;David (Prometheus);Number Six"
-297,ultra hard,"Beyond the Black Rainbow Theme","Elena","River Tam;Eleven;Jean Grey;Lucy (Lucy);Akira"
-298,ultra hard,"Boogiepop Phantom Theme","Nagi Kirima","River Tam;Eleven;Jean Grey;Raven (Teen Titans);Lucy (Elfen Lied)"
-299,ultra hard,"Haibane Renmei Theme","Rakka","River Tam;Lucy (Elfen Lied);Major Kusanagi;Alita;Violet Evergarden"
-300,ultra hard,"Kaiba Theme","Memory Dealer","Morpheus;Dream of the Endless;Doctor Strange;John Constantine;Doctor Manhattan"
-301,ultra hard,"Casshern Sins Theme","Luna","Major Kusanagi;Alita;Eve (Wall-E);Dolores (Westworld);Seven of Nine"
-302,ultra hard,"Mushishi Theme","Ginko","Constantine;Doctor Strange;Harry Dresden;Dream of the Endless;Ghost Doctor"
-303,ultra hard,"Shinsekai Yori Theme","Tomiko Asahina","Professor X;Jean Grey;Eleven;River Tam;Lucy (Elfen Lied)"
-304,ultra hard,"Memories: Magnetic Rose Theme","Heintz","Dave Bowman (2001);Sam Bell (Moon);Cooper (Interstellar);Dr. Mann;Freeman Lowell"
-305,ultra hard,"Technolyze Theme","Yoshii","Agent Smith;Roy Batty;Major Kusanagi;Adam Jensen;Case (Neuromancer)"
-306,ultra hard,"Kaiba Theme","Dr. Cheki","Doctor Manhattan;Walter Bishop;Rick Sanchez;Doctor Strange;Reed Richards"
-307,ultra hard,"Sonny Boy Theme","Mizuho","River Tam;Eleven;Jean Grey;Lucy (Elfen Lied);Major Kusanagi"
-308,ultra hard,"Casshern Sins Theme","Ohji","Walter Bishop;Tony Stark;Doctor Manhattan;Reed Richards;Bruce Banner"
-309,ultra hard,"Texhnolyze Theme","Doc","Rick Sanchez;Walter Bishop;Dr. Manhattan;Tony Stark;Reed Richards"
-310,ultra hard,"Knights of Sidonia Theme","Captain Kobayashi","Commander Adama;Captain Picard;Admiral Cain;Mon Mothma;President Roslin"
-311,ultra hard,"Wolf's Rain Theme","Kiba","Jon Snow;Geralt of Rivia;Logan;Beast Boy;Jacob Black"
-312,ultra hard,"Dennou Coil Theme","Isako","Major Kusanagi;Trinity;Battle Angel Alita;Seven of Nine;River Tam"
-313,ultra hard,"Fantastic Children Theme","Thoma","Shinji Ikari;Simon (Gurren Lagann);Edward Elric;Vash the Stampede;Roger Smith"
-314,ultra hard,"Noein Theme","Karasu","Doctor Strange;Cable;Doctor Manhattan;Bishop;Adam Warlock"
-315,ultra hard,"The OA Theme","Dr. Hunter Aloysius Percy","Walter Bishop;Doctor Strange;Doctor Manhattan;Reed Richards;Tony Stark"
-316,ultra hard,"Beforeigners Theme","Alfhildr","Claire Fraser (Outlander);River Song;Dana Scully;Sarah Connor;Trinity"
-317,ultra hard,"Station Eleven Theme","Jeevan Chaudhary","Rick Grimes;Joel Miller;John Constantine;Roland Deschain;Thomas Anderson"
-318,ultra hard,"Yokohama Kaidashi Kikou Theme","Alpha","Major Kusanagi;Ava (Ex Machina);Data;Vision;Wall-E"
-319,ultra hard,"Key the Metal Idol Theme","Sergei Sergeevich","Doctor Manhattan;Tony Stark;Reed Richards;Bruce Banner;Walter Bishop"
-320,ultra hard,"Tetsuo II: Body Hammer Theme","Doctor Kanno","Doctor Manhattan;Walter Bishop;Rick Sanchez;Reed Richards;Doctor Strange"
-321,ultra hard,"Boogiepop Phantom Theme","Touka Miyashita","River Tam;Eleven;Jean Grey;Lucy (Elfen Lied);Carrie White"
-322,ultra hard,"The Big O Theme","Dorothy Wayneright","Major Kusanagi;Alita;Cameron (Terminator);Ava (Ex Machina);Seven of Nine"
-323,ultra hard,"Gungrave Theme","Brandon Heat","Spike Spiegel;John Wick;The Punisher;Ghost Rider;Constantine"
-324,ultra hard,"Kaiba Theme","Dr. Cheki","Doctor Manhattan;Walter Bishop;Rick Sanchez;Doctor Strange;Reed Richards"
-325,ultra hard,"Sonny Boy Theme","Mizuho","River Tam;Eleven;Jean Grey;Lucy (Elfen Lied);Major Kusanagi"
-326,ultra hard,"Casshern Sins Theme","Ohji","Walter Bishop;Tony Stark;Doctor Manhattan;Reed Richards;Bruce Banner"
-327,ultra hard,"Angel's Egg Theme","The Fisherman","Dream of the Endless;John Constantine;Doctor Strange;Solomon Kane;Van Helsing"
-328,ultra hard,"Texhnolyze Theme","Onishi","Roy Batty;Agent Smith;Cable;Winter Soldier;Adam Jensen"
-329,ultra hard,"Key the Metal Idol Theme","Jinsaku Ajo","Norman Osborn;Lex Luthor;Doctor Doom;Wilson Fisk;Baron Zemo"
-330,ultra hard,"Proud Corazón","Tía Rosita","Mama Coco;Abuela Alma;Flora;Fauna;Merryweather"
-331,ultra hard,"Where You Are","Chief Tui","King Fergus;Maurice;Sultan;King Triton;King Stefan"
-332,ultra hard,"What Else Can I Do?","Dolores","Tía Pepa;Tía Victoria;Mrs. Potts;Fauna;Nani"
+id,difficulty,song,correct_character,other_characters,spotify_uri,youtube_id
+2,easy,A Whole New World,abu,meeko;mushu;donkey;rafiki;philoctetes,ed2cba9d69b84288,uAcSiVeVXpI
+3,medium,The Matrix Theme,agent_smith,terminator;blackbeard;harkonnen;jason_bourne;dexter,3e573a11ee9844c6,dzEtP6fpbOo
+4,easy,A Whole New World,aladdin,esmeralda;elsa;anastasia;woody;voldemort,ed2cba9d69b84288,uAcSiVeVXpI
+5,medium,Once Upon a December,anastasia,elsa;mulan;pocahontas;ariel;jasmine,03e4ed4e2c0440a8,koWKsgOSs1w
+6,medium,Apollo 13 Theme,apollo13_hanks,interstellar;inception;edge_of_tmrw_tc;et;luke_skywalker,34ba6ddbeaf848f0,RPnWVzAZkH4
+7,medium,The Fellowship Theme,aragorn,william_wallace;hodor;leonidas;last_samurai_tc;maximus,19927ccf4bfb47cb,OMh1xkxzXVY
+8,easy,Part of Your World,ariel,jasmine;pocahontas;mulan;esmeralda;anastasia,2d35f86f9bd24c58,sg1Y6Vxl6Nk
+9,easy,Pokemon Theme,ash_ketchum,rick_sanchez;doctor_doom;charlie_brown;miles_morales;static_shock,3853093b1a7a4463,fAP-lGPqHbA
+10,medium,The Chronicles of Narnia Aslan Theme,aslan,mufasa;spirit;shadowfax;scar;bagheera,2618f2a14d5445f0,fhghtHmnqJE
+11,medium,The Mandalorian Theme,baby_yoda,meeko;et;spirit;mushu;aslan,3d0a04b2b2df4f82,xXp4GnC1Z3Q
+12,medium,Toccata and Fugue in D minor,bach,beethoven;mozart;chopin;schubert;grieg,f3763adaa4f44b30,z69C2Jqp42Q
+13,medium,The Bare Necessities (Reprise),bagheera,mufasa;aslan;spirit;rafiki;meeko,4c5a533362d6462a,5LkymWf0WyQ
+14,medium,The Dark Knight Theme,batman,spiderman;wolverine;black_adam;doctor_strange;miles_morales,559478619b454961,ypmrU7QfiDc
+16,medium,Moonlight Sonata,beethoven,mozart;bach;chopin;schubert;grieg,0fd4e0a00d064e4c,9_C6CTs0WhI
+17,medium,Day-O (The Banana Boat Song),beetlejuice,jack_skellington;joker;pennywise;phantom;voldemort,464de95c1f554227,YO7M0Hx_1D8
+18,medium,Heart and Soul,big_hanks,forrest_gump_hanks;philadelphia_hanks;cast_away_hanks;saving_private_ryan_hanks;sully_hanks,2944cefc0c90479c,RzbsmZoe0Ww
+19,medium,Black Adam Theme,black_adam,doctor_doom;thanos;voldemort;erik_killmonger;green_goblin,8546489e16ef4494,Lzs7ANbGApc
+22,medium,The Breaking of the Fellowship,boromir,william_wallace;maximus;leonidas;conan;chief_brody,84ca4b92a4724a47,fowHzOH9rqk
+23,easy,To Infinity and Beyond,buzz_lightyear,spiderman;mandalorian;optimus_prime;tony_stark;luke_skywalker,82c2aa83ad3d4cbd,ONas_NTTYjg
+24,medium,Safe Now,captain_phillips_hanks,sully_hanks;saving_private_ryan_hanks;apollo13_hanks;forrest_gump_hanks;philadelphia_hanks,1fb0322f85414a8c,JTRoOyxuEsA
+25,medium,Cast Away: End Title Theme,cast_away_hanks,forrest_gump_hanks;philadelphia_hanks;apollo13_hanks;saving_private_ryan_hanks;sully_hanks,3d2bab4a006e435f,eUsvnTYuO2Q
+26,easy,Charlie Brown Theme,charlie_brown,simone;patrick;cynthia;kevin_mccallister;lucas,68f90ef61ab94157,b4WP_Qq8JWQ
+27,medium,Jaws Theme,chief_brody,indiana_jones;grant_jurassic_park;john_mcclane;ethan_hunt_tc;rust_cohle,4dd0e1c6b76d4045,b1pwAed5w5A
+28,medium,Nocturne Op. 9,chopin,beethoven;mozart;bach;schubert;grieg,d43af1023d18414d,Jz1gvBluvc8
+29,medium,The Pink Panther Theme,clouseau,sherlock_holmes;poirot;inspector_gadget;dominic_west;captain_phillips_hanks,3f5bf49b12ce4c6a,VyZiIuMufTA
+30,medium,Ratatouille Theme,colette,elsa;mulan;pocahontas;jasmine;anastasia,025b4eaffa4d481b,A078E6faw18
+31,medium,Ready Steady Go (Korean Style),collateral_tc,vampire_tc;risky_business_tc;edge_of_tmrw_tc;good_men_tc;last_samurai_tc,71c3e4c5ac7c4238,qxZExomEZa4
+32,medium,Conan the Barbarian Theme,conan,maximus;leonidas;william_wallace;aragorn;terminator,e014087417514ccd,CSwWd9Xn2fc
+33,easy,Defying Gravity,cynthia,patrick;charlie_brown;mary_jane;lucas;simone,de90516b1a8b4194,WTgNu7XHrrU
+34,medium,The Imperial March,darth_vader,doctor_doom;sauron;voldemort;thanos;green_goblin,eadd58eeeeac4cc9,s3SZ5sIMY6o
+35,medium,Chevaliers De Sangreal,davinci_code_hanks,philadelphia_hanks;saving_private_ryan_hanks;apollo13_hanks;forrest_gump_hanks;sully_hanks,6318d79e7cf14b38,CpHkMZxNLV0
+36,medium,Dexter Main Title,dexter,heisenberg;jesse_pinkman;rust_cohle;rick_grimes;lucas,ef7cbf8eb42c4c1f,k4PTCE9g8AU
+37,easy,Dexter Main Title,doakes,j_jonah_jameson;les_grossman_tc;chief_brody;rick_grimes;john_mcclane,ef7cbf8eb42c4c1f,k4PTCE9g8AU
+38,medium,Back to the Future Theme,doc_brown,et;rick_sanchez;tony_stark;doctor_strange;oppenheimer,4480667777be4e85,YbKv1B2vZNw
+40,medium,Spider-Man 2 Theme,doctor_octopus,doctor_strange;doctor_doom;thanos;erik_killmonger;voldemort,2e17ac47f8fe4380,DNti8jHPOG0
+41,medium,The Time Stone,doctor_strange,gandalf;dumbledore;patrick;saruman;harry_potter,b75e4ffc46204b4d,-sBdfHxo_n4
+42,medium,The Wire Theme,dominic_west,rust_cohle;rick_grimes;javier_pena;heisenberg;dr_house,4fb9db0124de4411,x2yp0qQCxeA
+43,easy,All Star,donkey,bagheera;mushu;meeko;abu;philoctetes,17a1fbb0cc6c4349,8ay_BkRuv-o
+44,easy,Somewhere Over the Rainbow,dorothy,elsa;glinda;jasmine;mary_jane;maria_west_side_story,7dd2f4c6821a49d6,YdvV-uKef_A
+45,medium,House MD Theme,dr_house,sherlock_holmes;poirot;dexter;rust_cohle;rick_sanchez,28c7f7af18c041e3,c4sBYBSvBOQ
+46,medium,Hedwig's Theme,dumbledore,gandalf;saruman;doctor_strange;merlin;doc_brown,5f4e5b7431b746a7,wtHra9tFISY
+47,medium,Mimics and Alphas,edge_of_tmrw_tc,good_men_tc;risky_business_tc;collateral_tc;vampire_tc;last_samurai_tc,90912c89f91f4708,gwj27LySeTo
+48,medium,Stranger Things Theme,eleven,harry_potter;chief_brody;doctor_strange;miles_morales;static_shock,a764af5951d74705,2obv0DHuhu4
+49,easy,Let It Go,elsa,anastasia;mulan;pocahontas;jasmine;ariel,486ad9e988a24e1b,qSU560anReg
+50,medium,Wakanda,erik_killmonger,black_adam;doctor_doom;thanos;green_goblin;voldemort,15777599d7d64b03,OLtSLZEWK78
+51,medium,Tuyo (Narcos Theme),escobar_narcos,tony_montana;nathan_drake;rick_grimes;rust_cohle;heisenberg,845626f0a5bb4ce2,zNPXnAVyAUA
+52,medium,The Bells of Notre Dame,esmeralda,pocahontas;mulan;jasmine;maria_west_side_story;anastasia,4b8c09771bcf4b90,1dBwv5_59T8
+53,easy,Flying Theme,et,baby_yoda;buzz_lightyear;darth_vader;optimus_prime;megatron,fec27d42490e45fc,7AR6KQOiNHA
+54,medium,Mission Impossible Theme,ethan_hunt_tc,james_bond;jason_bourne;nathan_drake;indiana_jones;john_mcclane,ad45d0ff817a4376,YBZ6GPCJcxM
+55,easy,I'm Forrest... Forrest Gump,forrest_gump_hanks,davinci_code_hanks;saving_private_ryan_hanks;apollo13_hanks;philadelphia_hanks;cast_away_hanks,1d17b42b5dd54146,L4tetTHHPEQ
+56,medium,The White Rider,gandalf,dumbledore;moses;doctor_strange;merlin;harry_potter,748df294431a4797,HgV-prS1tyU
+57,medium,Popular,glinda,elsa;dorothy;jasmine;mary_jane;maria_west_side_story,d47ec2c9a1494f0b,rpFXOD_olvY
+58,medium,Hound Dog,good_men_tc,ethan_hunt_tc;last_samurai_tc;maverick_tc;collateral_tc;jerry_maguire_tc,1789b2d9faf943d9,x3lvUeQUo28
+59,medium,Jurassic Park Theme,grant_jurassic_park,indiana_jones;chief_brody;nathan_drake;rick_grimes;tyrion_lannister,9c61edc459564cdb,lDlU08RU7Tk
+60,medium,Spiderman Main Title,green_goblin,wolverine;doctor_doom;erik_killmonger;thanos;voldemort,d682f7381e9d4e2d,tbhdL8VLhwI
+61,medium,The Green Mile,green_mile_hanks,philadelphia_hanks;saving_private_ryan_hanks;forrest_gump_hanks;cast_away_hanks;sully_hanks,ce9b9b7163ed4217,gSXdiuOj3b8
+62,medium,In the Hall of the Mountain King,grieg,beethoven;mozart;bach;chopin;schubert,22d321ae55c14913,IKwstbpvNMc
+63,medium,Hagrid the Professor,hagrid,gandalf;hook;saruman;aslan;mufasa,407879ec571049e1,sM62wvwVEk0
+64,medium,The Asteroid Field,han_solo,indiana_jones;ethan_hunt_tc;maverick_tc;james_bond;indiana_jones,e14d1c25f3ab4bf5,XNDEljd1cQI
+65,medium,Lisan al Gaib,harkonnen,sauron;voldemort;saruman;thanos;erik_killmonger,f4f05d9ccf9b440c,HnES5cg-5Rc
+66,easy,Jingle Bell Rock,harry_bandit,lucas;patrick;charlie_brown;good_men_tc;interstellar,2f484af53eca4cc9,Z0ajuTaHBtM
+67,easy,Hedwig's Theme,harry_potter,rose;gandalf;doctor_strange;merlin;luke_skywalker,3941cdb7fe294be8,wtHra9tFISY
+68,medium,Breaking Bad Theme,heisenberg,philadelphia_hanks;dexter;rick_grimes;rust_cohle;tony_montana,2335fb95143c45c5,ilfYnhXD-bE
+69,medium,Hold the Door,hodor,hagrid;samwise;boromir;aragorn;william_wallace,f72d3232474c4bd6,GFgwGctudfM
+70,medium,Hook-Napped,hook,jack_sparrow;blackbeard;long_john_silver;conan;captain_phillips_hanks,ffed86dfcf5b4394,MLCCEuIAG9M
+71,easy,Husvagn,husvagn,pippi;marv;ove;kevin_mccallister;truckdriver,270dc12079d94e6c,t4CGLR6A3kM
+72,medium,Top Gun Theme,iceman,javier_pena;han_solo;ethan_hunt_tc;james_bond;jason_bourne,7ce50e2d98524462,iNJLFWlfep4
+73,medium,Time (Inception),inception,interstellar;edge_of_tmrw_tc;luke_skywalker;jack_dawson;doctor_strange,4441b2cc18bb4695,jgyShFzdB_Q
+74,medium,Raiders March,indiana_jones,nathan_drake;ethan_hunt_tc;james_bond;saruman;hook,6fab03af2f68490d,bC77czRbjd0
+75,medium,Inspector Gadget Theme,inspector_gadget,sherlock_holmes;poirot;clouseau;nathan_drake;rick_sanchez,79555f407caa438e,XUB8ScEhPsA
+76,medium,No Time for Caution,interstellar,inception;edge_of_tmrw_tc;harkonnen;doctor_doom;darth_vader,9851a884c4324121,2o9KfyPqQzY
+77,easy,Spiderman Main Title,j_jonah_jameson,perry;chief_brody;les_grossman_tc;doc_brown;venkman,f51dccb4eeb94be2,tbhdL8VLhwI
+78,medium,My Heart Will Go On,jack_dawson,jerry_maguire_tc;mary_jane;maverick_tc;han_solo;rick_grimes,576923ddb2234551,Siz-xBfIqpg
+79,easy,This Is Halloween,jack_skellington,beetlejuice;pennywise;phantom;joker;voldemort,36cf8680881b4dc6,ntsrWX-0FE4
+80,medium,He's a Pirate,jack_sparrow,blackbeard;hook;long_john_silver;cast_away_hanks;captain_phillips_hanks,6701bc73897a4691,BuYf0taXoNw
+81,medium,James Bond Theme,james_bond,ethan_hunt_tc;jason_bourne;indiana_jones;nathan_drake;john_mcclane,73ed4c53e533413f,milCpGBouPc
+82,medium,Magic Dance,jareth_the_goblin_king,phantom;beetlejuice;jack_skellington;voldemort;pennywise,162de67df583494f,j6NqnYYmSVE
+83,easy,A Whole New World,jasmine,ariel;pocahontas;mulan;elsa;anastasia,3ea6d479dff24649,uAcSiVeVXpI
+84,medium,Extreme Ways (Bourne Theme),jason_bourne,james_bond;ethan_hunt_tc;john_mcclane;indiana_jones;nathan_drake,1b7b7c75eb914202,aYAoeYE9CLs
+85,medium,Tuyo (Narcos Theme),javier_pena,tony_montana;rust_cohle;j_jonah_jameson;heisenberg;harkonnen,eb8f40a419f3462d,zNPXnAVyAUA
+86,medium,Secret Garden,jerry_maguire_tc,rain_man_tc;les_grossman_tc;good_men_tc;maverick_tc;risky_business_tc,3c97aa7876c84e56,WY1spB1J0vw
+87,medium,Rocket Scientist,jesse_pinkman,john_bender;dexter;rick_grimes;rust_cohle;tony_montana,a3ddeb0b6ad546e2,l9yc2SNJLNk
+88,medium,Don't You (Forget About Me),john_bender,kevin_mccallister;marty_mcfly;jerry_maguire_tc;lucas;charlie_brown,529e0a79e9ca45f1,vn3VcT6ZQk4
+89,medium,Skeletons,john_mcclane,ethan_hunt_tc;james_bond;jason_bourne;nathan_drake;rick_grimes,7d201db42c07473e,XsUsj7YSjf4
+90,medium,The Dark Knight Theme (Joker),joker,pennywise;beetlejuice;voldemort;green_goblin;phantom,39cb145cd17e4305,ypmrU7QfiDc
+91,easy,"Main Title ""Somewhere iny My Memory"" (From ""Home Alone"")",kevin_mccallister,lucas;charlie_brown;schindler;john_mcclane;john_bender,4e5583da56af4a97,U89pW3kgOJ0
+92,medium,A Way of Life,last_samurai_tc,collateral_tc;edge_of_tmrw_tc;good_men_tc;maverick_tc;vampire_tc;risky_business_tc;,36c1aa7d3169425e,Vp6_Rjxs9U8
+93,medium,Returns a King,leonidas,maximus;william_wallace;aragorn;conan;boromir,433d98818896406a,N5wBTBCRsmQ
+94,medium,Get Back,les_grossman_tc,j_jonah_jameson;venkman;tony_stark;maverick_tc;jerry_maguire_tc,f277205e890740d3,ELPbTvc-3J0
+95,medium,I'm Still Here,long_john_silver,jack_sparrow;blackbeard;hook;moses;captain_phillips_hanks,5b93949e3d2145aa,MUZwblurraA
+96,easy,Star Wars Theme,luke_skywalker,indiana_jones;optimus_prime;neytiri;eleven;ethan_hunt_tc,72f675c015344bef,HrIJT_4Txqw
+97,medium,The Mandalorian Theme,mandalorian,luke_skywalker;han_solo;boromir;black_adam;darth_vader,61135cc40a924d97,xXp4GnC1Z3Q
+98,medium,America,maria_west_side_story,anastasia;glinda;rose;esmeralda;simone,ef9c69e8bc8d41f7,_Tihl3pzWRc
+99,easy,Johnny B. Goode,marty_mcfly,marv;rick_sanchez;tony_stark;indiana_jones;nathan_drake,8681f16c4fda4416,eINKTGikDXg
+100,easy,Carol of the Bells,marv,meeko;rafiki;john_mcclane;chief_brody;les_grossman_tc,23810feeab5a45ee,5zSfb5vmkPc
+101,easy,Spider-Man Theme,mary_jane,jasmine;ariel;sarah_connor;mulan;maria_west_side_story,0b7b8956fda14964,tbhdL8VLhwI
+102,medium,You're Welcome,maui,voldemort;aladdin;mushu;donkey;black_adam,0b1b4eb4215f48ef,CTvjhbfrgEY
+103,medium,Danger Zone,maverick_tc,les_grossman_tc;good_men_tc;ethan_hunt_tc;rain_man_tc;jerry_maguire_tc,89a0240e1c524f97,9ID4RAqCqnQ
+1,easy,Now We Are Free,maximus,leonidas;william_wallace;aragorn;boromir;conan,619068248c2249d9,ghxzLw2wRis
+105,easy,Colors of the Wind,meeko,abu;mushu;rafiki;donkey;philoctetes,3108547ffedc499f,hcmpj5HPue0
+106,medium,Autobots,megatron,mandalorian;terminator;doctor_doom;thanos;darth_vader,dfd453943ba9423c,w581xiVe0Q8
+107,medium,Sunflower,miles_morales,spiderman;static_shock;blue_beetle;black_adam;doctor_strange,ac8bd114f61d48bb,r7Rn4ryE_w8
+108,medium,The Matrix Theme,morpheus,maverick_tc;gandalf;doctor_strange;rick_sanchez;tony_stark,8d850016889f4af4,dzEtP6fpbOo
+109,medium,When You Believe,moses,pocahontas;gandalf;aslan;dumbledore;rasputin,07e9e49c83d94e85,-vA9b8UDzy8
+110,medium,Symphony No. 40,mozart,beethoven;bach;chopin;schubert;grieg,d6a67107084e483c,S3cRXCPF0XE
+111,medium,Circle of Life,mufasa,aslan;spirit;bagheera;patrick;meeko,5ba4fa6da7a14eab,BM-khAJP2cU
+112,easy,I'll Make a Man Out of You,mulan,pocahontas;jasmine;ariel;elsa;anastasia,ce5f9642799840dd,elBKil5zE2g
+113,easy,I'll Make a Man Out of You,mushu,donkey;abu;meeko;rafiki;philoctetes,ce5f9642799840dd,elBKil5zE2g
+114,medium,Nate's Theme,nathan_drake,indiana_jones;ethan_hunt_tc;james_bond;jason_bourne;john_mcclane,e297edcd3f944ffc,h_b5WdaP1fI
+115,medium,Pandora,neytiri,pocahontas;mulan;jasmine;ariel;anastasia,6880e23f2b734dcd,qGV7o3wiadg
+116,medium,Can You Hear The Music,oppenheimer,sherlock_holmes;schindler;doc_brown;boromir;beethoven,82d56858236d4112,4JZ-o3iAJv4
+117,medium,Transformers Theme (Autobots),optimus_prime,blue_beetle;terminator;iron_man;buzz_lightyear;doctor_doom,aa5dd3bc39664e33,w581xiVe0Q8
+118,medium,I'm So Happy,ove,forrest_gump_hanks;rick_sanchez;doc_brown;marty_mcfly;sheldon,f00a0c4eb7d647d0,9WBQHkWwAv0
+119,easy,People Get Up And Drive Your Funky Sould - Remix,parker.webm,miles_morales;static_shock;blue_beetle;black_adam;green_goblin,508a838fc4b64c27,Nl-RVIdTUVI
+120,easy,SpongeBob SquarePants Theme,patrick,charlie_brown;kevin_mccallister;lucas;cynthia;perry,a7561f0b3e504c9b,ehu9-GDSrck
+121,medium,Beverly,pennywise,joker;beetlejuice;jack_skellington;phantom;voldemort,c258c51c635d4f62,jQyMa-oVTCI
+122,easy,Ain't Got Rhythm,perry,patrick;charlie_brown;kevin_mccallister;lucas;cynthia,3f8b7c966f33436a,1NpgW2qkD34
+123,medium,The Phantom of the Opera,phantom,jack_skellington;beetlejuice;pennywise;voldemort;joker,59fd1140581c479a,-DvVAsGdnBQ
+124,medium,Streets of Philadelphia,philadelphia_hanks,forrest_gump_hanks;saving_private_ryan_hanks;cast_away_hanks;apollo13_hanks;sully_hanks,588e42905d8945ab,tKdk97y2Wjg
+125,medium,Go the Distance,philoctetes,mushu;rafiki;donkey;meeko;abu,ad847ab433e64741,4tfnSv-tskg
+126,easy,Här kommer Pippi Långstrump,pippi,dorothy;kevin_mccallister;lucas;charlie_brown;mary_jane,3fb7ab1c2bc34b0a,o-3hvSyRroM
+127,easy,Colors of the Wind,pocahontas,mulan;jasmine;ariel;elsa;anastasia,b79c28852e5f442d,hcmpj5HPue0
+128,medium,Poirot Theme,poirot,sherlock_holmes;inspector_gadget;indiana_jones;rust_cohle;dr_house,b3910e1878a846c3,nRDXwBWwiWI
+129,medium,I Just Can't Wait to Be King,rafiki,patrick;aslan;bagheera;mushu;philoctetes,65bc66b738bb45dd,INugjPMaOWs
+130,medium,Leaving Wallbrook/On The Road,rain_man_tc,collateral_tc;edge_of_tmrw_tc;good_men_tc;maverick_tc;jerry_maguire_tc;risky_business_tc;,26336e0365c14cd9,gEX3bBjz44s
+131,medium,Night on Bald Mountain,rasputin,voldemort;sauron;darth_vader;thanos;green_goblin,21acc9bdcef84dea,5Z0dxsFmX7c
+132,medium,The Walking Dead Theme,rick_grimes,rust_cohle;john_mcclane;harry_bandit;grant_jurassic_park;heisenberg,2b6529fa034f4ba8,v5ISBJc1wFk
+133,medium,Rick and Morty Theme,rick_sanchez,doc_brown;doctor_strange;tony_stark;sheldon;marty_mcfly,49b87e287078491f,fcrm8XIvbcY
+134,medium,Old Time Rock and Roll,risky_business_tc,jerry_maguire_tc;maverick_tc;les_grossman_tc;vampire_tc;rain_man_tc,06cfa7a27d824d0b,W1LsRShUPtY
+135,medium,Gonna Fly Now,rocky,john_mcclane;conan;jerry_maguire_tc;terminator;maximus,d1ed0a5a1fe24e04,Qwu5zWTEYVs
+136,medium,My Heart Will Go On,rose,maria_west_side_story;dorothy;simone;glinda;mary_jane,0c7b2294f5b64775,Siz-xBfIqpg
+137,medium,Far From Any Road,rust_cohle,rick_grimes;heisenberg;dr_house;dexter;john_mcclane,e4bd982361ee4d78,Y4SjTUPC6gI
+138,medium,Concerning Hobbits,samwise,voldemort;aragorn;boromir;gandalf;saruman,5ae08feabe5f4ee1,CL_3mlOPnGI
+139,medium,The Terminator Theme,sarah_connor,john_bender;john_mcclane;javier_pena;oppenheimer;leonidas,3e33443b43cd4019,CnQm2_cAZvo
+140,medium,Saruman the White,saruman,harkonnen;dumbledore;voldemort;hodor;doctor_doom,7304e7baeeb44acb,zRvgiyyqbAY
+141,medium,The Foor of Orthanc,sauron,hodor;hagrid;darth_vader;thanos;doctor_doom,ddda1340c27e4788,beBVpHW_xa4
+142,medium,Hymn To The Fallen,saving_private_ryan_hanks,philadelphia_hanks;forrest_gump_hanks;apollo13_hanks;cast_away_hanks;green_mile_hanks,e9bf0d710ca244e8,fvpQMTY8H9Y
+143,medium,Be Prepared,scar,rasputin;aslan;bagheera;woody;spirit,95bd64a652b94a05,OEQmeTalXfM
+144,medium,Schindler's List Theme,schindler,saving_private_ryan_hanks;green_mile_hanks;phantom;oppenheimer;maximus,d507014789664d00,057A1RdssoU
+145,medium,"Marche militaire Op. 51, No. 1",schubert,beethoven;mozart;bach;chopin;grieg,288b1dcfc2d74815,VlsxNoqzhk0
+146,medium,The Lord of the Rings Theme,shadowfax,aslan;spirit;maximus;mufasa;baby_yoda,d4d8d65877724999,IlmiRndxkU8
+147,medium,The Big Bang Theory Theme,sheldon,rick_sanchez;doc_brown;doctor_strange;tony_stark;dr_house,ddebbe05a3ed4101,8KTA50Z9Z0U
+148,medium,Sherlock Theme,sherlock_holmes,poirot;inspector_gadget;nathan_drake;rust_cohle;dr_house,f4f3b915f4574419,7KgFdPipGK4
+149,easy,All Star,shrek,perry;mushu;meeko;abu;philoctetes,8008868df9d245e9,8ay_BkRuv-o
+151,medium,Harry Potter Theme,snape,hodor;saruman;doctor_doom;thanos;green_goblin,ce97536f3e32437b,wtHra9tFISY
+152,medium,Spider-Man Theme,spiderman,miles_morales;static_shock;blue_beetle;black_adam;doctor_strange,2b7f2348a4024d75,DNti8jHPOG0
+153,medium,Here I Am,spirit,aslan;shadowfax;mufasa;bagheera;maximus,66ada68316d148a2,nyp2HQgdT8M
+155,medium,Sully Theme,sully_hanks,saving_private_ryan_hanks;apollo13_hanks;cast_away_hanks;philadelphia_hanks;forrest_gump_hanks,da42ca7b3b914a78,4RGpSZQ_ZuU
+156,medium,The Terminator Theme,terminator,optimus_prime;conan;doctor_doom;thanos;darth_vader,80d1d541ba204593,CnQm2_cAZvo
+157,medium,The Avengers Theme,thanos,doctor_doom;darth_vader;voldemort;sauron;green_goblin,a6c0d7d65ed04fb6,QtxeJ703w18
+158,medium,Push It To The Limit,tony_montana,escobar_narcos;javier_pena;rick_grimes;heisenberg;harry_bandit,7e90cb2538554cc7,VrlKfUKC7Vk
+159,medium,Iron Man,tony_stark,doctor_strange;batman;spiderman;black_adam;davinci_code_hanks,bb80128add9b4755,b3-QqGVt-tM
+160,easy,Truckdriving song,truckdriver,harry_bandit;marv;john_mcclane;maverick_tc;rocky,c89ab38849a54232,fMn7vnpwhcM
+161,medium,Game of Thrones Theme,tyrion_lannister,aragorn;william_wallace;maximus;leonidas;conan,44421bfa167041c9,uXZd_W5B7N0
+162,medium,Interview with the Vampire Theme,vampire_tc,jack_sparrow;phantom;pennywise;voldemort;beetlejuice,f427bd137bb84415,k53aLj72MYE
+163,medium,Ghostbusters Theme,venkman,philadelphia_hanks;marv;rick_sanchez;marty_mcfly;doc_brown,c3ebdec3033e4ae7,TaV1r341wYk
+164,medium,Voldemort Theme,voldemort,saruman;sauron;doctor_doom;thanos;darth_vader,8203f96260134b8a,wtHra9tFISY
+165,medium,Braveheart Theme,william_wallace,maximus;leonidas;aragorn;boromir;conan,04f1829312b94f6f,gfHjh8KLURI
+166,medium,Cast Away Theme,wilson,saving_private_ryan_hanks;interstellar;schindler;william_wallace;jack_dawson,6e67c0956bc54402,eUsvnTYuO2Q
+167,medium,Sweet Dreams,wolverine,batman;spiderman;black_adam;miles_morales;static_shock,111b08bbdb4f4e76,eRhg7qPLeN8
+104,easy,You've Got a Friend in Me,woody,perry;donkey;mushu;abu;meeko,38c47264f90b4242,0hG-2tQtdlE
