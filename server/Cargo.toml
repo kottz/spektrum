@@ -10,7 +10,7 @@ axum-server = { version = "0.7.1", features = ["tls-rustls"] }
 reqwest = { version = "0.12.9", features = ["json"] }
 serde = { version = "1.0.216", features = ["derive"] }
 serde_json = "1.0.133"
-tower-http = { version = "0.6.2", features = ["fs", "trace"] }
+tower-http = { version = "0.6.2", features = ["fs", "trace", "cors"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 base64 = "0.22.1"
@@ -23,3 +23,4 @@ thiserror = "2.0.7"
 uuid = { version = "1.11.0", features = ["v4", "serde"] }
 regex = "1.11.1"
 lazy_static = "1.5.0"
+http = "1.2.0"

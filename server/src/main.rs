@@ -7,6 +7,8 @@ use axum_server::Server;
 use clap::Parser;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use http::{HeaderValue, Method};
+use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::ServeDir;
 use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 use tracing::{error, info};
@@ -15,8 +17,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 mod game;
 mod game_manager;
 mod messages;
-mod server;
 mod question;
+mod server;
 
 use crate::question::{load_questions_from_csv, GameQuestion, QuestionResult};
 use crate::server::{create_lobby_handler, ws_handler, AppState};
@@ -68,6 +70,16 @@ async fn main() {
 
     let state = AppState::new(questions);
 
+    let cors = CorsLayer::new()
+        .allow_methods([Method::GET, Method::POST])
+        .allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap())
+        .allow_credentials(true)
+        .allow_headers([
+            http::header::CONTENT_TYPE,
+            http::header::AUTHORIZATION,
+            http::header::ACCEPT,
+        ]);
+
     let app = Router::new()
         .route("/ws", get(ws_handler))
         .route("/api/lobbies", post(create_lobby_handler))
@@ -76,7 +88,8 @@ async fn main() {
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(DefaultMakeSpan::default().include_headers(true)),
-        );
+        )
+        .layer(cors);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], args.port));
     info!("Starting server on http://{}", addr);
