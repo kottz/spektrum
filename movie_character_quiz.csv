@@ -16,7 +16,7 @@ id,difficulty,song,correct_character,other_characters,spotify_uri,youtube_id
 17,medium,Day-O (The Banana Boat Song),beetlejuice,jack_skellington;joker;pennywise;phantom;voldemort,464de95c1f554227,YO7M0Hx_1D8
 18,medium,Heart and Soul,big_hanks,forrest_gump_hanks;philadelphia_hanks;cast_away_hanks;saving_private_ryan_hanks;sully_hanks,2944cefc0c90479c,RzbsmZoe0Ww
 19,medium,Black Adam Theme,black_adam,doctor_doom;thanos;voldemort;erik_killmonger;green_goblin,8546489e16ef4494,Lzs7ANbGApc
-22,medium,The Breaking of the Fellowship,boromir,william_wallace;maximus;leonidas;conan;chief_brody,84ca4b92a4724a47,fowHzOH9rqk
+22,medium,Concerning Hobbits,boromir,william_wallace;maximus;leonidas;conan;chief_brody,84ca4b92a4724a47,CL_3mlOPnGI
 23,easy,To Infinity and Beyond,buzz_lightyear,spiderman;mandalorian;optimus_prime;tony_stark;luke_skywalker,82c2aa83ad3d4cbd,ONas_NTTYjg
 24,medium,Safe Now,captain_phillips_hanks,sully_hanks;saving_private_ryan_hanks;apollo13_hanks;forrest_gump_hanks;philadelphia_hanks,1fb0322f85414a8c,JTRoOyxuEsA
 25,medium,Cast Away: End Title Theme,cast_away_hanks,forrest_gump_hanks;philadelphia_hanks;apollo13_hanks;saving_private_ryan_hanks;sully_hanks,3d2bab4a006e435f,eUsvnTYuO2Q
@@ -39,14 +39,14 @@ id,difficulty,song,correct_character,other_characters,spotify_uri,youtube_id
 43,easy,All Star,donkey,bagheera;mushu;meeko;abu;philoctetes,17a1fbb0cc6c4349,8ay_BkRuv-o
 44,easy,Somewhere Over the Rainbow,dorothy,elsa;glinda;jasmine;mary_jane;maria_west_side_story,7dd2f4c6821a49d6,YdvV-uKef_A
 45,medium,House MD Theme,dr_house,sherlock_holmes;poirot;dexter;rust_cohle;rick_sanchez,28c7f7af18c041e3,c4sBYBSvBOQ
-46,medium,Hedwig's Theme,dumbledore,gandalf;saruman;doctor_strange;merlin;doc_brown,5f4e5b7431b746a7,wtHra9tFISY
+46,medium,Hedwig's Theme,dumbledore,gandalf;saruman;doctor_strange;black_adam;doc_brown,5f4e5b7431b746a7,wtHra9tFISY
 47,medium,Mimics and Alphas,edge_of_tmrw_tc,good_men_tc;risky_business_tc;collateral_tc;vampire_tc;last_samurai_tc,90912c89f91f4708,gwj27LySeTo
 48,medium,Stranger Things Theme,eleven,harry_potter;chief_brody;doctor_strange;miles_morales;static_shock,a764af5951d74705,2obv0DHuhu4
 49,easy,Let It Go,elsa,anastasia;mulan;pocahontas;jasmine;ariel,486ad9e988a24e1b,qSU560anReg
 50,medium,Wakanda,erik_killmonger,black_adam;doctor_doom;thanos;green_goblin;voldemort,15777599d7d64b03,OLtSLZEWK78
 51,medium,Tuyo (Narcos Theme),escobar_narcos,tony_montana;nathan_drake;rick_grimes;rust_cohle;heisenberg,845626f0a5bb4ce2,zNPXnAVyAUA
 52,medium,The Bells of Notre Dame,esmeralda,pocahontas;mulan;jasmine;maria_west_side_story;anastasia,4b8c09771bcf4b90,1dBwv5_59T8
-53,easy,Flying Theme,et,baby_yoda;buzz_lightyear;darth_vader;optimus_prime;megatron,fec27d42490e45fc,7AR6KQOiNHA
+53,easy,Flying Theme,et,baby_yoda;buzz_lightyear;darth_vader;voldemort;gandalf,fec27d42490e45fc,7AR6KQOiNHA
 54,medium,Mission Impossible Theme,ethan_hunt_tc,james_bond;jason_bourne;nathan_drake;indiana_jones;john_mcclane,ad45d0ff817a4376,YBZ6GPCJcxM
 55,easy,I'm Forrest... Forrest Gump,forrest_gump_hanks,davinci_code_hanks;saving_private_ryan_hanks;apollo13_hanks;philadelphia_hanks;cast_away_hanks,1d17b42b5dd54146,L4tetTHHPEQ
 56,medium,The White Rider,gandalf,dumbledore;moses;doctor_strange;merlin;harry_potter,748df294431a4797,HgV-prS1tyU
@@ -56,16 +56,16 @@ id,difficulty,song,correct_character,other_characters,spotify_uri,youtube_id
 60,medium,Spiderman Main Title,green_goblin,wolverine;doctor_doom;erik_killmonger;thanos;voldemort,d682f7381e9d4e2d,tbhdL8VLhwI
 61,medium,The Green Mile,green_mile_hanks,philadelphia_hanks;saving_private_ryan_hanks;forrest_gump_hanks;cast_away_hanks;sully_hanks,ce9b9b7163ed4217,gSXdiuOj3b8
 62,medium,In the Hall of the Mountain King,grieg,beethoven;mozart;bach;chopin;schubert,22d321ae55c14913,IKwstbpvNMc
-63,medium,Hagrid the Professor,hagrid,gandalf;hook;saruman;aslan;mufasa,407879ec571049e1,sM62wvwVEk0
+63,medium,Hedwig's Theme,hagrid,gandalf;hook;saruman;aslan;mufasa,407879ec571049e1,wtHra9tFISY
 64,medium,The Asteroid Field,han_solo,indiana_jones;ethan_hunt_tc;maverick_tc;james_bond;indiana_jones,e14d1c25f3ab4bf5,XNDEljd1cQI
 65,medium,Lisan al Gaib,harkonnen,sauron;voldemort;saruman;thanos;erik_killmonger,f4f05d9ccf9b440c,HnES5cg-5Rc
 66,easy,Jingle Bell Rock,harry_bandit,lucas;patrick;charlie_brown;good_men_tc;interstellar,2f484af53eca4cc9,Z0ajuTaHBtM
 67,easy,Hedwig's Theme,harry_potter,rose;gandalf;doctor_strange;merlin;luke_skywalker,3941cdb7fe294be8,wtHra9tFISY
 68,medium,Breaking Bad Theme,heisenberg,philadelphia_hanks;dexter;rick_grimes;rust_cohle;tony_montana,2335fb95143c45c5,ilfYnhXD-bE
-69,medium,Hold the Door,hodor,hagrid;samwise;boromir;aragorn;william_wallace,f72d3232474c4bd6,GFgwGctudfM
+69,medium,Game of Thrones Theme,hodor,hagrid;samwise;boromir;aragorn;william_wallace,f72d3232474c4bd6,uXZd_W5B7N0
 70,medium,Hook-Napped,hook,jack_sparrow;blackbeard;long_john_silver;conan;captain_phillips_hanks,ffed86dfcf5b4394,MLCCEuIAG9M
 71,easy,Husvagn,husvagn,pippi;marv;ove;kevin_mccallister;truckdriver,270dc12079d94e6c,t4CGLR6A3kM
-72,medium,Top Gun Theme,iceman,javier_pena;han_solo;ethan_hunt_tc;james_bond;jason_bourne,7ce50e2d98524462,iNJLFWlfep4
+72,medium,Top Gun Theme,iceman,javier_pena;han_solo;voldemort;james_bond;jason_bourne,7ce50e2d98524462,iNJLFWlfep4
 73,medium,Time (Inception),inception,interstellar;edge_of_tmrw_tc;luke_skywalker;jack_dawson;doctor_strange,4441b2cc18bb4695,jgyShFzdB_Q
 74,medium,Raiders March,indiana_jones,nathan_drake;ethan_hunt_tc;james_bond;saruman;hook,6fab03af2f68490d,bC77czRbjd0
 75,medium,Inspector Gadget Theme,inspector_gadget,sherlock_holmes;poirot;clouseau;nathan_drake;rick_sanchez,79555f407caa438e,XUB8ScEhPsA
@@ -90,12 +90,12 @@ id,difficulty,song,correct_character,other_characters,spotify_uri,youtube_id
 94,medium,Get Back,les_grossman_tc,j_jonah_jameson;venkman;tony_stark;maverick_tc;jerry_maguire_tc,f277205e890740d3,ELPbTvc-3J0
 95,medium,I'm Still Here,long_john_silver,jack_sparrow;blackbeard;hook;moses;captain_phillips_hanks,5b93949e3d2145aa,MUZwblurraA
 96,easy,Star Wars Theme,luke_skywalker,indiana_jones;optimus_prime;neytiri;eleven;ethan_hunt_tc,72f675c015344bef,HrIJT_4Txqw
-97,medium,The Mandalorian Theme,mandalorian,luke_skywalker;han_solo;boromir;black_adam;darth_vader,61135cc40a924d97,xXp4GnC1Z3Q
+97,medium,The Mandalorian Theme,mandalorian,voldemort;gandalf;boromir;black_adam;darth_vader,61135cc40a924d97,xXp4GnC1Z3Q
 98,medium,America,maria_west_side_story,anastasia;glinda;rose;esmeralda;simone,ef9c69e8bc8d41f7,_Tihl3pzWRc
 99,easy,Johnny B. Goode,marty_mcfly,marv;rick_sanchez;tony_stark;indiana_jones;nathan_drake,8681f16c4fda4416,eINKTGikDXg
 100,easy,Carol of the Bells,marv,meeko;rafiki;john_mcclane;chief_brody;les_grossman_tc,23810feeab5a45ee,5zSfb5vmkPc
 101,easy,Spider-Man Theme,mary_jane,jasmine;ariel;sarah_connor;mulan;maria_west_side_story,0b7b8956fda14964,tbhdL8VLhwI
-102,medium,You're Welcome,maui,voldemort;aladdin;mushu;donkey;black_adam,0b1b4eb4215f48ef,CTvjhbfrgEY
+102,medium,You're Welcome,maui,voldemort;aladdin;mushu;donkey;gandalf,0b1b4eb4215f48ef,CTvjhbfrgEY
 103,medium,Danger Zone,maverick_tc,les_grossman_tc;good_men_tc;ethan_hunt_tc;rain_man_tc;jerry_maguire_tc,89a0240e1c524f97,9ID4RAqCqnQ
 1,easy,Now We Are Free,maximus,leonidas;william_wallace;aragorn;boromir;conan,619068248c2249d9,ghxzLw2wRis
 105,easy,Colors of the Wind,meeko,abu;mushu;rafiki;donkey;philoctetes,3108547ffedc499f,hcmpj5HPue0
@@ -155,7 +155,7 @@ id,difficulty,song,correct_character,other_characters,spotify_uri,youtube_id
 161,medium,Game of Thrones Theme,tyrion_lannister,aragorn;william_wallace;maximus;leonidas;conan,44421bfa167041c9,uXZd_W5B7N0
 162,medium,Interview with the Vampire Theme,vampire_tc,jack_sparrow;phantom;pennywise;voldemort;beetlejuice,f427bd137bb84415,k53aLj72MYE
 163,medium,Ghostbusters Theme,venkman,philadelphia_hanks;marv;rick_sanchez;marty_mcfly;doc_brown,c3ebdec3033e4ae7,TaV1r341wYk
-164,medium,Voldemort Theme,voldemort,saruman;sauron;doctor_doom;thanos;darth_vader,8203f96260134b8a,wtHra9tFISY
+164,medium,Hedwig's Theme,voldemort,saruman;sauron;doctor_doom;thanos;darth_vader,8203f96260134b8a,wtHra9tFISY
 165,medium,Braveheart Theme,william_wallace,maximus;leonidas;aragorn;boromir;conan,04f1829312b94f6f,gfHjh8KLURI
 166,medium,Cast Away Theme,wilson,saving_private_ryan_hanks;interstellar;schindler;william_wallace;jack_dawson,6e67c0956bc54402,eUsvnTYuO2Q
 167,medium,Sweet Dreams,wolverine,batman;spiderman;black_adam;miles_morales;static_shock,111b08bbdb4f4e76,eRhg7qPLeN8
