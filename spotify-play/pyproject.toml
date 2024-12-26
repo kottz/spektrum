@@ -6,7 +6,10 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "aioconsole>=0.8.1",
+    "pandas>=2.2.3",
     "python-dotenv>=1.0.1",
     "requests>=2.32.3",
+    "spotipy>=2.24.0",
     "websockets>=14.1",
+    "ytmusicapi>=1.9.0",
 ]
