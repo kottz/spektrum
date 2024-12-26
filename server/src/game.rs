@@ -205,9 +205,8 @@ pub struct GameState {
     pub current_alternatives: Vec<String>,
     pub correct_answers: Option<Vec<String>>,
     pub current_question: Option<GameQuestion>,
-    pub used_questions: HashSet<u32>, // Track by question ID instead of spotify_uri
     pub all_questions: Vec<GameQuestion>, // Replace all_songs
-    pub current_question_index: usize, // Rename but same functionality
+    pub current_question_index: usize,    // Rename but same functionality
 }
 
 pub struct GameEngine {
@@ -228,7 +227,6 @@ impl GameEngine {
                 current_alternatives: Vec::new(),
                 correct_answers: None,
                 current_question: None,
-                used_questions: HashSet::new(),
                 all_questions: questions,
                 current_question_index: 0,
             },
@@ -490,18 +488,28 @@ impl GameEngine {
             }];
         }
 
+        // Check if we're out of questions before trying to start a new round
+        if self.state.current_question_index >= self.state.all_questions.len() {
+            return vec![GameResponse {
+                recipients: Recipients::Single(self.state.admin_id),
+                payload: ResponsePayload::Error {
+                    code: ErrorCode::InvalidAction,
+                    message: "No more questions available. Please end the game.".into(),
+                },
+            }];
+        }
+
         // Reset all players' answer state
         for player in self.state.players.values_mut() {
             player.has_answered = false;
             player.answer = None;
         }
 
-        // Setup the round with the current question or specified alternatives
+        // Setup the round
         match self.setup_round(specified_alternatives) {
             Ok(()) => {
                 self.state.phase = GamePhase::Question;
                 self.state.round_start_time = Some(ctx.timestamp);
-                // find if questoins are color or character
 
                 let mut outputs = Vec::new();
                 outputs.push(GameResponse {
@@ -520,7 +528,6 @@ impl GameEngine {
                     },
                 });
 
-                // If there's a current question, send it to the admin
                 if let Some(question) = &self.state.current_question {
                     outputs.push(GameResponse {
                         recipients: Recipients::Single(self.state.admin_id),
@@ -543,7 +550,6 @@ impl GameEngine {
     }
 
     fn handle_end_round(&mut self, ctx: EventContext) -> Vec<GameResponse> {
-        // Phase check remains the same
         if self.state.phase != GamePhase::Question {
             return vec![GameResponse {
                 recipients: Recipients::Single(ctx.sender_id),
@@ -552,11 +558,6 @@ impl GameEngine {
                     message: "Can only end round from question phase".into(),
                 },
             }];
-        }
-
-        // Mark current question as used
-        if let Some(question) = &self.state.current_question {
-            self.state.used_questions.insert(question.get_id());
         }
 
         // Reset state for next round
@@ -601,12 +602,7 @@ impl GameEngine {
             }];
         }
 
-        // Mark current question as used if it exists
-        if let Some(question) = &self.state.current_question {
-            self.state.used_questions.insert(question.get_id());
-        }
-
-        // Reset state for next question
+        // Don't mark as used when skipping, just move to the next question
         self.state.current_question = None;
         self.state.current_question_index += 1;
         self.state.current_alternatives.clear();
@@ -669,13 +665,6 @@ impl GameEngine {
         }
 
         let next_question = &self.state.all_questions[self.state.current_question_index];
-
-        if self.state.used_questions.contains(&next_question.get_id()) {
-            // This should ideally not happen if the index is managed correctly,
-            // but adding a safeguard.
-            return Err("This question has already been used".to_string());
-        }
-
         self.state.current_question = Some(next_question.clone());
         self.state.correct_answers = Some(next_question.get_correct_answer());
 
@@ -701,20 +690,12 @@ impl GameEngine {
     }
 
     fn get_upcoming_questions(&self, count: usize) -> Vec<GameQuestion> {
+        if self.state.current_question_index >= self.state.all_questions.len() {
+            return Vec::new(); // Return empty vec if we're at or past the end
+        }
         let start = self.state.current_question_index;
         let end = std::cmp::min(start + count, self.state.all_questions.len());
-        let mut upcoming = Vec::new();
-
-        for i in start..end {
-            if !self
-                .state
-                .used_questions
-                .contains(&self.state.all_questions[i].get_id())
-            {
-                upcoming.push(self.state.all_questions[i].clone());
-            }
-        }
-        upcoming
+        self.state.all_questions[start..end].to_vec()
     }
 }
 
@@ -766,7 +747,7 @@ mod tests {
         let engine = GameEngine::new(admin_id, questions, 30);
         assert_eq!(engine.state.phase, GamePhase::Lobby);
         assert!(engine.state.current_alternatives.is_empty());
-        assert!(engine.state.correct_answer.is_none());
+        assert!(engine.state.correct_answers.is_none()); //fix
     }
 
     #[test]
@@ -854,7 +835,7 @@ mod tests {
         // Setup game state
         engine.state.phase = GamePhase::Question;
         engine.state.round_start_time = Some(Instant::now());
-        engine.state.correct_answer = Some("RED".to_string());
+        engine.state.correct_answers = Some(vec!["RED".to_string()]);
         engine.state.current_alternatives = vec!["RED".to_string(), "BLUE".to_string()];
         engine
             .state
