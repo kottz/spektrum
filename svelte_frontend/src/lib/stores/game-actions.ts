@@ -45,6 +45,22 @@ class GameActions {
         }
     }
 
+    public submitAnswer(answer: string) {
+        const state = gameStore.getState();
+        if (!state.lobbyId) {
+            console.error('No active lobby');
+            return;
+        }
+
+        const message: ClientMessage = {
+            type: 'Answer',
+            lobby_id: state.lobbyId,
+            answer
+        };
+
+        websocketStore.send(message);
+    }
+
     private sendAdminAction(action: AdminAction) {
         const state = gameStore.getState();
         if (!state.lobbyId || !state.isAdmin) {
