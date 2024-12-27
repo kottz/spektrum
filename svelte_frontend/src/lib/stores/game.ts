@@ -1,4 +1,3 @@
-// src/lib/stores/game.ts
 import { writable, derived, get } from 'svelte/store';
 import { websocketStore } from './websocket';
 import { browser } from '$app/environment';
@@ -51,7 +50,7 @@ function createGameStore() {
                     });
                     return {
                         ...state,
-                        phase: message.phase,
+                        phase: message.phase.toLowerCase() as GamePhase, // Convert to proper phase enum
                         players: newPlayers,
                         currentQuestion: message.alternatives ? {
                             type: message.question_type,

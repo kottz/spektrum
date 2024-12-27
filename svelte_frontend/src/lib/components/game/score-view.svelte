@@ -1,4 +1,3 @@
-// src/lib/components/game/score-view.svelte
 <script lang="ts">
     import { gameStore } from '../../stores/game';
     import { gameActions } from '../../stores/game-actions';
