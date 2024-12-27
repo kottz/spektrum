@@ -2,12 +2,14 @@
     import { gameStore } from '../../stores/game';
     import { gameActions } from '../../stores/game-actions';
     import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
+    import AnswerProgress from './answer-progress.svelte';
 
     // Get current game state
     $: alternatives = $gameStore.currentQuestion?.alternatives || [];
     $: currentPlayer = $gameStore.playerName ? 
         $gameStore.players.get($gameStore.playerName) : undefined;
     $: hasAnswered = currentPlayer?.hasAnswered || false;
+    $: selectedAnswer = currentPlayer?.answer;
     $: timeRemaining = $gameStore.roundDuration;
 
     function handleAnswer(answer: string) {
@@ -15,9 +17,27 @@
             gameActions.submitAnswer(answer);
         }
     }
+
+    function getButtonStyles(alternative: string) {
+        if (hasAnswered) {
+            if (alternative === selectedAnswer) {
+                return 'bg-zinc-800/50 border-blue-500 border-2';
+            }
+            return 'bg-zinc-800/50 opacity-50';
+        }
+        return 'bg-zinc-800/50 hover:bg-zinc-700/50 hover:border-zinc-600 border-2 border-transparent';
+    }
 </script>
 
-<div class="container mx-auto max-w-2xl p-6">
+<div class="container mx-auto max-w-2xl p-6 space-y-6">
+    <!-- Answer Progress -->
+    <Card class="border-zinc-800 bg-zinc-900/50">
+        <CardContent class="p-4">
+            <AnswerProgress />
+        </CardContent>
+    </Card>
+
+    <!-- Answer Options -->
     <Card class="border-zinc-800 bg-zinc-900/50">
         <CardHeader>
             <CardTitle class="flex justify-between items-center">
@@ -29,12 +49,7 @@
             <div class="grid grid-cols-2 gap-4">
                 {#each alternatives as alternative}
                     <button
-                        class="aspect-square rounded-lg border-2 border-transparent p-4 
-                               {hasAnswered ? 
-                                   (currentPlayer?.answer === alternative ? 
-                                       'bg-blue-500/20 border-blue-500' : 
-                                       'bg-zinc-800/50 opacity-50') : 
-                                   'bg-zinc-800/50 hover:bg-zinc-700/50'}"
+                        class="aspect-square rounded-lg transition-all duration-200 {getButtonStyles(alternative)}"
                         disabled={hasAnswered}
                         on:click={() => handleAnswer(alternative)}
                     >
