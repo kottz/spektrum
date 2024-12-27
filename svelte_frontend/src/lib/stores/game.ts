@@ -27,7 +27,7 @@ function createGameStore() {
 
     function handleServerMessage(message: ServerMessage) {
         console.log('Handling server message:', message);
-        
+
         if (message.type === 'GameClosed') {
             console.log('Game closed, cleaning up...');
             cleanup();
@@ -61,6 +61,11 @@ function createGameStore() {
                     return {
                         ...state,
                         phase: 'gameover'
+                    };
+                case 'AdminNextQuestions':
+                    return {
+                        ...state,
+                        upcomingQuestions: message.upcoming_questions
                     };
                 default:
                     return state;
