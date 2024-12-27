@@ -9,35 +9,39 @@
     $: phase = $gameStore.phase;
     $: players = Array.from($gameStore.players.values());
     $: playerCount = players.length;
-    $: currentQuestion = $gameStore.currentQuestion;
     $: roundAnswers = players.filter(p => p.hasAnswered).length;
 
-    function getPhaseAction(): { text: string; action: () => void } {
+    // Determine primary action based on game phase
+    function getPrimaryAction(): { text: string; action: () => void; disabled: boolean } {
         switch (phase) {
             case GamePhase.Lobby:
                 return {
-                    text: playerCount < 2 ? 'Waiting for Players...' : 'Start Game',
-                    action: () => gameActions.startGame()
+                    text: 'Start Game',
+                    action: () => gameActions.startGame(),
+                    disabled: false
+                };
+            case GamePhase.Score:
+                return {
+                    text: 'Start Round',
+                    action: () => gameActions.startRound(),
+                    disabled: false
                 };
             case GamePhase.Question:
                 return {
                     text: 'End Round',
-                    action: () => gameActions.endRound()
-                };
-            case GamePhase.Score:
-                return {
-                    text: 'Start Next Round',
-                    action: () => gameActions.startRound()
+                    action: () => gameActions.endRound(),
+                    disabled: false
                 };
             default:
                 return {
-                    text: 'Unknown Phase',
-                    action: () => {}
+                    text: 'Waiting...',
+                    action: () => {},
+                    disabled: true
                 };
         }
     }
 
-    $: phaseAction = getPhaseAction();
+    $: primaryAction = getPrimaryAction();
 </script>
 
 <Card class="border-zinc-800 bg-zinc-900/50">
@@ -75,40 +79,18 @@
             {/if}
         </div>
 
-        <!-- Phase-specific controls -->
+        <!-- Game flow controls -->
         <div class="space-y-4 pt-4 border-t border-zinc-800">
-            <!-- Main phase action button -->
+            <!-- Primary action button (Start Game/Start Round/End Round) -->
             <Button
                 class="w-full"
-                disabled={phase === GamePhase.Lobby && playerCount < 2}
-                on:click={phaseAction.action}
+                disabled={primaryAction.disabled}
+                on:click={primaryAction.action}
             >
-                {phaseAction.text}
+                {primaryAction.text}
             </Button>
 
-            <!-- Skip question button (only during question phase) -->
-            {#if phase === GamePhase.Question}
-                <Button
-                    variant="outline"
-                    class="w-full border-zinc-800"
-                    on:click={() => gameActions.skipQuestion()}
-                >
-                    Skip Question
-                </Button>
-            {/if}
-
-            <!-- End game button (not in game over phase) -->
-            {#if phase !== GamePhase.GameOver}
-                <Button
-                    variant="destructive"
-                    class="w-full"
-                    on:click={() => gameActions.endGame()}
-                >
-                    End Game
-                </Button>
-            {/if}
-
-            <!-- Close lobby button (always available) -->
+            <!-- End game button -->
             <Button
                 variant="destructive"
                 class="w-full"

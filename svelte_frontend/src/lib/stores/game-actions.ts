@@ -37,7 +37,7 @@ class GameActions {
             gameStore.setJoinCode(data.join_code);
             gameStore.setLobbyId(data.lobby_id);
             websocketStore.connect(data.join_code, playerName, data.admin_id);
-            
+
             return data.join_code;
         } catch (error) {
             console.error('Failed to create game:', error);
@@ -55,12 +55,10 @@ class GameActions {
         const message: ClientMessage = {
             type: 'AdminAction',
             lobby_id: state.lobbyId,
-            action: {
-                ...action,
-                admin_id: state.adminId // Include admin ID in action
-            }
+            action
         };
 
+        console.log('Sending admin action:', message);
         websocketStore.send(message);
     }
 
@@ -68,7 +66,7 @@ class GameActions {
         this.sendAdminAction({ type: 'StartGame' });
     }
 
-    public startRound(specifiedAlternatives?: string[]) {
+    public startRound(specifiedAlternatives: string[] | null = null) {
         this.sendAdminAction({
             type: 'StartRound',
             specified_alternatives: specifiedAlternatives
