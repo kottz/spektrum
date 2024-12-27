@@ -11,8 +11,9 @@
     $: roundAnswers = players.filter(p => p.hasAnswered).length;
     
     // Game state checks
-    $: isGameRunning = phase !== 'lobby';
+    $: isGameRunning = phase !== 'lobby' && phase !== 'gameover';
     $: isInQuestion = phase === 'question';
+    $: isGameOver = phase === 'gameover';
 </script>
 
 <Card class="border-zinc-800 bg-zinc-900/50">
@@ -52,33 +53,44 @@
 
         <!-- Game flow controls -->
         <div class="space-y-4 pt-4 border-t border-zinc-800">
-            <!-- Game control -->
-            <Button
-                class="w-full"
-                variant={isGameRunning ? "destructive" : "default"}
-                on:click={() => isGameRunning ? gameActions.endGame() : gameActions.startGame()}
-            >
-                {isGameRunning ? 'End Game' : 'Start Game'}
-            </Button>
-
-            <!-- Round control - only shown when game is running -->
-            {#if isGameRunning}
+            {#if !isGameOver}
+                <!-- Game control -->
                 <Button
                     class="w-full"
-                    on:click={() => isInQuestion ? gameActions.endRound() : gameActions.startRound()}
+                    variant={isGameRunning ? "destructive" : "default"}
+                    on:click={() => isGameRunning ? gameActions.endGame() : gameActions.startGame()}
                 >
-                    {isInQuestion ? 'End Round' : 'Start Round'}
+                    {isGameRunning ? 'End Game' : 'Start Game'}
+                </Button>
+
+                <!-- Round control - only shown when game is running -->
+                {#if isGameRunning}
+                    <Button
+                        class="w-full"
+                        on:click={() => isInQuestion ? gameActions.endRound() : gameActions.startRound()}
+                    >
+                        {isInQuestion ? 'End Round' : 'Start Round'}
+                    </Button>
+                {/if}
+
+                <!-- Close game button -->
+                <Button
+                    variant="destructive"
+                    class="w-full"
+                    on:click={() => gameActions.closeGame()}
+                >
+                    Close Lobby
+                </Button>
+            {:else}
+                <!-- Leave button - only button shown when game is closed -->
+                <Button
+                    variant="default"
+                    class="w-full"
+                    on:click={() => gameActions.leaveGame()}
+                >
+                    Leave Lobby
                 </Button>
             {/if}
-
-            <!-- Close lobby button -->
-            <Button
-                variant="destructive"
-                class="w-full"
-                on:click={() => gameActions.closeGame()}
-            >
-                Close Lobby
-            </Button>
         </div>
     </CardContent>
 </Card>

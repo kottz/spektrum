@@ -57,6 +57,11 @@ function createGameStore() {
                             alternatives: message.alternatives
                         } : undefined
                     };
+                case 'GameOver':
+                    return {
+                        ...state,
+                        phase: 'gameover'
+                    };
                 default:
                     return state;
             }
