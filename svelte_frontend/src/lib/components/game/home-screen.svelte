@@ -1,4 +1,3 @@
-// src/lib/components/game/home-screen.svelte
 <script lang="ts">
     import { Button } from '$lib/components/ui/button';
     import { Input } from '$lib/components/ui/input';
@@ -6,14 +5,12 @@
     import { gameActions } from '../../stores/game-actions';
     import { gameStore } from '../../stores/game';
 
-    // Props that will be bound from the parent
-    export let screen: 'home' | 'game' | 'admin';
-    export let playerName: string;
-    export let lobbyCode: string;
-
-    // Loading states
-    let isCreating = false;
+    export let playerName = "";
+    export let lobbyCode = "";
+    
     let isJoining = false;
+    let isCreating = false;
+    let joinError = '';
 
     const handleCreateLobby = async () => {
         if (isCreating) return;
@@ -21,7 +18,6 @@
         try {
             isCreating = true;
             await gameActions.createGame();
-            screen = 'admin';
         } catch (error) {
             console.error("Error creating lobby:", error);
             alert('Failed to create lobby. Please try again.');
@@ -31,8 +27,6 @@
     };
 
     const handleJoinGame = async () => {
-        if (isJoining) return;
-        
         if (!lobbyCode || !playerName) {
             alert('Please enter both lobby code and player name');
             return;
@@ -40,18 +34,15 @@
 
         try {
             isJoining = true;
+            joinError = '';
             await gameActions.joinGame(lobbyCode, playerName);
-            screen = 'game';
         } catch (error) {
             console.error("Error joining game:", error);
-            alert('Failed to join game. Please check your code and try again.');
+            joinError = 'Failed to join game. Please check your code and try again.';
         } finally {
             isJoining = false;
         }
     };
-
-    // Clear any existing game state when showing home screen
-    gameStore.cleanup();
 </script>
 
 <div class="container flex min-h-screen flex-col items-center justify-center gap-8 py-8">
@@ -81,7 +72,7 @@
         <!-- Join Lobby Card -->
         <Card class="border-zinc-800 bg-zinc-900/50 shadow-xl">
             <CardHeader>
-                <CardTitle>Join Lobby</CardTitle>
+                <CardTitle>Join Game</CardTitle>
             </CardHeader>
             <CardContent class="grid gap-4">
                 <Input
@@ -98,6 +89,11 @@
                     class="border-zinc-800 bg-zinc-900/50"
                     disabled={isJoining}
                 />
+                {#if joinError}
+                    <div class="text-sm text-red-400">
+                        {joinError}
+                    </div>
+                {/if}
                 <Button
                     size="lg"
                     class="w-full bg-primary font-medium hover:bg-primary/90"
@@ -109,11 +105,4 @@
             </CardContent>
         </Card>
     </div>
-
-    <!-- Error display -->
-    {#if $gameStore.error}
-        <div class="w-full max-w-lg p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500">
-            {$gameStore.error}
-        </div>
-    {/if}
 </div>

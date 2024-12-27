@@ -37,6 +37,25 @@ function createGameStore() {
 
         store.update(state => {
             switch (message.type) {
+                case 'JoinedLobby':
+                    return {
+                        ...state,
+                        lobbyId: message.lobby_id,
+                        playerId: message.player_id,
+                        playerName: message.name,
+                        roundDuration: message.round_duration,
+                        joinCode: message.join_code,
+                        isAdmin: false, // Ensure we're not admin when joining
+                        players: new Map(message.players.map(([name, score]) => [
+                            name,
+                            {
+                                name,
+                                score,
+                                hasAnswered: false,
+                                answer: null
+                            }
+                        ]))
+                    };
                 case 'StateChanged':
                     console.log('State changed:', message);
                     // Update players from scoreboard

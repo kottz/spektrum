@@ -2,7 +2,6 @@
   import { gameStore } from "../../stores/game";
   import QuestionView from "./question-view.svelte";
   import ScoreView from "./score-view.svelte";
-  import LobbyView from "./lobby-view.svelte";
   import GameOver from "./game-over.svelte";
   import { GamePhase } from "../../types/game";
 
@@ -12,10 +11,7 @@
   $: phase = $gameStore.phase;
 </script>
 
-<!-- Players see different views based on game phase -->
-{#if phase === GamePhase.Lobby}
-  <LobbyView />
-{:else if phase === GamePhase.Question}
+{#if phase === GamePhase.Question}
   <QuestionView />
 {:else if phase === GamePhase.Score}
   <ScoreView />
