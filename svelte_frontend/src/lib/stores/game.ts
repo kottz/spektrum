@@ -11,6 +11,7 @@ const initialState: GameState = {
     lobbyId: undefined,
     roundDuration: 60,
     players: new Map(),
+    currentAnswers: [],
 };
 
 function createGameStore() {
@@ -50,8 +51,10 @@ function createGameStore() {
                     });
                     return {
                         ...state,
-                        phase: message.phase.toLowerCase() as GamePhase, // Convert to proper phase enum
+                        phase: message.phase.toLowerCase() as GamePhase,
                         players: newPlayers,
+                        // Clear answers when entering score phase (round ended)
+                        currentAnswers: message.phase.toLowerCase() === 'score' ? [] : state.currentAnswers,
                         currentQuestion: message.alternatives ? {
                             type: message.question_type,
                             alternatives: message.alternatives
@@ -66,6 +69,22 @@ function createGameStore() {
                     return {
                         ...state,
                         upcomingQuestions: message.upcoming_questions
+                    };
+                case 'PlayerAnswered':
+                    // Don't add duplicate answers
+                    if (state.currentAnswers?.some(a => a.name === message.name)) {
+                        return state;
+                    }
+                    return {
+                        ...state,
+                        currentAnswers: [
+                            ...(state.currentAnswers || []),
+                            {
+                                name: message.name,
+                                correct: message.correct,
+                                timestamp: Date.now()
+                            }
+                        ]
                     };
                 default:
                     return state;

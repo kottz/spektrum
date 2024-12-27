@@ -20,6 +20,12 @@ export enum ErrorCode {
 	InvalidName = 'InvalidName'
 }
 
+export interface PlayerAnswer {
+    name: string;
+    correct: boolean;
+    timestamp: number;
+}
+
 // Player state
 export interface PlayerState {
 	name: string;
@@ -52,6 +58,7 @@ export interface GameState {
 		correct_character?: string;
 		colors?: string[];
 	}>;
+	currentAnswers: PlayerAnswer[];
 }
 
 // Game question type
