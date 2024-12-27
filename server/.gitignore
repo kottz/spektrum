@@ -2,3 +2,4 @@
 cert*
 key*
 *.pem
+config.toml
