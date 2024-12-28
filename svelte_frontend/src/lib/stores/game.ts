@@ -124,10 +124,10 @@ function createGameStore() {
                     };
                 }
                 case 'AdminNextQuestions': {
-                    // During score phase, preload the next video
+                    // Load the next video regardless of current phase
                     const nextQuestion = message.upcoming_questions[0];
                     if (nextQuestion?.youtube_id) {
-                        console.log('Preloading next video:', nextQuestion.youtube_id);
+                        console.log('Loading next video:', nextQuestion.youtube_id);
                         youtubeStore.loadVideo(nextQuestion.youtube_id);
                     }
                     return {

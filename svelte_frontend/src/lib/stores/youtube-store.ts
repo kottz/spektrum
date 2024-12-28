@@ -6,6 +6,7 @@ interface YouTubeState {
     isLoading: boolean;
     currentVideoId: string | null;
     isPlayerReady: boolean;
+    pendingVideoId: string | null;
 }
 
 function createYouTubeStore() {
@@ -13,7 +14,8 @@ function createYouTubeStore() {
         player: null,
         isLoading: false,
         currentVideoId: null,
-        isPlayerReady: false
+        isPlayerReady: false,
+        pendingVideoId: null
     });
 
     let autoplayPending = false;
@@ -30,28 +32,44 @@ function createYouTubeStore() {
 
     function loadVideo(videoId: string) {
         const state = get({ subscribe });
-        if (state.player && state.isPlayerReady) {
-            console.log('Loading video:', videoId);
-            // Only load if it's different from current
-            if (state.currentVideoId !== videoId) {
-                state.player.cueVideoById(videoId);
-            }
-            update(state => ({ ...state, currentVideoId: videoId }));
+        console.log('Load video requested:', videoId, 'Player ready:', state.isPlayerReady);
+
+        if (!state.isPlayerReady || !state.player) {
+            // Store the video ID to load when player is ready
+            console.log('Player not ready, storing video ID for later:', videoId);
+            update(state => ({ ...state, pendingVideoId: videoId }));
+            return;
+        }
+
+        if (state.currentVideoId !== videoId) {
+            console.log('Loading new video:', videoId);
+            state.player.cueVideoById(videoId);
+            update(state => ({
+                ...state,
+                currentVideoId: videoId,
+                pendingVideoId: null
+            }));
+        } else {
+            console.log('Video already loaded:', videoId);
         }
     }
 
     async function verifyAndPlayVideo(expectedVideoId: string): Promise<boolean> {
         const state = get({ subscribe });
-        if (!state.player || !state.isPlayerReady) return false;
+        if (!state.player || !state.isPlayerReady) {
+            console.log('Player not ready for verification');
+            return false;
+        }
 
         try {
             const currentVideoId = state.player.getVideoData()?.video_id;
             console.log('Verifying video before play:', { current: currentVideoId, expected: expectedVideoId });
 
             if (currentVideoId !== expectedVideoId) {
-                // We have the wrong video loaded, need to load and play the correct one
+                // Wrong video loaded, need to load the correct one
                 console.log('Video mismatch, loading correct video');
                 state.player.loadVideoById(expectedVideoId);
+                update(state => ({ ...state, currentVideoId: expectedVideoId }));
                 return true;
             } else {
                 // Correct video is already loaded, just play it
@@ -69,6 +87,7 @@ function createYouTubeStore() {
         const state = get({ subscribe });
         if (!state.player || !state.isPlayerReady) {
             if (phase === 'question') {
+                console.log('Setting autoplay pending due to player not ready');
                 autoplayPending = true;
             }
             return;
@@ -78,9 +97,10 @@ function createYouTubeStore() {
 
         switch (phase.toLowerCase()) {
             case 'question':
-                // Verify and play current video
-                if (state.currentVideoId) {
-                    verifyAndPlayVideo(state.currentVideoId);
+                if (state.currentVideoId || state.pendingVideoId) {
+                    const videoId = state.currentVideoId || state.pendingVideoId;
+                    console.log('Question phase: verifying and playing video:', videoId);
+                    verifyAndPlayVideo(videoId!);
                 }
                 break;
             case 'score':
@@ -100,12 +120,22 @@ function createYouTubeStore() {
         initializeAPI,
         setPlayer: (player: YT.Player) => {
             console.log('Setting player');
+            const state = get({ subscribe });
+
             update(state => ({
                 ...state,
                 player,
                 isPlayerReady: true
             }));
-            if (autoplayPending) {
+
+            // If we have a pending video, load it now
+            if (state.pendingVideoId) {
+                console.log('Loading pending video:', state.pendingVideoId);
+                loadVideo(state.pendingVideoId);
+            }
+
+            if (autoplayPending && state.currentVideoId) {
+                console.log('Executing pending autoplay');
                 player.playVideo();
                 autoplayPending = false;
             }
@@ -113,13 +143,15 @@ function createYouTubeStore() {
         loadVideo,
         handlePhaseChange,
         cleanup: () => {
+            console.log('Cleaning up YouTube player');
             update(state => {
                 state.player?.destroy();
                 return {
                     player: null,
                     isLoading: false,
                     currentVideoId: null,
-                    isPlayerReady: false
+                    isPlayerReady: false,
+                    pendingVideoId: null
                 };
             });
         }
