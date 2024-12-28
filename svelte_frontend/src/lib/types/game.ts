@@ -21,9 +21,9 @@ export enum ErrorCode {
 }
 
 export interface PlayerAnswer {
-    name: string;
-    correct: boolean;
-    timestamp: number;
+	name: string;
+	correct: boolean;
+	timestamp: number;
 }
 
 // Player state
@@ -47,6 +47,11 @@ export interface GameState {
 	currentQuestion?: {
 		type: string;
 		alternatives: string[];
+	};
+	currentSong?: {
+		songName: string;
+		artist: string;
+		youtubeId: string;
 	};
 	error?: string;
 	upcomingQuestions?: Array<{

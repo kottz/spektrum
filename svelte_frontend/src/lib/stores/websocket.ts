@@ -41,7 +41,7 @@ function createWebSocketStore() {
 
 		update(state => ({ ...state, isConnecting: true }));
 
-		const wsUrl = `ws://localhost:8765/ws`;
+		const wsUrl = `ws://192.168.1.155:8765/ws`; // TODO FIX THIS
 		socket = new WebSocket(wsUrl);
 
 		socket.onopen = () => {
