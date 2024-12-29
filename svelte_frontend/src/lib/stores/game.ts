@@ -1,3 +1,4 @@
+// src/lib/stores/game.ts
 import { writable, derived, get } from 'svelte/store';
 import { websocketStore } from './websocket';
 import { browser } from '$app/environment';

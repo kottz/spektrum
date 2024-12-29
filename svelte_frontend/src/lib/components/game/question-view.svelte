@@ -3,6 +3,7 @@
 	import { gameActions } from '../../stores/game-actions';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import AnswerProgress from './answer-progress.svelte';
+	import RoundTimer from './round-timer.svelte';
 
 	// Get current game state
 	$: alternatives = $gameStore.currentQuestion?.alternatives || [];
@@ -99,6 +100,8 @@
 			<AnswerProgress />
 		</CardContent>
 	</Card>
+
+	<RoundTimer />
 
 	<!-- Answer Options -->
 	<Card>
