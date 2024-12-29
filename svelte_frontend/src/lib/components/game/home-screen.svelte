@@ -4,7 +4,7 @@
     import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
     import { gameActions } from '../../stores/game-actions';
     import { gameStore } from '../../stores/game';
-
+    
     export let playerName = "";
     export let lobbyCode = "";
     
@@ -31,7 +31,6 @@
             alert('Please enter both lobby code and player name');
             return;
         }
-
         try {
             isJoining = true;
             joinError = '';
@@ -50,17 +49,16 @@
         <span class="text-2xl">🎵</span>
         <h1 class="text-3xl font-bold">Music Quiz</h1>
     </div>
-
     <div class="grid w-full max-w-lg gap-6">
         <!-- Create Lobby Card -->
-        <Card class="border-zinc-800 bg-zinc-900/50 shadow-xl">
+        <Card>
             <CardHeader>
                 <CardTitle>Create New Lobby</CardTitle>
             </CardHeader>
             <CardContent>
                 <Button
                     size="lg"
-                    class="w-full bg-primary font-medium hover:bg-primary/90"
+                    class="w-full"
                     on:click={handleCreateLobby}
                     disabled={isCreating}
                 >
@@ -70,7 +68,7 @@
         </Card>
 
         <!-- Join Lobby Card -->
-        <Card class="border-zinc-800 bg-zinc-900/50 shadow-xl">
+        <Card>
             <CardHeader>
                 <CardTitle>Join Game</CardTitle>
             </CardHeader>
@@ -79,24 +77,22 @@
                     name="lobbyCode"
                     placeholder="Enter lobby code"
                     bind:value={lobbyCode}
-                    class="border-zinc-800 bg-zinc-900/50"
                     disabled={isJoining}
                 />
                 <Input
                     name="playerName"
                     placeholder="Enter your name"
                     bind:value={playerName}
-                    class="border-zinc-800 bg-zinc-900/50"
                     disabled={isJoining}
                 />
                 {#if joinError}
-                    <div class="text-sm text-red-400">
+                    <div class="text-sm text-destructive">
                         {joinError}
                     </div>
                 {/if}
                 <Button
                     size="lg"
-                    class="w-full bg-primary font-medium hover:bg-primary/90"
+                    class="w-full"
                     on:click={handleJoinGame}
                     disabled={isJoining || !lobbyCode || !playerName}
                 >

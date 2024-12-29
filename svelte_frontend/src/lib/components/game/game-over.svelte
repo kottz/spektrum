@@ -12,7 +12,7 @@
 
 <div class="space-y-6">
     <!-- Winner announcement -->
-    <Card class="border-zinc-800 bg-zinc-900/50">
+    <Card>
         <CardHeader>
             <CardTitle class="text-center">Game Over!</CardTitle>
         </CardHeader>
@@ -26,7 +26,7 @@
                             Winner: {winner.name}
                         {/if}
                     </div>
-                    <div class="text-zinc-400">
+                    <div class="text-muted-foreground">
                         Final Score: {winner.score} points
                     </div>
                 {/if}
@@ -35,7 +35,7 @@
     </Card>
 
     <!-- Final Scoreboard -->
-    <Card class="border-zinc-800 bg-zinc-900/50">
+    <Card>
         <CardHeader>
             <CardTitle>Final Scores</CardTitle>
         </CardHeader>

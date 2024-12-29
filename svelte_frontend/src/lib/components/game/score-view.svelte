@@ -10,7 +10,7 @@
 
 <div class="container mx-auto max-w-2xl p-6 space-y-6">
     <!-- Scoreboard -->
-    <Card class="border-zinc-800 bg-zinc-900/50">
+    <Card>
         <CardContent class="p-6">
             <Scoreboard />
         </CardContent>
@@ -25,7 +25,7 @@
             Start Next Round
         </Button>
     {:else}
-        <div class="text-center text-zinc-400">
+        <div class="text-center text-muted-foreground">
             Waiting for next round...
         </div>
     {/if}

@@ -17,20 +17,20 @@
         <!-- Main content area -->
         <div class="space-y-6">
             <!-- Join code display -->
-            <Card class="border-zinc-800 bg-zinc-900/50">
+            <Card>
                 <CardContent class="p-4">
                     <div class="flex items-center justify-between">
-                        <div class="text-zinc-400">Join Code:</div>
+                        <div class="text-muted-foreground">Join Code:</div>
                         <div class="font-mono text-lg font-bold">{joinCode}</div>
                     </div>
                 </CardContent>
             </Card>
 
             <!-- Game phase specific content -->
-            <Card class="border-zinc-800 bg-zinc-900/50">
+            <Card>
                 <CardContent>
                     {#if phase === GamePhase.Lobby}
-                        <div class="p-6 text-center text-zinc-400">
+                        <div class="p-6 text-center text-muted-foreground">
                             Waiting for players to join...
                         </div>
                     {:else if phase === GamePhase.Question}
@@ -47,7 +47,6 @@
         <!-- Admin controls sidebar -->
         <div class="space-y-6">
             <AdminControls />
-
             <!-- Error display if any -->
             {#if $gameStore.error}
                 <Card class="border-red-500/20 bg-red-500/10">

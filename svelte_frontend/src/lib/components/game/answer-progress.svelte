@@ -10,13 +10,11 @@
 
 <div class="space-y-2">
     <div class="flex justify-between text-sm">
-        <span class="text-zinc-400">Answers</span>
+        <span class="text-muted-foreground">Answers</span>
         <span>{answers.length}/{players.length}</span>
     </div>
-
     <!-- Progress bar -->
-    <Progress value={progress} class="h-2 bg-zinc-800" />
-
+    <Progress value={progress} class="h-2 bg-muted" />
     <!-- Answer pills -->
     <div class="flex flex-wrap gap-1.5">
         {#each answers as answer}

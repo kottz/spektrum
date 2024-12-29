@@ -20,22 +20,22 @@
         {#each players as player, i}
             <div class="relative">
                 <!-- Background for full width context -->
-                <div class="absolute inset-0 bg-zinc-800/50 rounded-lg" />
+                <div class="absolute inset-0 bg-muted rounded-lg" />
                 
                 <!-- Score bar -->
                 <div 
-                    class="absolute inset-0 bg-zinc-700/50 rounded-lg transition-all duration-500 ease-out" 
+                    class="absolute inset-0 bg-primary/20 rounded-lg transition-all duration-500 ease-out" 
                     style="width: {getScoreWidth(player.score)}"
                 />
                 
                 <!-- Content -->
                 <div class="relative px-4 py-3 flex justify-between items-center">
                     <div class="flex items-center gap-3">
-                        <span class="text-zinc-400">{i + 1}.</span>
+                        <span class="text-muted-foreground">{i + 1}.</span>
                         <span class="font-medium">
                             {player.name}
                             {#if player.name === $gameStore.playerName}
-                                <span class="text-zinc-400">(You)</span>
+                                <span class="text-muted-foreground">(You)</span>
                             {/if}
                         </span>
                     </div>
