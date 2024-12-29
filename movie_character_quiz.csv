@@ -131,7 +131,7 @@ id,difficulty,song,correct_character,other_characters,spotify_uri,youtube_id
 135,medium,Gonna Fly Now,rocky,john_mcclane;conan;jerry_maguire_tc;terminator;maximus,d1ed0a5a1fe24e04,Qwu5zWTEYVs
 136,medium,My Heart Will Go On,rose,maria_west_side_story;dorothy;simone;glinda;mary_jane,0c7b2294f5b64775,Siz-xBfIqpg
 137,medium,Far From Any Road,rust_cohle,rick_grimes;heisenberg;dr_house;dexter;john_mcclane,e4bd982361ee4d78,Y4SjTUPC6gI
-138,medium,Concerning Hobbits,samwise,voldemort;aragorn;boromir;gandalf;saruman,5ae08feabe5f4ee1,CL_3mlOPnGI
+138,medium,Concerning Hobbits,samwise,voldemort;william_wallace;maximus;glinda;conan,5ae08feabe5f4ee1,CL_3mlOPnGI
 139,medium,The Terminator Theme,sarah_connor,john_bender;john_mcclane;javier_pena;oppenheimer;leonidas,3e33443b43cd4019,CnQm2_cAZvo
 140,medium,Saruman the White,saruman,harkonnen;dumbledore;voldemort;hodor;doctor_doom,7304e7baeeb44acb,zRvgiyyqbAY
 141,medium,The Foor of Orthanc,sauron,hodor;hagrid;darth_vader;thanos;doctor_doom,ddda1340c27e4788,beBVpHW_xa4
@@ -187,7 +187,7 @@ id,difficulty,song,correct_character,other_characters,spotify_uri,youtube_id
 193,medium,Hill Street Blues Theme,mick_belker,chief_brody;rick_grimes;john_mcclane;rust_cohle;javier_pena,7c50fac52209414f,h2qK_Qekt-I
 194,medium,MASH Theme,alan_alda,dr_house;rick_grimes;rust_cohle;heisenberg;dexter,db719c0f44784b6e,JQaMkHkx8bA
 195,medium,Kojak Theme,kojak,poirot;sherlock_holmes;inspector_gadget;chief_brody;dr_house,79b6ae706f7840ab,WpN6kQgyyAA
-196,medium,Knight Rider,knight_rider,batman;tony_stark;doc_brown;iron_man;optimus_prime,6807a60c1cd14bea,lxhWxv_5bQ0
+196,medium,Knight Rider,knight_rider,batman;tony_stark;doc_brown;john_mcclane;optimus_prime,6807a60c1cd14bea,lxhWxv_5bQ0
 197,medium,I'm Always Here,hasselhoff,maverick_tc;james_bond;ethan_hunt_tc;jerry_maguire_tc;han_solo,fda78f88d96a47f7,iyHa6VfNPR4
 198,medium,True Survivor,kung_fury,terminator;wolverine;batman;conan;rocky,05e6c6abae6645f1,yXUlX6vDlIg
 199,medium,Mr Bean Theme,mr_bean,venkman;rick_sanchez;doc_brown;sheldon;marty_mcfly,6c9c4a528bfe470c,ArJwmhRmhfA
@@ -195,7 +195,7 @@ id,difficulty,song,correct_character,other_characters,spotify_uri,youtube_id
 201,medium,The Best Of Both Worlds,hannah_montana,maria_west_side_story;jasmine;mary_jane;rose;ariel,b3335c72041f4bf9,Xw23EVCSqOY
 202,medium,Everything Is Not As It Seems,alex_russo,doctor_strange;eleven;harry_potter;gandalf;dumbledore,649053cbb0894c4c,J3Og4vG_xuo
 203,medium,Call Me Beep Me,rufus,meeko;abu;mushu;donkey;philoctetes,1d83b3ec21864ff3,u2id3z1vw8c
-204,medium,Here We Go,totally_spies,black_widow;maria_west_side_story;mary_jane;sarah_connor;laurie_strode,12bea3311ed94e99,VFrY1MhJ6W4
+204,medium,Here We Go,totally_spies,voldemort;maria_west_side_story;mary_jane;sarah_connor;laurie_strode,12bea3311ed94e99,VFrY1MhJ6W4
 205,medium,Recess Main Theme,tj,lucas;kevin_mccallister;charlie_brown;john_bender;marty_mcfly,ec6bcf1521ff4bfb,Fsd6sYe4OUY
 206,medium,Never Gonna Give You Up,rick_astley,marty_mcfly;jerry_maguire_tc;tony_stark;maverick_tc;jack_dawson,895043e1277049cb,lYBUbBu4W08
 207,medium,The Addams Family,thing,beetlejuice;jack_skellington;phantom;pennywise;voldemort,32828da58e044b74,25jdYZiFAJs
@@ -259,7 +259,7 @@ id,difficulty,song,correct_character,other_characters,spotify_uri,youtube_id
 265,medium,MASH Theme,alan_alda,dr_house;rust_cohle;dexter;rick_grimes;heisenberg,db719c0f44784b6e,JQaMkHkx8bA
 266,medium,Kojak theme,kojak,sherlock_holmes;poirot;inspector_gadget;dr_house;rust_cohle,79b6ae706f7840ab,WpN6kQgyyAA
 267,medium,I'm always here,hasselhoff,maverick_tc;james_bond;ethan_hunt_tc;han_solo;indiana_jones,fda78f88d96a47f7,iyHa6VfNPR4
-268,medium,Knight Rider,knight_rider,batman;iron_man;optimus_prime;terminator;doctor_strange,6807a60c1cd14bea,lxhWxv_5bQ0
+268,medium,Knight Rider,knight_rider,batman;jerry_maguire_tc;optimus_prime;terminator;doctor_strange,6807a60c1cd14bea,lxhWxv_5bQ0
 269,medium,Both Sides Now,frank_rossi,rust_cohle;dr_house;rick_sanchez;doc_brown;sheldon,e3d243b0c9784f1d,GKevHTbVsbQ
 270,medium,Beauty and the Beast,beast,phantom;voldemort;doctor_doom;thanos;darth_vader,23a50c62fa814419,EGnNGEzFXOE
 271,medium,The Glory Days,mr_incredible,superman;batman;spiderman;tony_stark;optimus_prime,0cd10752665b4d8b,Uaz2MPzBQps
