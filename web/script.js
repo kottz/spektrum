@@ -544,7 +544,7 @@ class UIManager {
       button.className = "color-button";
 
       const img = document.createElement("img");
-      img.src = `img/${character}.png`;
+      img.src = `img_avif/${character}.avif`;
       img.alt = character;
       img.className = "character-img";
       button.appendChild(img);
