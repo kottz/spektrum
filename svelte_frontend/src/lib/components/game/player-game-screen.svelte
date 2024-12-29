@@ -8,14 +8,13 @@
 	import { GamePhase } from '../../types/game';
 	import { Card } from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
-
 	$: phase = $gameStore.phase;
 	$: joinCode = $gameStore.joinCode;
 </script>
 
-<div class="container mx-auto space-y-6 p-6">
-	<!-- Top bar with join code and leave button -->
-	<div class="flex items-center justify-between">
+<div class="flex h-[100dvh] flex-col">
+	<!-- Top bar with join code and leave button - now flex-none -->
+	<div class="flex flex-none items-center justify-between p-4">
 		{#if joinCode}
 			<Card>
 				<div class="flex items-center gap-2 p-4">
@@ -27,14 +26,16 @@
 		<Button variant="outline" on:click={() => gameActions.leaveGame()}>Leave Game</Button>
 	</div>
 
-	<!-- Game content based on phase -->
-	{#if phase === GamePhase.Lobby}
-		<LobbyView />
-	{:else if phase === GamePhase.Question}
-		<QuestionView />
-	{:else if phase === GamePhase.Score}
-		<ScoreView />
-	{:else if phase === GamePhase.GameOver}
-		<GameOver />
-	{/if}
+	<!-- Game content based on phase - now flex-1 with min-h-0 -->
+	<div class="min-h-0 flex-1">
+		{#if phase === GamePhase.Lobby}
+			<LobbyView />
+		{:else if phase === GamePhase.Question}
+			<QuestionView />
+		{:else if phase === GamePhase.Score}
+			<ScoreView />
+		{:else if phase === GamePhase.GameOver}
+			<GameOver />
+		{/if}
+	</div>
 </div>

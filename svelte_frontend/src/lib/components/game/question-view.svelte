@@ -93,15 +93,16 @@
 	}
 </script>
 
-<div class="container mx-auto max-w-2xl space-y-6 p-6">
+<!-- Game content -->
+<div class="container mx-auto max-w-2xl p-4">
 	<!-- Answer Progress -->
-	<Card>
+	<Card class="mb-4">
 		<CardContent class="p-4">
 			<AnswerProgress />
 		</CardContent>
 	</Card>
 
-	<RoundTimer />
+	<RoundTimer class="mb-4" />
 
 	<!-- Answer Options -->
 	<Card>
@@ -112,7 +113,8 @@
 			</CardTitle>
 		</CardHeader>
 		<CardContent>
-			<div class="grid grid-cols-2 gap-4">
+			<!-- Changed from grid-cols-2 to grid-cols-3 -->
+			<div class="grid grid-cols-3 gap-2">
 				{#each alternatives as alternative}
 					<button
 						class={getButtonStyles(alternative)}
@@ -123,11 +125,13 @@
 							: ''}
 					>
 						{#if questionType === 'character'}
-							<img
-								src={`http://192.168.1.155:8765/img_avif/${alternative}.avif`}
-								alt={alternative}
-								class="h-full w-full object-cover"
-							/>
+							<div class="aspect-square w-full">
+								<img
+									src={`http://192.168.1.155:8765/img_avif/${alternative}.avif`}
+									alt={alternative}
+									class="h-full w-full object-contain"
+								/>
+							</div>
 						{:else if questionType === 'color'}
 							<span class="sr-only">{alternative}</span>
 						{:else}
