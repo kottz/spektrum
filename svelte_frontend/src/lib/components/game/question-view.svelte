@@ -1,122 +1,140 @@
 <script lang="ts">
-    import { gameStore } from '../../stores/game';
-    import { gameActions } from '../../stores/game-actions';
-    import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
-    import AnswerProgress from './answer-progress.svelte';
+	import { gameStore } from '../../stores/game';
+	import { gameActions } from '../../stores/game-actions';
+	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
+	import AnswerProgress from './answer-progress.svelte';
 
-    // Get current game state
-    $: alternatives = $gameStore.currentQuestion?.alternatives || [];
-    $: questionType = $gameStore.currentQuestion?.type || 'default';
-    $: currentPlayer = $gameStore.playerName
-        ? $gameStore.players.get($gameStore.playerName)
-        : undefined;
-    $: hasAnswered = currentPlayer?.hasAnswered || false;
-    $: selectedAnswer = currentPlayer?.answer;
-    $: timeRemaining = $gameStore.roundDuration;
+	// Get current game state
+	$: alternatives = $gameStore.currentQuestion?.alternatives || [];
+	$: questionType = $gameStore.currentQuestion?.type || 'default';
+	$: currentPlayer = $gameStore.playerName
+		? $gameStore.players.get($gameStore.playerName)
+		: undefined;
+	$: hasAnswered = currentPlayer?.hasAnswered || false;
+	$: selectedAnswer = currentPlayer?.answer;
+	$: timeRemaining = $gameStore.roundDuration;
+	$: currentAnswers = $gameStore.currentAnswers;
 
-    // Track which answer was clicked (separate from server state)
-    let clickedAnswer: string | null = null;
+	// Get if answer was correct
+	$: myAnswer = currentAnswers.find((a) => a.name === $gameStore.playerName);
+	$: wasCorrect = myAnswer?.correct;
 
-    // Color mapping with explicit type
-    const colorMap: Record<string, string> = {
-        'red': '#FF0000',
-        'green': '#00FF00',
-        'blue': '#0000FF',
-        'yellow': '#FFFF00',
-        'purple': '#800080',
-        'gold': '#FFD700',
-        'silver': '#C0C0C0',
-        'pink': '#FFC0CB',
-        'black': '#000000',
-        'white': '#FFFFFF',
-        'brown': '#3D251E',
-        'orange': '#FFA500',
-        'gray': '#808080'
-    };
+	// Track which answer was clicked (separate from server state)
+	let clickedAnswer: string | null = null;
 
-    function handleAnswer(answer: string) {
-        if (!hasAnswered) {
-            clickedAnswer = answer; // Track local state immediately
-            gameActions.submitAnswer(answer);
-        }
-    }
+	// Color mapping with explicit type
+	const colorMap: Record<string, string> = {
+		red: '#FF0000',
+		green: '#00FF00',
+		blue: '#0000FF',
+		yellow: '#FFFF00',
+		purple: '#800080',
+		gold: '#FFD700',
+		silver: '#C0C0C0',
+		pink: '#FFC0CB',
+		black: '#000000',
+		white: '#FFFFFF',
+		brown: '#3D251E',
+		orange: '#FFA500',
+		gray: '#808080'
+	};
 
-    function getButtonStyles(alternative: string) {
-        const styles = [];
-        
-        // Base styles
-        styles.push('aspect-square', 'rounded-lg', 'transition-all', 'duration-300', 'relative');
+	function handleAnswer(answer: string) {
+		if (!hasAnswered) {
+			clickedAnswer = answer; // Track local state immediately
+			gameActions.submitAnswer(answer);
+		}
+	}
 
-        // Add a strong border to the selected answer
-        if (alternative === clickedAnswer) {
-            styles.push('ring-4', 'ring-primary', 'ring-offset-2', 'scale-105', 'z-10');
-        }
+	function getButtonStyles(alternative: string) {
+		const styles = [];
 
-        // If any answer is clicked, reduce opacity of non-selected answers
-        if (clickedAnswer && alternative !== clickedAnswer) {
-            styles.push('opacity-40');
-        }
+		styles.push('aspect-square', 'rounded-lg', 'transition-all', 'duration-150', 'relative');
 
-        // Hover state only before answer is selected
-        if (!clickedAnswer) {
-            styles.push('hover:ring-2', 'hover:ring-muted-foreground', 'hover:scale-105');
-        }
+		// Add a strong border and background to the selected answer
+		if (alternative === clickedAnswer) {
+			// Added faster animation for the pulse effect
+			styles.push('ring-4', 'ring-offset-2', 'z-10'); //, 'animate-[pulse_1s_ease-in-out]');
 
-        // Question type specific styles
-        if (questionType === 'character') {
-            styles.push('p-0', 'overflow-hidden');
-        } else if (questionType !== 'color') {
-            styles.push('bg-muted');
-        }
+			if (myAnswer) {
+				if (wasCorrect) {
+					styles.push('ring-green-500', 'bg-green-500/20');
+				} else {
+					styles.push('ring-red-500', 'bg-red-500/20');
+				}
+			} else {
+				styles.push('ring-primary');
+			}
+		}
 
-        // Cursor styles
-        styles.push(clickedAnswer ? 'cursor-not-allowed' : 'cursor-pointer');
+		// If any answer is clicked, reduce opacity of non-selected answers
+		if (clickedAnswer && alternative !== clickedAnswer) {
+			styles.push('opacity-40');
+		}
 
-        return styles.join(' ');
-    }
+		// Hover state only before answer is selected
+		if (!clickedAnswer) {
+			// Made the scale effect smaller and faster
+			styles.push('hover:ring-2', 'hover:ring-muted-foreground', 'hover:scale-[1.02]');
+		}
+
+		// Question type specific styles
+		if (questionType === 'character') {
+			styles.push('p-0', 'overflow-hidden');
+		} else if (questionType !== 'color') {
+			styles.push('bg-muted');
+		}
+
+		// Cursor styles
+		styles.push(clickedAnswer ? 'cursor-not-allowed' : 'cursor-pointer');
+
+		return styles.join(' ');
+	}
 </script>
 
 <div class="container mx-auto max-w-2xl space-y-6 p-6">
-    <!-- Answer Progress -->
-    <Card>
-        <CardContent class="p-4">
-            <AnswerProgress />
-        </CardContent>
-    </Card>
+	<!-- Answer Progress -->
+	<Card>
+		<CardContent class="p-4">
+			<AnswerProgress />
+		</CardContent>
+	</Card>
 
-    <!-- Answer Options -->
-    <Card>
-        <CardHeader>
-            <CardTitle class="flex items-center justify-between">
-                <span>Choose your answer</span>
-                <span class="text-muted-foreground">{timeRemaining}s</span>
-            </CardTitle>
-        </CardHeader>
-        <CardContent>
-            <div class="grid grid-cols-2 gap-4">
-                {#each alternatives as alternative}
-                    <button
-                        class={getButtonStyles(alternative)}
-                        disabled={clickedAnswer !== null}
-                        on:click={() => handleAnswer(alternative)}
-                        style={questionType === 'color' ? `background-color: ${colorMap[alternative.toLowerCase()]};` : ''}
-                    >
-                        {#if questionType === 'character'}
-                            <img
-                                src={`http://192.168.1.155:8765/img_avif/${alternative}.avif`}
-                                alt={alternative}
-                                class="h-full w-full object-cover"
-                            />
-                        {:else if questionType === 'color'}
-                            <span class="sr-only">{alternative}</span>
-                        {:else}
-                            <div class="flex h-full w-full items-center justify-center text-lg font-medium">
-                                {alternative}
-                            </div>
-                        {/if}
-                    </button>
-                {/each}
-            </div>
-        </CardContent>
-    </Card>
+	<!-- Answer Options -->
+	<Card>
+		<CardHeader>
+			<CardTitle class="flex items-center justify-between">
+				<span>Choose your answer</span>
+				<span class="text-muted-foreground">{timeRemaining}s</span>
+			</CardTitle>
+		</CardHeader>
+		<CardContent>
+			<div class="grid grid-cols-2 gap-4">
+				{#each alternatives as alternative}
+					<button
+						class={getButtonStyles(alternative)}
+						disabled={clickedAnswer !== null}
+						on:click={() => handleAnswer(alternative)}
+						style={questionType === 'color'
+							? `background-color: ${colorMap[alternative.toLowerCase()]};`
+							: ''}
+					>
+						{#if questionType === 'character'}
+							<img
+								src={`http://192.168.1.155:8765/img_avif/${alternative}.avif`}
+								alt={alternative}
+								class="h-full w-full object-cover"
+							/>
+						{:else if questionType === 'color'}
+							<span class="sr-only">{alternative}</span>
+						{:else}
+							<div class="flex h-full w-full items-center justify-center text-lg font-medium">
+								{alternative}
+							</div>
+						{/if}
+					</button>
+				{/each}
+			</div>
+		</CardContent>
+	</Card>
 </div>
