@@ -19,23 +19,40 @@ function createYouTubeStore() {
     });
 
     let autoplayPending = false;
+    let apiInitialized = false;
 
     function initializeAPI() {
         console.log('Initializing YouTube API');
-        if (document.querySelector('script[src*="youtube.com/iframe_api"]')) return;
 
+        // Remove existing script if it exists
+        const existingScript = document.querySelector('script[src*="youtube.com/iframe_api"]');
+        if (existingScript) {
+            existingScript.remove();
+        }
+
+        // Reset global YouTube API state
+        (window as any).YT = undefined;
+        (window as any).onYouTubeIframeAPIReady = undefined;
+
+        // Add new script
         const tag = document.createElement('script');
         tag.src = "https://www.youtube.com/iframe_api";
         const firstScriptTag = document.getElementsByTagName('script')[0];
         firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
+
+        apiInitialized = true;
     }
 
     function loadVideo(videoId: string) {
         const state = get({ subscribe });
         console.log('Load video requested:', videoId, 'Player ready:', state.isPlayerReady);
 
+        if (!apiInitialized) {
+            console.log('API not initialized, initializing first');
+            initializeAPI();
+        }
+
         if (!state.isPlayerReady || !state.player) {
-            // Store the video ID to load when player is ready
             console.log('Player not ready, storing video ID for later:', videoId);
             update(state => ({ ...state, pendingVideoId: videoId }));
             return;
@@ -66,13 +83,11 @@ function createYouTubeStore() {
             console.log('Verifying video before play:', { current: currentVideoId, expected: expectedVideoId });
 
             if (currentVideoId !== expectedVideoId) {
-                // Wrong video loaded, need to load the correct one
                 console.log('Video mismatch, loading correct video');
                 state.player.loadVideoById(expectedVideoId);
                 update(state => ({ ...state, currentVideoId: expectedVideoId }));
                 return true;
             } else {
-                // Correct video is already loaded, just play it
                 console.log('Correct video already loaded, playing');
                 state.player.playVideo();
                 return true;
@@ -104,9 +119,6 @@ function createYouTubeStore() {
                 }
                 break;
             case 'score':
-                console.log('Score phase, stopping video');
-                state.player.stopVideo();
-                break;
             case 'lobby':
             case 'gameover':
                 console.log('Stopping video');
@@ -128,7 +140,6 @@ function createYouTubeStore() {
                 isPlayerReady: true
             }));
 
-            // If we have a pending video, load it now
             if (state.pendingVideoId) {
                 console.log('Loading pending video:', state.pendingVideoId);
                 loadVideo(state.pendingVideoId);
@@ -144,16 +155,29 @@ function createYouTubeStore() {
         handlePhaseChange,
         cleanup: () => {
             console.log('Cleaning up YouTube player');
-            update(state => {
-                state.player?.destroy();
-                return {
-                    player: null,
-                    isLoading: false,
-                    currentVideoId: null,
-                    isPlayerReady: false,
-                    pendingVideoId: null
-                };
+            const state = get({ subscribe });
+
+            if (state.player) {
+                state.player.destroy();
+            }
+
+            // Reset API initialization flag
+            apiInitialized = false;
+
+            // Reset the store state
+            set({
+                player: null,
+                isLoading: false,
+                currentVideoId: null,
+                isPlayerReady: false,
+                pendingVideoId: null
             });
+
+            // Remove the YouTube iframe if it exists
+            const iframe = document.querySelector('iframe[src*="youtube.com"]');
+            if (iframe) {
+                iframe.remove();
+            }
         }
     };
 }

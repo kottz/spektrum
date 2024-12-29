@@ -1,6 +1,7 @@
 // src/lib/stores/game-actions.ts
 import { websocketStore } from './websocket';
 import { gameStore } from './game';
+import { youtubeStore } from './youtube-store';
 import type { ClientMessage, AdminAction } from '../types/game';
 import { GamePhase } from '../types/game';
 
@@ -122,6 +123,7 @@ class GameActions {
 
         websocketStore.send(message);
         gameStore.cleanup();
+        youtubeStore.cleanup();
     }
 }
 
