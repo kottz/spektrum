@@ -2,7 +2,9 @@
 	import { gameStore } from '../../stores/game';
 	import { Card, CardContent } from '$lib/components/ui/card';
 	import RoundTimer from './round-timer.svelte';
+	import { PUBLIC_SPEKTRUM_SERVER_URL } from '$env/static/public';
 
+	const imageBaseUrl = $derived(`${PUBLIC_SPEKTRUM_SERVER_URL}/img_avif`);
 	const alternatives = $derived($gameStore.currentQuestion?.alternatives || []);
 	const questionType = $derived($gameStore.currentQuestion?.type || 'default');
 	const upcomingQuestions = $derived($gameStore.upcomingQuestions || []);
@@ -55,7 +57,7 @@
 		<div class="flex items-center gap-4">
 			<!-- Timer first -->
 			<div class="w-[200px]">
-				<RoundTimer compact={true} />
+				<RoundTimer />
 			</div>
 			<!-- Question options -->
 			<div class="grid flex-1 grid-cols-6 gap-2">
@@ -70,7 +72,7 @@
 						{#if questionType === 'character'}
 							<div class="aspect-square w-full">
 								<img
-									src={`http://192.168.1.155:8765/img_avif/${alternative}.avif`}
+									src={`${imageBaseUrl}/${alternative}.avif`}
 									alt={alternative}
 									class="h-full w-full object-contain"
 								/>

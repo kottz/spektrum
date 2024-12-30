@@ -6,7 +6,6 @@
 <div class="space-y-2">
 	<div class="flex justify-between text-sm">
 		<span class="text-muted-foreground">Upcoming Questions</span>
-		<span class="font-medium">{upcomingQuestions.length}</span>
 	</div>
 	<div class="space-y-1">
 		{#each upcomingQuestions as question, i}

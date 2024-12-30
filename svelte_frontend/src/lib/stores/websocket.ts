@@ -1,6 +1,7 @@
 // src/lib/stores/websocket.ts
 import { writable, get } from 'svelte/store';
 import type { ServerMessage, ClientMessage } from '../types/game';
+import { PUBLIC_SPEKTRUM_WS_SERVER_URL } from '$env/static/public';
 
 // Store state interface
 interface WebSocketState {
@@ -41,7 +42,7 @@ function createWebSocketStore() {
 
 		update(state => ({ ...state, isConnecting: true }));
 
-		const wsUrl = `ws://192.168.1.155:8765/ws`; // TODO FIX THIS
+		const wsUrl = PUBLIC_SPEKTRUM_WS_SERVER_URL;
 		socket = new WebSocket(wsUrl);
 
 		socket.onopen = () => {

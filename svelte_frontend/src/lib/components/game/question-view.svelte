@@ -12,7 +12,6 @@
 	);
 	const hasAnswered = $derived(currentPlayer?.hasAnswered || false);
 	const selectedAnswer = $derived(currentPlayer?.answer);
-	const timeRemaining = $derived($gameStore.roundDuration);
 	const currentAnswers = $derived($gameStore.currentAnswers);
 
 	const myAnswer = $derived(currentAnswers.find((a) => a.name === $gameStore.playerName));
@@ -96,7 +95,6 @@
 		<CardHeader>
 			<CardTitle class="flex items-center justify-between">
 				<span>Choose your answer</span>
-				<span class="text-muted-foreground">{timeRemaining}s</span>
 			</CardTitle>
 		</CardHeader>
 		<CardContent>

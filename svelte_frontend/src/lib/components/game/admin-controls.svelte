@@ -11,7 +11,6 @@
 	const phase = $derived($gameStore.phase?.toLowerCase() || 'lobby');
 	const players = $derived(Array.from($gameStore.players.values()));
 	const playerCount = $derived(players.length);
-	const roundAnswers = $derived(players.filter((p) => p.hasAnswered).length);
 
 	// Game state checks
 	const isGameRunning = $derived(phase !== 'lobby' && phase !== 'gameover');
@@ -82,13 +81,6 @@
 					{/each}
 				</div>
 			</div>
-
-			{#if isInQuestion}
-				<div class="flex justify-between text-sm">
-					<span class="text-muted-foreground">Answers</span>
-					<span class="font-medium">{roundAnswers}/{playerCount}</span>
-				</div>
-			{/if}
 		</div>
 
 		<!-- Upcoming Questions -->
