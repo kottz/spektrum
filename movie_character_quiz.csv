@@ -67,7 +67,7 @@ id,difficulty,song,correct_character,other_characters,spotify_uri,youtube_id
 71,easy,Husvagn,husvagn,pippi;marv;ove;kevin_mccallister;truckdriver,270dc12079d94e6c,t4CGLR6A3kM
 72,medium,Top Gun Theme,iceman,javier_pena;han_solo;voldemort;james_bond;jason_bourne,7ce50e2d98524462,iNJLFWlfep4
 73,medium,Time (Inception),inception,interstellar;edge_of_tmrw_tc;luke_skywalker;jack_dawson;doctor_strange,4441b2cc18bb4695,jgyShFzdB_Q
-74,medium,Raiders March,indiana_jones,nathan_drake;ethan_hunt_tc;james_bond;saruman;hook,6fab03af2f68490d,bC77czRbjd0
+74,medium,Raiders March,indiana_jones,nathan_drake;grant_jurassic_park;james_bond;saruman;hook,6fab03af2f68490d,bC77czRbjd0
 75,medium,Inspector Gadget Theme,inspector_gadget,sherlock_holmes;poirot;clouseau;nathan_drake;rick_sanchez,79555f407caa438e,XUB8ScEhPsA
 76,medium,Cornfield Chase,interstellar,inception;edge_of_tmrw_tc;harkonnen;doctor_doom;darth_vader,e5e7b0ce3b164faf,7GlsxNI4LVI
 77,easy,Spiderman Main Title,j_jonah_jameson,perry;chief_brody;les_grossman_tc;doc_brown;venkman,f51dccb4eeb94be2,tbhdL8VLhwI
@@ -181,7 +181,7 @@ id,difficulty,song,correct_character,other_characters,spotify_uri,youtube_id
 188,medium,Staying Alive,tony_manero,jerry_maguire_tc;maverick_tc;jack_dawson;marty_mcfly;tony_stark,03d325fe110e466c,GbsFCYEJGZ0
 189,medium,I'm Just Ken,ken,don_johnson;lucas;danny_zuko;mads_mikkelsen;rust_cohle,4e468f87a1f048b0,zsxjvlr6dv0
 190,medium,The Greatest Show,pt_barnum,tony_stark;paul_atreides;blackbeard;alex_russo;venkman,827ffb6c5bd8476e,w8OyrhaR0kA
-191,medium,Love Theme From Godfather,godfather,harry_bandit;escobar_narcos;tony_manero;tony_montana;kojak,a388fa2ba08c4763,Flb01Ni3p3M
+191,medium,Love Theme From Godfather,godfather,harry_bandit;escobar_narcos;tony_manero;per_oscarsson;kojak,a388fa2ba08c4763,Flb01Ni3p3M
 192,medium,Miami Vice Theme,don_johnson,mick_belker;jr_ewing;alan_alda;kojak;knight_rider,7c37bd3a96b448de,FWh1UW1T9w8
 193,medium,Hill Street Blues Theme,mick_belker,chief_brody;rick_grimes;john_mcclane;rust_cohle;javier_pena,7c50fac52209414f,h2qK_Qekt-I
 194,medium,MASH Theme,alan_alda,kojak;don_johnson;mick_belker;hasselhoff;jr_ewing,db719c0f44784b6e,JQaMkHkx8bA
