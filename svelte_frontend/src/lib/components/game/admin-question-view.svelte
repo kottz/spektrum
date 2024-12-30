@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { gameStore } from '../../stores/game';
 	import { Card, CardContent } from '$lib/components/ui/card';
+	import RoundTimer from './round-timer.svelte';
 
 	const alternatives = $derived($gameStore.currentQuestion?.alternatives || []);
 	const questionType = $derived($gameStore.currentQuestion?.type || 'default');
@@ -51,32 +52,39 @@
 
 <Card>
 	<CardContent class="py-2">
-		<div class="grid max-h-[100px] grid-cols-6 gap-2">
-			{#each alternatives as alternative}
-				<button
-					class={getButtonStyles(alternative)}
-					disabled={true}
-					style={questionType === 'color'
-						? `background-color: ${colorMap[alternative.toLowerCase()]};`
-						: ''}
-				>
-					{#if questionType === 'character'}
-						<div class="aspect-square w-full">
-							<img
-								src={`http://192.168.1.155:8765/img_avif/${alternative}.avif`}
-								alt={alternative}
-								class="h-full w-full object-contain"
-							/>
-						</div>
-					{:else if questionType === 'color'}
-						<span class="sr-only">{alternative}</span>
-					{:else}
-						<div class="flex h-full w-full items-center justify-center text-sm font-medium">
-							{alternative}
-						</div>
-					{/if}
-				</button>
-			{/each}
+		<div class="flex items-center gap-4">
+			<!-- Timer first -->
+			<div class="w-[200px]">
+				<RoundTimer compact={true} />
+			</div>
+			<!-- Question options -->
+			<div class="grid flex-1 grid-cols-6 gap-2">
+				{#each alternatives as alternative}
+					<button
+						class={getButtonStyles(alternative)}
+						disabled={true}
+						style={questionType === 'color'
+							? `background-color: ${colorMap[alternative.toLowerCase()]};`
+							: ''}
+					>
+						{#if questionType === 'character'}
+							<div class="aspect-square w-full">
+								<img
+									src={`http://192.168.1.155:8765/img_avif/${alternative}.avif`}
+									alt={alternative}
+									class="h-full w-full object-contain"
+								/>
+							</div>
+						{:else if questionType === 'color'}
+							<span class="sr-only">{alternative}</span>
+						{:else}
+							<div class="flex h-full w-full items-center justify-center text-sm font-medium">
+								{alternative}
+							</div>
+						{/if}
+					</button>
+				{/each}
+			</div>
 		</div>
 	</CardContent>
 </Card>
