@@ -56,3 +56,60 @@
     @apply bg-background text-foreground;
   }
 }
+
+.metallic-gold {
+  background: linear-gradient(
+    45deg,
+    #B17F02 5%,
+    #FED851 10%,
+    #D4AF37 30%,
+    #FED851 50%,
+    #D4AF37 70%,
+    #FED851 80%,
+    #B17F02 95%
+  );
+}
+
+.metallic-silver {
+  background: linear-gradient(
+    45deg,
+    #999 5%,
+    #fff 10%,
+    #ccc 30%,
+    #ddd 50%,
+    #ccc 70%,
+    #fff 80%,
+    #999 95%
+  );
+}
+
+/* If you want hover effects for color buttons */
+.color-button:not(:disabled):hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+}
+
+/* Metallic-specific hover states */
+.metallic-gold:not(:disabled):hover {
+  background: linear-gradient(
+    45deg,
+    #FED851 5%,
+    #D4AF37 30%,
+    #FED851 50%,
+    #D4AF37 70%,
+    #FED851 95%
+  );
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
+}
+
+.metallic-silver:not(:disabled):hover {
+  background: linear-gradient(
+    45deg,
+    #fff 5%,
+    #ccc 30%,
+    #fff 50%,
+    #ccc 70%,
+    #fff 95%
+  );
+  box-shadow: 0 0 15px rgba(192, 192, 192, 0.4);
+}
