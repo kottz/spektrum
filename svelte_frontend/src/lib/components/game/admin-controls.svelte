@@ -3,18 +3,20 @@
 	import { gameActions } from '../../stores/game-actions';
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
+	import { Separator } from '$lib/components/ui/separator';
 	import UpcomingQuestions from '$lib/components/game/upcoming-questions.svelte';
 	import AnswerProgress from '$lib/components/game/answer-progress.svelte';
 
 	// Reactive values from store
-	$: phase = $gameStore.phase?.toLowerCase() || 'lobby';
-	$: players = Array.from($gameStore.players.values());
-	$: playerCount = players.length;
-	$: roundAnswers = players.filter((p) => p.hasAnswered).length;
+	const phase = $derived($gameStore.phase?.toLowerCase() || 'lobby');
+	const players = $derived(Array.from($gameStore.players.values()));
+	const playerCount = $derived(players.length);
+	const roundAnswers = $derived(players.filter((p) => p.hasAnswered).length);
+
 	// Game state checks
-	$: isGameRunning = phase !== 'lobby' && phase !== 'gameover';
-	$: isInQuestion = phase === 'question';
-	$: isGameOver = phase === 'gameover';
+	const isGameRunning = $derived(phase !== 'lobby' && phase !== 'gameover');
+	const isInQuestion = $derived(phase === 'question');
+	const isGameOver = $derived(phase === 'gameover');
 </script>
 
 <Card>
@@ -22,12 +24,50 @@
 		<CardTitle>Admin Controls</CardTitle>
 	</CardHeader>
 	<CardContent class="space-y-6">
+		<!-- Control buttons at the top -->
+		<div class="flex flex-col gap-2">
+			<!-- Leave/Close button always first -->
+			<Button
+				variant="destructive"
+				on:click={() => (isGameOver ? gameActions.leaveGame() : gameActions.closeGame())}
+			>
+				{isGameOver ? 'Leave Lobby' : 'Close Lobby'}
+			</Button>
+
+			<!-- Start/End Game button -->
+			{#if !isGameOver}
+				<Button
+					variant={isGameRunning ? 'destructive' : 'default'}
+					on:click={() => (isGameRunning ? gameActions.endGame() : gameActions.startGame())}
+				>
+					{isGameRunning ? 'End Game' : 'Start Game'}
+				</Button>
+			{/if}
+			<Separator class="my-4" />
+			<!-- Start/End Round button -->
+			{#if isGameRunning}
+				<Button on:click={() => (isInQuestion ? gameActions.endRound() : gameActions.startRound())}>
+					{isInQuestion ? 'End Round' : 'Start Round'}
+				</Button>
+			{/if}
+
+			<!-- Skip Question button - always visible but conditionally disabled -->
+			<Button
+				variant="outline"
+				disabled={isInQuestion || !isGameRunning}
+				on:click={() => gameActions.skipQuestion()}
+			>
+				Skip Question
+			</Button>
+		</div>
+
 		<!-- Current game status -->
 		<div class="space-y-2">
 			<div class="flex justify-between text-sm">
 				<span class="text-muted-foreground">Current Phase</span>
 				<span class="font-medium">{phase}</span>
 			</div>
+
 			<!-- Players list -->
 			<div class="space-y-2">
 				<div class="flex justify-between text-sm">
@@ -42,6 +82,7 @@
 					{/each}
 				</div>
 			</div>
+
 			{#if isInQuestion}
 				<div class="flex justify-between text-sm">
 					<span class="text-muted-foreground">Answers</span>
@@ -49,6 +90,7 @@
 				</div>
 			{/if}
 		</div>
+
 		<!-- Upcoming Questions -->
 		{#if !isGameOver}
 			<AnswerProgress />
@@ -56,42 +98,5 @@
 				<UpcomingQuestions />
 			</div>
 		{/if}
-		<!-- Game flow controls -->
-		<div class="space-y-4 border-t border-border pt-4">
-			{#if !isGameOver}
-				<!-- Game control -->
-				<Button
-					class="w-full"
-					variant={isGameRunning ? 'destructive' : 'default'}
-					on:click={() => (isGameRunning ? gameActions.endGame() : gameActions.startGame())}
-				>
-					{isGameRunning ? 'End Game' : 'Start Game'}
-				</Button>
-				<!-- Round control - only shown when game is running -->
-				{#if isGameRunning}
-					<div class="space-y-4">
-						<Button
-							class="w-full"
-							on:click={() => (isInQuestion ? gameActions.endRound() : gameActions.startRound())}
-						>
-							{isInQuestion ? 'End Round' : 'Start Round'}
-						</Button>
-						{#if phase === 'score'}
-							<Button variant="outline" class="w-full" on:click={() => gameActions.skipQuestion()}>
-								Skip Question
-							</Button>
-						{/if}
-					</div>
-				{/if}
-				<Button variant="destructive" class="w-full" on:click={() => gameActions.closeGame()}>
-					Close Lobby
-				</Button>
-			{:else}
-				<!-- Leave button - only button shown when game is over -->
-				<Button variant="default" class="w-full" on:click={() => gameActions.leaveGame()}>
-					Leave Lobby
-				</Button>
-			{/if}
-		</div>
 	</CardContent>
 </Card>
