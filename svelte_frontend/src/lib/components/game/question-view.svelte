@@ -5,23 +5,20 @@
 	import AnswerProgress from './answer-progress.svelte';
 	import RoundTimer from './round-timer.svelte';
 
-	// Get current game state
-	$: alternatives = $gameStore.currentQuestion?.alternatives || [];
-	$: questionType = $gameStore.currentQuestion?.type || 'default';
-	$: currentPlayer = $gameStore.playerName
-		? $gameStore.players.get($gameStore.playerName)
-		: undefined;
-	$: hasAnswered = currentPlayer?.hasAnswered || false;
-	$: selectedAnswer = currentPlayer?.answer;
-	$: timeRemaining = $gameStore.roundDuration;
-	$: currentAnswers = $gameStore.currentAnswers;
+	const alternatives = $derived($gameStore.currentQuestion?.alternatives || []);
+	const questionType = $derived($gameStore.currentQuestion?.type || 'default');
+	const currentPlayer = $derived(
+		$gameStore.playerName ? $gameStore.players.get($gameStore.playerName) : undefined
+	);
+	const hasAnswered = $derived(currentPlayer?.hasAnswered || false);
+	const selectedAnswer = $derived(currentPlayer?.answer);
+	const timeRemaining = $derived($gameStore.roundDuration);
+	const currentAnswers = $derived($gameStore.currentAnswers);
 
-	// Get if answer was correct
-	$: myAnswer = currentAnswers.find((a) => a.name === $gameStore.playerName);
-	$: wasCorrect = myAnswer?.correct;
+	const myAnswer = $derived(currentAnswers.find((a) => a.name === $gameStore.playerName));
+	const wasCorrect = $derived(myAnswer?.correct);
 
-	// Track which answer was clicked (separate from server state)
-	let clickedAnswer: string | null = null;
+	let clickedAnswer = $state<string | null>(null);
 
 	// Color mapping with explicit type
 	const colorMap: Record<string, string> = {
@@ -42,7 +39,7 @@
 
 	function handleAnswer(answer: string) {
 		if (!hasAnswered) {
-			clickedAnswer = answer; // Track local state immediately
+			clickedAnswer = answer;
 			gameActions.submitAnswer(answer);
 		}
 	}
@@ -52,10 +49,8 @@
 
 		styles.push('aspect-square', 'rounded-lg', 'transition-all', 'duration-150', 'relative');
 
-		// Add a strong border and background to the selected answer
 		if (alternative === clickedAnswer) {
-			// Added faster animation for the pulse effect
-			styles.push('ring-4', 'ring-offset-2', 'z-10'); //, 'animate-[pulse_1s_ease-in-out]');
+			styles.push('ring-4', 'ring-offset-2', 'z-10');
 
 			if (myAnswer) {
 				if (wasCorrect) {
@@ -68,34 +63,27 @@
 			}
 		}
 
-		// If any answer is clicked, reduce opacity of non-selected answers
 		if (clickedAnswer && alternative !== clickedAnswer) {
 			styles.push('opacity-40');
 		}
 
-		// Hover state only before answer is selected
 		if (!clickedAnswer) {
-			// Made the scale effect smaller and faster
 			styles.push('hover:ring-2', 'hover:ring-muted-foreground', 'hover:scale-[1.02]');
 		}
 
-		// Question type specific styles
 		if (questionType === 'character') {
 			styles.push('p-0', 'overflow-hidden');
 		} else if (questionType !== 'color') {
 			styles.push('bg-muted');
 		}
 
-		// Cursor styles
 		styles.push(clickedAnswer ? 'cursor-not-allowed' : 'cursor-pointer');
 
 		return styles.join(' ');
 	}
 </script>
 
-<!-- Game content -->
 <div class="container mx-auto max-w-2xl p-4">
-	<!-- Answer Progress -->
 	<Card class="mb-4">
 		<CardContent class="p-4">
 			<AnswerProgress />
@@ -104,7 +92,6 @@
 
 	<RoundTimer class="mb-4" />
 
-	<!-- Answer Options -->
 	<Card>
 		<CardHeader>
 			<CardTitle class="flex items-center justify-between">
@@ -113,7 +100,6 @@
 			</CardTitle>
 		</CardHeader>
 		<CardContent>
-			<!-- Changed from grid-cols-2 to grid-cols-3 -->
 			<div class="grid grid-cols-3 gap-2">
 				{#each alternatives as alternative}
 					<button

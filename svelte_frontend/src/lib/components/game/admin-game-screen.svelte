@@ -5,10 +5,11 @@
 	import { Card } from '$lib/components/ui/card';
 	import { GamePhase } from '../../types/game';
 	import YouTubePlayer from './youtube-player.svelte';
+	import AdminQuestionView from './admin-question-view.svelte'; // Changed import
 
-	$: joinCode = $gameStore.joinCode;
-	$: phase = $gameStore.phase;
-	$: showScoreboard = phase === GamePhase.Score || phase === GamePhase.GameOver;
+	const joinCode = $derived($gameStore.joinCode);
+	const phase = $derived($gameStore.phase);
+	const showScoreboard = $derived(phase === GamePhase.Score || phase === GamePhase.GameOver);
 </script>
 
 <div class="container mx-auto p-6">
@@ -34,6 +35,10 @@
 			{/if}
 			<!-- YouTube player -->
 			<YouTubePlayer />
+			<!-- Question preview - using new AdminQuestionView -->
+			{#if phase === GamePhase.Question}
+				<AdminQuestionView />
+			{/if}
 		</div>
 		<!-- Admin controls sidebar -->
 		<div class="space-y-6">
