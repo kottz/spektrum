@@ -31,15 +31,9 @@ struct ServerConfig {
     https: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Default, Debug, Deserialize)]
 struct LoggingConfig {
     json: bool,
-}
-
-impl Default for LoggingConfig {
-    fn default() -> Self {
-        Self { json: false }
-    }
 }
 
 #[derive(Debug, Deserialize)]
