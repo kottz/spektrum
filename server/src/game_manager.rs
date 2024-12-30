@@ -1,20 +1,29 @@
+use crate::game::{GameEngine, GameEvent, GameResponse, Recipients};
+use crate::messages::{convert_to_server_message, ServerMessage};
+use crate::question::GameQuestion;
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
 };
+use thiserror::Error;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::*;
 use uuid::Uuid;
 
-use crate::game::{GameEngine, GameEvent, GameResponse, Recipients};
-use crate::messages::{convert_to_server_message, ServerMessage};
-use crate::question::GameQuestion;
+/// Example error type for GameManager
+#[derive(Error, Debug)]
+pub enum GameManagerError {
+    #[error("Failed to acquire lock: {0}")]
+    LockError(String),
+    #[error("Out of join codes.")]
+    OutOfJoinCodes,
+}
 
 /// A single lobby instance that manages its own connection pool and game engine
 pub struct GameLobby {
     id: Uuid,
     engine: Arc<RwLock<GameEngine>>,
-    connections: Arc<RwLock<HashMap<Uuid, UnboundedSender<ServerMessage>>>>,
+    pub connections: Arc<RwLock<HashMap<Uuid, UnboundedSender<ServerMessage>>>>,
 }
 
 impl GameLobby {
@@ -96,29 +105,38 @@ impl GameManager {
         }
     }
 
-    fn generate_join_code(&self, lobby_id: Uuid) -> String {
+    fn generate_join_code(&self, lobby_id: Uuid) -> Result<String, GameManagerError> {
+        let mut join_codes = self
+            .join_codes
+            .write()
+            .map_err(|e| GameManagerError::LockError(e.to_string()))?;
+
         // First try 6-digit codes up to a limit.
         for _ in 0..10_000 {
             let code = format!("{:06}", fastrand::u32(0..1_000_000));
-            if !self.join_codes.read().unwrap().contains_key(&code) {
-                return code;
+            if !join_codes.contains_key(&code) {
+                join_codes.insert(code.clone(), lobby_id);
+                return Ok(code);
             }
         }
 
         // If many collisions or lobbies, escalate to 7 digits.
-        loop {
+        for _ in 0..1_000_000 {
             let code = format!("{:07}", fastrand::u32(0..10_000_00));
-            if !self.join_codes.read().unwrap().contains_key(&code) {
-                return code;
+            if !join_codes.contains_key(&code) {
+                join_codes.insert(code.clone(), lobby_id);
+                return Ok(code);
             }
         }
+
+        Err(GameManagerError::OutOfJoinCodes)
     }
 
     pub fn create_lobby(
         &self,
         questions: Vec<GameQuestion>,
         round_duration: u64,
-    ) -> (Uuid, String, Uuid) {
+    ) -> Result<(Uuid, String, Uuid), GameManagerError> {
         let lobby_id = Uuid::new_v4();
         let admin_id = Uuid::new_v4();
 
@@ -128,14 +146,11 @@ impl GameManager {
             questions,
             round_duration,
         ));
-        let join_code = self.generate_join_code(lobby_id);
-        self.join_codes
-            .write()
-            .unwrap()
-            .insert(join_code.clone(), lobby_id);
 
+        let join_code = self.generate_join_code(lobby_id)?;
         self.lobbies.write().unwrap().insert(lobby_id, lobby);
-        (lobby_id, join_code, admin_id)
+
+        Ok((lobby_id, join_code, admin_id))
     }
 
     pub fn get_lobby(&self, id: &Uuid) -> Option<Arc<GameLobby>> {

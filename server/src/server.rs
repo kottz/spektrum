@@ -1,9 +1,7 @@
-use crate::game::{
-    ErrorCode, EventContext, GameAction, GameEvent, GameResponse, Recipients, ResponsePayload,
-};
-use crate::question::GameQuestion;
+use crate::game::{EventContext, GameAction, GameEvent, Recipients};
 use crate::game_manager::{GameLobby, GameManager};
-use crate::messages::{AdminAction, ClientMessage, ServerMessage};
+use crate::messages::{convert_to_server_message, AdminAction, ClientMessage, ServerMessage};
+use crate::question::GameQuestion;
 use axum::{
     extract::ws::{Message, WebSocket},
     extract::State,
@@ -11,26 +9,59 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use futures_util::{sink::SinkExt, stream::StreamExt};
+use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::{
     sync::{Arc, Mutex},
     time::Instant,
 };
+use thiserror::Error;
 use tokio::sync::mpsc::unbounded_channel;
 use tracing::*;
 use uuid::Uuid;
 
-//--------------------------------------------------------------------------------
-// Application State
-//--------------------------------------------------------------------------------
+#[derive(Error, Debug)]
+pub enum ApiError {
+    #[error("Internal server error: {0}")]
+    Internal(String),
+
+    #[error("Validation error: {0}")]
+    Validation(String),
+
+    #[error("Lobby error: {0}")]
+    Lobby(String),
+
+    #[error("Lock acquisition failed: {0}")]
+    Lock(String),
+}
+
+impl IntoResponse for ApiError {
+    fn into_response(self) -> axum::response::Response {
+        let (status, error_message) = match &self {
+            ApiError::Internal(_) => (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                self.to_string(),
+            ),
+            ApiError::Validation(_) => (axum::http::StatusCode::BAD_REQUEST, self.to_string()),
+            ApiError::Lobby(_) => (axum::http::StatusCode::BAD_REQUEST, self.to_string()),
+            ApiError::Lock(_) => (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                self.to_string(),
+            ),
+        };
+
+        let body = Json(serde_json::json!({
+            "error": error_message
+        }));
+
+        (status, body).into_response()
+    }
+}
 
 #[derive(Clone)]
 pub struct AppState {
     pub manager: Arc<Mutex<GameManager>>,
     pub questions: Arc<Vec<GameQuestion>>,
-    // pub songs: Arc<Vec<Song>>,
-    // pub all_colors: Arc<Vec<ColorDef>>,
 }
 
 impl AppState {
@@ -42,17 +73,13 @@ impl AppState {
     }
 }
 
-//--------------------------------------------------------------------------------
-// HTTP Handlers for Lobby Management
-//--------------------------------------------------------------------------------
-
 #[derive(Debug, Deserialize)]
 pub struct CreateLobbyRequest {
     round_duration: Option<u64>,
 }
 
 #[derive(Debug, Serialize)]
-struct CreateLobbyResponse {
+pub struct CreateLobbyResponse {
     lobby_id: Uuid,
     join_code: String,
     admin_id: Uuid,
@@ -61,30 +88,34 @@ struct CreateLobbyResponse {
 pub async fn create_lobby_handler(
     State(state): State<AppState>,
     Json(req): Json<CreateLobbyRequest>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, ApiError> {
     let round_duration = req.round_duration.unwrap_or(60);
+    if round_duration < 10 {
+        return Err(ApiError::Validation(
+            "Round duration must be at least 10 seconds".into(),
+        ));
+    }
 
-    let mgr = state.manager.lock().unwrap();
-    let (lobby_id, join_code, admin_id) = mgr.create_lobby(
-        state.questions.to_vec(),
-        round_duration,
-    );
+    let mgr = state
+        .manager
+        .lock()
+        .map_err(|e| ApiError::Lock(e.to_string()))?;
 
-    Json(CreateLobbyResponse {
+    let (lobby_id, join_code, admin_id) =
+        mgr.create_lobby(state.questions.to_vec(), round_duration).map_err(|e| ApiError::Lobby(e.to_string()))?;
+
+    Ok(Json(CreateLobbyResponse {
         lobby_id,
         join_code,
         admin_id,
-    })
+    }))
 }
-
-//--------------------------------------------------------------------------------
-// WebSocket Handler
-//--------------------------------------------------------------------------------
 
 pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
     ws.on_upgrade(move |socket| handle_socket(socket, state))
 }
-pub async fn handle_socket(socket: WebSocket, state: AppState) {
+
+async fn handle_socket(socket: WebSocket, state: AppState) {
     let (mut ws_tx, mut ws_rx) = socket.split();
     let (tx, mut rx) = unbounded_channel::<ServerMessage>();
 
@@ -95,7 +126,8 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
     let send_task = tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
             if let Ok(text) = serde_json::to_string(&msg) {
-                if ws_tx.send(Message::Text(text)).await.is_err() {
+                if let Err(e) = ws_tx.send(Message::Text(text)).await {
+                    error!("Failed to send WebSocket message: {}", e);
                     break;
                 }
             }
@@ -107,45 +139,40 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
             Ok(client_msg) => {
                 let now = Instant::now();
 
-                // Handle join message specially to set up lobby_ref
-                if let ClientMessage::JoinLobby {
-                    join_code,
-                    admin_id,
-                    name: _,
-                } = &client_msg
-                {
-                    if lobby_ref.is_none() {
-                        let manager = state.manager.lock().unwrap();
-                        if let Some(lobby_id) = manager.get_lobby_id_from_join_code(&join_code) {
-                            lobby_ref = manager.get_lobby(&lobby_id);
+                match &client_msg {
+                    ClientMessage::JoinLobby {
+                        join_code,
+                        admin_id,
+                        ..
+                    } if lobby_ref.is_none() => {
+                        if let Ok(manager) = state.manager.lock() {
+                            if let Some(lobby_id) = manager.get_lobby_id_from_join_code(join_code) {
+                                lobby_ref = manager.get_lobby(&lobby_id);
 
-                            // Set up player ID and add connection to the lobby
-                            if let Some(aid) = admin_id {
-                                player_id = *aid;
-                            }
-                            if let Some(lobby) = &lobby_ref {
-                                lobby.add_connection(player_id, tx.clone());
+                                if let Some(aid) = admin_id {
+                                    player_id = *aid;
+                                }
+                                if let Some(lobby) = &lobby_ref {
+                                    lobby.add_connection(player_id, tx.clone());
+                                }
                             }
                         }
-                        drop(manager);
                     }
+                    _ => {}
                 }
 
                 // Process messages using the cached lobby reference
-                let responses = if let Some(ref lobby) = lobby_ref {
-                    match client_msg {
-                        ClientMessage::JoinLobby { name, .. } => {
-                            let event = GameEvent {
-                                context: EventContext {
-                                    lobby_id: lobby.id(),
-                                    sender_id: player_id,
-                                    timestamp: now,
-                                    is_admin: false,
-                                },
-                                action: GameAction::Join { name },
-                            };
-                            lobby.process_event(event)
-                        }
+                if let Some(ref lobby) = lobby_ref {
+                    let event = match client_msg {
+                        ClientMessage::JoinLobby { name, .. } => GameEvent {
+                            context: EventContext {
+                                lobby_id: lobby.id(),
+                                sender_id: player_id,
+                                timestamp: now,
+                                is_admin: false,
+                            },
+                            action: GameAction::Join { name },
+                        },
                         ClientMessage::Leave { lobby_id } => {
                             let event = GameEvent {
                                 context: EventContext {
@@ -156,72 +183,83 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
                                 },
                                 action: GameAction::Leave,
                             };
-                            let responses = lobby.process_event(event);
                             lobby.remove_connection(&player_id);
-                            responses
+                            event
                         }
-                        ClientMessage::Answer { lobby_id, answer } => {
-                            let event = GameEvent {
-                                context: EventContext {
-                                    lobby_id,
-                                    sender_id: player_id,
-                                    timestamp: now,
-                                    is_admin: false,
-                                },
-                                action: GameAction::Answer { answer },
-                            };
-                            lobby.process_event(event)
-                        }
+                        ClientMessage::Answer { lobby_id, answer } => GameEvent {
+                            context: EventContext {
+                                lobby_id,
+                                sender_id: player_id,
+                                timestamp: now,
+                                is_admin: false,
+                            },
+                            action: GameAction::Answer { answer },
+                        },
                         ClientMessage::AdminAction { lobby_id, action } => {
-                            let game_action = match action {
+                            let game_action = match &action {
                                 AdminAction::StartGame => GameAction::StartGame,
-                                AdminAction::StartRound { specified_alternatives } => GameAction::StartRound {
-                                    specified_alternatives
+                                AdminAction::StartRound {
+                                    specified_alternatives,
+                                } => GameAction::StartRound {
+                                    specified_alternatives: specified_alternatives.clone(),
                                 },
                                 AdminAction::EndRound => GameAction::EndRound,
                                 AdminAction::SkipQuestion => GameAction::SkipQuestion,
-                                AdminAction::EndGame { reason } => GameAction::EndGame { reason },
+                                AdminAction::EndGame { reason } => GameAction::EndGame {
+                                    reason: reason.clone(),
+                                },
                                 AdminAction::CloseGame { reason } => {
-                                    GameAction::CloseGame { reason }
+                                    if let Ok(manager) = state.manager.lock() {
+                                        manager.remove_lobby(&lobby_id);
+                                    }
+                                    GameAction::CloseGame {
+                                        reason: reason.clone(),
+                                    }
                                 }
                             };
 
-                            let event = GameEvent {
+                            GameEvent {
                                 context: EventContext {
                                     lobby_id,
                                     sender_id: player_id,
                                     timestamp: now,
                                     is_admin: true,
                                 },
-                                action: game_action.clone(),
+                                action: game_action,
+                            }
+                        }
+                    };
+
+                    let responses = lobby.process_event(event);
+                    for response in responses {
+                        let server_msg = convert_to_server_message(&response.payload);
+                        if let Ok(connections) = lobby.connections.read() {
+                            let recipient_ids = match response.recipients {
+                                Recipients::Single(id) => vec![id],
+                                Recipients::Multiple(ids) => ids,
+                                Recipients::AllExcept(exclude_ids) => connections
+                                    .keys()
+                                    .filter(|&&id| !exclude_ids.contains(&id))
+                                    .copied()
+                                    .collect(),
+                                Recipients::All => connections.keys().copied().collect(),
                             };
 
-                            let responses = lobby.process_event(event);
-
-                            // Only lock manager briefly if we need to remove the lobby
-                            if matches!(game_action, GameAction::CloseGame { .. }) {
-                                state.manager.lock().unwrap().remove_lobby(&lobby_id);
+                            for id in recipient_ids {
+                                if let Some(sender) = connections.get(&id) {
+                                    let _ = sender.send(server_msg.clone());
+                                }
                             }
-
-                            responses
                         }
                     }
-                } else {
-                    vec![GameResponse {
-                        recipients: Recipients::Single(player_id),
-                        payload: ResponsePayload::Error {
-                            code: ErrorCode::LobbyNotFound,
-                            message: "Lobby not found".into(),
-                        },
-                    }]
-                };
-
-                if let Some(ref lobby) = lobby_ref {
-                    lobby.broadcast_responses(responses);
                 }
             }
             Err(e) => {
                 warn!("Failed to parse client message: {}", e);
+                let error_msg = ServerMessage::Error {
+                    message: format!("Invalid message format: {}", e),
+                };
+                let _ = tx.send(error_msg);
             }
         }
     }
@@ -230,12 +268,13 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
     if let Some(lobby) = lobby_ref {
         lobby.remove_connection(&player_id);
 
-        // Check if lobby is empty and remove it
         if lobby.is_empty() {
-            state.manager.lock().unwrap().remove_lobby(&lobby.id());
+            if let Ok(manager) = state.manager.lock() {
+                manager.remove_lobby(&lobby.id());
+            }
         }
     }
 
     send_task.abort();
-    info!("WebSocket closed");
+    info!("WebSocket closed for player {}", player_id);
 }
