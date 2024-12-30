@@ -6,6 +6,24 @@ use rand::{seq::SliceRandom, thread_rng};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Mutex;
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum ColorError {
+    #[error("Failed to acquire weights lock: {0}")]
+    LockError(String),
+
+    #[error("Invalid color format: {0}")]
+    InvalidColor(String),
+}
+
+impl From<ColorError> for QuestionError {
+    fn from(err: ColorError) -> Self {
+        QuestionError::InvalidFormat(err.to_string())
+    }
+}
+
+type ColorResult<T> = Result<T, ColorError>;
 
 // Static storage for color weights
 lazy_static! {
@@ -13,6 +31,7 @@ lazy_static! {
 }
 
 // Structure to store color weights
+#[derive(Default)]
 struct ColorWeightStore {
     weights: HashMap<Color, f64>,
     total_songs: usize,
@@ -20,13 +39,10 @@ struct ColorWeightStore {
 
 impl ColorWeightStore {
     fn new() -> Self {
-        Self {
-            weights: HashMap::new(),
-            total_songs: 0,
-        }
+        Self::default()
     }
 
-    fn update_from_questions(&mut self, questions: &[ColorQuestion]) {
+    fn update_from_questions(&mut self, questions: &[ColorQuestion]) -> ColorResult<()> {
         let mut color_counts: HashMap<Color, usize> = HashMap::new();
         self.total_songs = questions.len();
 
@@ -40,10 +56,16 @@ impl ColorWeightStore {
         // Calculate weights for each color
         for &color in Color::all() {
             let count = color_counts.get(&color).copied().unwrap_or(0);
-            let base_proportion = count as f64 / self.total_songs as f64;
+            let base_proportion = if self.total_songs > 0 {
+                count as f64 / self.total_songs as f64
+            } else {
+                0.0
+            };
             let weight = base_proportion.sqrt() + 0.15; // Apply square root transformation
             self.weights.insert(color, weight);
         }
+
+        Ok(())
     }
 
     fn get_weight(&self, color: Color) -> f64 {
@@ -52,9 +74,11 @@ impl ColorWeightStore {
 }
 
 // Public function to initialize weights
-pub fn initialize_color_weights(questions: &[ColorQuestion]) {
-    let mut store = COLOR_WEIGHTS.lock().unwrap();
-    store.update_from_questions(questions);
+pub fn initialize_color_weights(questions: &[ColorQuestion]) -> ColorResult<()> {
+    COLOR_WEIGHTS
+        .lock()
+        .map_err(|e| ColorError::LockError(e.to_string()))?
+        .update_from_questions(questions)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -82,7 +106,7 @@ impl Color {
         ]
     }
 
-    fn from_str(s: &str) -> QuestionResult<Self> {
+    fn from_str(s: &str) -> Result<Self, ColorError> {
         match s.trim().to_uppercase().as_str() {
             "RED" => Ok(Color::Red),
             "GREEN" => Ok(Color::Green),
@@ -97,10 +121,7 @@ impl Color {
             "BROWN" => Ok(Color::Brown),
             "ORANGE" => Ok(Color::Orange),
             "GRAY" | "GREY" => Ok(Color::Gray),
-            _ => Err(QuestionError::InvalidFormat(format!(
-                "Invalid color: {}",
-                s
-            ))),
+            _ => Err(ColorError::InvalidColor(format!("Invalid color: {}", s))),
         }
     }
 
@@ -120,15 +141,38 @@ pub struct ColorQuestion {
 }
 
 impl ColorQuestion {
-    fn generate_weighted_alternatives(&self) -> Vec<Color> {
+    pub fn new(
+        id: u32,
+        song: String,
+        artist: String,
+        colors: Vec<Color>,
+        spotify_uri: String,
+        youtube_id: String,
+    ) -> Self {
+        Self {
+            id,
+            song,
+            artist,
+            colors,
+            spotify_uri,
+            youtube_id,
+        }
+    }
+}
+
+impl ColorQuestion {
+    fn generate_weighted_alternatives(&self) -> ColorResult<Vec<Color>> {
         let mut rng = thread_rng();
         let mut round_colors = self.colors.clone();
-        let weights = COLOR_WEIGHTS.lock().unwrap();
+
+        let weights = COLOR_WEIGHTS
+            .lock()
+            .map_err(|e| ColorError::LockError(e.to_string()))?;
 
         // If we already have 6 or more colors, shuffle and return
         if round_colors.len() >= 6 {
             round_colors.shuffle(&mut rng);
-            return round_colors;
+            return Ok(round_colors);
         }
 
         // Get available colors (excluding ones we already have)
@@ -167,7 +211,7 @@ impl ColorQuestion {
         }
 
         round_colors.shuffle(&mut rng);
-        round_colors
+        Ok(round_colors)
     }
 }
 
@@ -186,9 +230,8 @@ impl Question for ColorQuestion {
 
     fn generate_round_alternatives(&self) -> Vec<String> {
         self.generate_weighted_alternatives()
-            .into_iter()
-            .map(|c| c.to_string())
-            .collect()
+            .map(|colors| colors.into_iter().map(|c| c.to_string()).collect())
+            .unwrap_or_else(|_| self.get_all_possible_alternatives())
     }
 
     fn get_spotify_uri(&self) -> String {
@@ -198,25 +241,6 @@ impl Question for ColorQuestion {
     fn get_youtube_id(&self) -> String {
         self.youtube_id.clone()
     }
-}
-
-// Modified load function that also initializes weights
-pub fn load_from_csv(filepath: &str) -> QuestionResult<Vec<ColorQuestion>> {
-    let mut reader = csv::ReaderBuilder::new()
-        .has_headers(true)
-        .from_path(filepath)?;
-
-    let mut questions = Vec::new();
-
-    for result in reader.records() {
-        let record = result?;
-        questions.push(load_from_record(&record)?);
-    }
-
-    // Initialize weights after loading all questions
-    initialize_color_weights(&questions);
-
-    Ok(questions)
 }
 
 pub fn load_from_record(record: &StringRecord) -> QuestionResult<ColorQuestion> {
@@ -229,7 +253,7 @@ pub fn load_from_record(record: &StringRecord) -> QuestionResult<ColorQuestion> 
     let colors = record[3]
         .split(';')
         .map(Color::from_str)
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>, ColorError>>()?;
 
     if colors.is_empty() {
         return Err(QuestionError::InvalidFormat("No valid colors found".into()));
@@ -250,47 +274,290 @@ pub fn load_from_record(record: &StringRecord) -> QuestionResult<ColorQuestion> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use csv::StringRecord;
 
-    #[test]
-    fn test_color_from_str() {
-        assert!(matches!(Color::from_str("RED"), Ok(Color::Red)));
-        assert!(matches!(Color::from_str(" blue "), Ok(Color::Blue)));
-        assert!(matches!(Color::from_str("GREY"), Ok(Color::Gray)));
-        assert!(Color::from_str("InvalidColor").is_err());
+    fn create_test_questions() -> Vec<ColorQuestion> {
+        vec![
+            ColorQuestion {
+                id: 1,
+                song: "Test Song 1".to_string(),
+                artist: "Test Artist 1".to_string(),
+                colors: vec![Color::Red, Color::Blue],
+                spotify_uri: "spotify:1".to_string(),
+                youtube_id: "yt1".to_string(),
+            },
+            ColorQuestion {
+                id: 2,
+                song: "Test Song 2".to_string(),
+                artist: "Test Artist 2".to_string(),
+                colors: vec![Color::Green, Color::Yellow],
+                spotify_uri: "spotify:2".to_string(),
+                youtube_id: "yt2".to_string(),
+            },
+        ]
     }
 
     #[test]
-    fn test_generate_alternatives() {
-        let question = ColorQuestion::new(
-            1,
-            "Test Song".into(),
-            "Test Artist".into(),
-            vec![Color::Blue],
-            "spotify:uri".into(),
-            "youtube123".into(),
-        );
+    fn test_color_from_str() {
+        // Test valid colors
+        assert!(matches!(Color::from_str("red"), Ok(Color::Red)));
+        assert!(matches!(Color::from_str("BLUE"), Ok(Color::Blue)));
+        assert!(matches!(Color::from_str(" Green "), Ok(Color::Green)));
+        assert!(matches!(Color::from_str("grey"), Ok(Color::Gray)));
+        assert!(matches!(Color::from_str("GRAY"), Ok(Color::Gray)));
 
-        let color_stats = HashMap::from([
-            (
-                Color::Blue,
-                ColorStats {
-                    frequency: 0.5,
-                    song_count: 5,
-                },
-            ),
-            (
-                Color::Red,
-                ColorStats {
-                    frequency: 0.3,
-                    song_count: 3,
-                },
-            ),
+        // Test invalid colors
+        assert!(matches!(
+            Color::from_str("invalid"),
+            Err(ColorError::InvalidColor(_))
+        ));
+        assert!(matches!(
+            Color::from_str(""),
+            Err(ColorError::InvalidColor(_))
+        ));
+    }
+
+    #[test]
+    fn test_color_weight_initialization() {
+        let questions = create_test_questions();
+        let result = initialize_color_weights(&questions);
+        assert!(result.is_ok());
+
+        // Test weight access
+        if let Ok(weights) = COLOR_WEIGHTS.lock() {
+            assert!(weights.get_weight(Color::Red) > 0.0);
+            assert!(weights.get_weight(Color::Blue) > 0.0);
+            assert!(weights.get_weight(Color::Green) > 0.0);
+            // Colors not in questions should have minimum weight
+            assert_eq!(weights.get_weight(Color::Purple), 0.15);
+        }
+    }
+
+    #[test]
+    fn test_load_from_record() {
+        let record = StringRecord::from(vec![
+            "1",
+            "Test Song",
+            "Test Artist",
+            "Red;Blue",
+            "spotify:test",
+            "yt123",
         ]);
 
-        let alternatives = question.generate_weighted_alternatives(&color_stats);
+        let result = load_from_record(&record);
+        assert!(result.is_ok());
 
-        assert!(alternatives.len() == 6);
-        assert!(alternatives.contains(&Color::Blue));
-        assert!(alternatives.iter().all(|c| Color::all().contains(c)));
+        if let Ok(question) = result {
+            assert_eq!(question.id, 1);
+            assert_eq!(question.song, "Test Song");
+            assert_eq!(question.artist, "Test Artist");
+            assert_eq!(question.colors.len(), 2);
+            assert!(question.colors.contains(&Color::Red));
+            assert!(question.colors.contains(&Color::Blue));
+            assert_eq!(question.spotify_uri, "spotify:test");
+            assert_eq!(question.youtube_id, "yt123");
+        }
+    }
+
+    #[test]
+    fn test_load_from_record_errors() {
+        // Test record with too few fields
+        let short_record = StringRecord::from(vec!["1", "Test Song", "Test Artist"]);
+        assert!(matches!(
+            load_from_record(&short_record),
+            Err(QuestionError::InvalidFormat(_))
+        ));
+
+        // Test invalid color format
+        let invalid_colors = StringRecord::from(vec![
+            "1",
+            "Test Song",
+            "Test Artist",
+            "Invalid;Colors",
+            "spotify:test",
+            "yt123",
+        ]);
+        assert!(matches!(
+            load_from_record(&invalid_colors),
+            Err(QuestionError::InvalidFormat(_))
+        ));
+
+        // Test invalid ID
+        let invalid_id = StringRecord::from(vec![
+            "not_a_number",
+            "Test Song",
+            "Test Artist",
+            "Red;Blue",
+            "spotify:test",
+            "yt123",
+        ]);
+        assert!(matches!(
+            load_from_record(&invalid_id),
+            Err(QuestionError::InvalidFormat(_))
+        ));
+
+        // Test empty colors
+        let empty_colors = StringRecord::from(vec![
+            "1",
+            "Test Song",
+            "Test Artist",
+            "",
+            "spotify:test",
+            "yt123",
+        ]);
+        assert!(matches!(
+            load_from_record(&empty_colors),
+            Err(QuestionError::InvalidFormat(_))
+        ));
+    }
+
+    #[test]
+    fn test_generate_weighted_alternatives() {
+        let question = ColorQuestion {
+            id: 1,
+            song: "Test".to_string(),
+            artist: "Test".to_string(),
+            colors: vec![Color::Red, Color::Blue],
+            spotify_uri: "test".to_string(),
+            youtube_id: "test".to_string(),
+        };
+
+        // Initialize weights first
+        let _ = initialize_color_weights(&vec![question.clone()]);
+
+        // Test alternative generation
+        let result = question.generate_weighted_alternatives();
+        assert!(result.is_ok());
+        if let Ok(alternatives) = result {
+            assert!(alternatives.len() >= 2);
+            assert!(alternatives.len() <= 6);
+            assert!(alternatives.contains(&Color::Red));
+            assert!(alternatives.contains(&Color::Blue));
+        }
+    }
+
+    #[test]
+    fn test_question_trait_implementation() {
+        let question = ColorQuestion {
+            id: 1,
+            song: "Test".to_string(),
+            artist: "Test".to_string(),
+            colors: vec![Color::Red, Color::Blue],
+            spotify_uri: "test".to_string(),
+            youtube_id: "test".to_string(),
+        };
+
+        assert_eq!(question.get_id(), 1);
+        assert_eq!(question.get_spotify_uri(), "test");
+        assert_eq!(question.get_youtube_id(), "test");
+
+        let correct_answers = question.get_correct_answer();
+        assert_eq!(correct_answers.len(), 2);
+        assert!(correct_answers.contains(&"Red".to_string()));
+        assert!(correct_answers.contains(&"Blue".to_string()));
+
+        let alternatives = question.get_all_possible_alternatives();
+        assert_eq!(alternatives.len(), Color::all().len());
+    }
+
+    #[test]
+    fn test_multiple_color_combinations() {
+        let questions = vec![
+            ColorQuestion {
+                id: 1,
+                song: "Test 1".to_string(),
+                artist: "Artist".to_string(),
+                colors: vec![
+                    Color::Red,
+                    Color::Blue,
+                    Color::Green,
+                    Color::Yellow,
+                    Color::Purple,
+                    Color::Gold,
+                ],
+                spotify_uri: "test".to_string(),
+                youtube_id: "test".to_string(),
+            },
+            ColorQuestion {
+                id: 2,
+                song: "Test 2".to_string(),
+                artist: "Artist".to_string(),
+                colors: vec![Color::Silver],
+                spotify_uri: "test".to_string(),
+                youtube_id: "test".to_string(),
+            },
+        ];
+
+        let _ = initialize_color_weights(&questions);
+
+        // Test with many colors
+        let question = &questions[0];
+        let result = question.generate_weighted_alternatives();
+        assert!(result.is_ok());
+        if let Ok(alternatives) = result {
+            assert_eq!(alternatives.len(), 6);
+            // Check all original colors are included
+            for color in &question.colors {
+                assert!(alternatives.contains(color));
+            }
+        }
+
+        // Test with single color
+        let question = &questions[1];
+        let result = question.generate_weighted_alternatives();
+        assert!(result.is_ok());
+        if let Ok(alternatives) = result {
+            assert!(alternatives.len() >= 2);
+            assert!(alternatives.contains(&Color::Silver));
+        }
+    }
+
+    #[test]
+    fn test_thread_safety() {
+        use std::thread;
+
+        let questions = create_test_questions();
+        // Handle initialization error
+        if let Err(e) = initialize_color_weights(&questions) {
+            panic!("Failed to initialize color weights: {}", e);
+        }
+
+        let handles: Vec<_> = (0..10)
+            .map(|_| {
+                thread::spawn(|| {
+                    let question = ColorQuestion {
+                        id: 1,
+                        song: "Test".to_string(),
+                        artist: "Test".to_string(),
+                        colors: vec![Color::Red, Color::Blue],
+                        spotify_uri: "test".to_string(),
+                        youtube_id: "test".to_string(),
+                    };
+                    question.generate_weighted_alternatives()
+                })
+            })
+            .collect();
+
+        for handle in handles {
+            match handle.join() {
+                Ok(result) => {
+                    assert!(
+                        result.is_ok(),
+                        "Thread generated alternatives failed: {:?}",
+                        result.err()
+                    );
+                }
+                Err(e) => {
+                    panic!("Thread panicked: {:?}", e);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_weight_store_empty() {
+        let store = ColorWeightStore::new();
+        assert_eq!(store.total_songs, 0);
+        assert_eq!(store.get_weight(Color::Red), 0.15); // Default weight
     }
 }

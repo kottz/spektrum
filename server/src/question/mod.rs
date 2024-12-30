@@ -146,7 +146,7 @@ pub fn load_questions_from_csv(filepath: &str) -> QuestionResult<Vec<GameQuestio
 
     // Initialize color weights if we loaded any color questions
     if !color_questions.is_empty() {
-        color::initialize_color_weights(&color_questions);
+        color::initialize_color_weights(&color_questions)?;
     }
 
     Ok(questions)
