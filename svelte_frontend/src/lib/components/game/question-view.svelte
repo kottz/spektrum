@@ -89,8 +89,11 @@
 		</CardContent>
 	</Card>
 
-	<RoundTimer class="mb-4" />
-
+	<Card>
+		<CardContent class="p-4">
+			<RoundTimer class="mb-4" />
+		</CardContent>
+	</Card>
 	<Card>
 		<CardHeader>
 			<CardTitle class="flex items-center justify-between">

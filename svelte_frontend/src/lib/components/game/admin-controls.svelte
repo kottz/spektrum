@@ -6,6 +6,7 @@
 	import { Separator } from '$lib/components/ui/separator';
 	import UpcomingQuestions from '$lib/components/game/upcoming-questions.svelte';
 	import AnswerProgress from '$lib/components/game/answer-progress.svelte';
+	import RoundTimer from './round-timer.svelte';
 
 	// Reactive values from store
 	const phase = $derived($gameStore.phase?.toLowerCase() || 'lobby');
@@ -83,8 +84,8 @@
 			</div>
 		</div>
 
-		<!-- Upcoming Questions -->
 		{#if !isGameOver}
+			<RoundTimer />
 			<AnswerProgress />
 			<div class="border-t border-border pt-4">
 				<UpcomingQuestions />

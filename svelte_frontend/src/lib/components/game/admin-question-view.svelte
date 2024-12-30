@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { gameStore } from '../../stores/game';
 	import { Card, CardContent } from '$lib/components/ui/card';
-	import RoundTimer from './round-timer.svelte';
 	import { PUBLIC_SPEKTRUM_SERVER_URL } from '$env/static/public';
 
 	const imageBaseUrl = $derived(`${PUBLIC_SPEKTRUM_SERVER_URL}/img_avif`);
@@ -55,10 +54,6 @@
 <Card>
 	<CardContent class="py-2">
 		<div class="flex items-center gap-4">
-			<!-- Timer first -->
-			<div class="w-[200px]">
-				<RoundTimer />
-			</div>
 			<!-- Question options -->
 			<div class="grid flex-1 grid-cols-6 gap-2">
 				{#each alternatives as alternative}
