@@ -1,4 +1,4 @@
-use super::{GameQuestion, Question, QuestionError, QuestionResult};
+use super::{Question, QuestionError, QuestionResult};
 use csv::StringRecord;
 use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
@@ -66,17 +66,16 @@ impl CharacterQuestion {
     fn generate_character_alternatives(&self) -> Vec<String> {
         let mut rng = rand::thread_rng();
 
-        // Start with the correct character
         let mut alternatives = vec![self.correct_character.clone()];
         let mut available_characters = self.other_characters.clone();
         available_characters.shuffle(&mut rng);
 
-        // Add other characters until we have 6 or run out
-        while alternatives.len() < 6 && !available_characters.is_empty() {
-            alternatives.push(available_characters.pop().unwrap());
-        }
+        alternatives.extend(
+            available_characters
+                .into_iter()
+                .take(6 - alternatives.len()),
+        );
 
-        // Final shuffle to randomize position of correct answer
         alternatives.shuffle(&mut rng);
         alternatives
     }

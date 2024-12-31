@@ -22,9 +22,6 @@ use uuid::Uuid;
 
 #[derive(Error, Debug)]
 pub enum ApiError {
-    #[error("Internal server error: {0}")]
-    Internal(String),
-
     #[error("Validation error: {0}")]
     Validation(String),
 
@@ -38,10 +35,6 @@ pub enum ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> axum::response::Response {
         let (status, error_message) = match &self {
-            ApiError::Internal(_) => (
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                self.to_string(),
-            ),
             ApiError::Validation(_) => (axum::http::StatusCode::BAD_REQUEST, self.to_string()),
             ApiError::Lobby(_) => (axum::http::StatusCode::BAD_REQUEST, self.to_string()),
             ApiError::Lock(_) => (
@@ -101,8 +94,9 @@ pub async fn create_lobby_handler(
         .lock()
         .map_err(|e| ApiError::Lock(e.to_string()))?;
 
-    let (lobby_id, join_code, admin_id) =
-        mgr.create_lobby(state.questions.to_vec(), round_duration).map_err(|e| ApiError::Lobby(e.to_string()))?;
+    let (lobby_id, join_code, admin_id) = mgr
+        .create_lobby(state.questions.to_vec(), round_duration)
+        .map_err(|e| ApiError::Lobby(e.to_string()))?;
 
     Ok(Json(CreateLobbyResponse {
         lobby_id,
@@ -146,14 +140,18 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                         ..
                     } if lobby_ref.is_none() => {
                         if let Ok(manager) = state.manager.lock() {
-                            if let Some(lobby_id) = manager.get_lobby_id_from_join_code(join_code) {
-                                lobby_ref = manager.get_lobby(&lobby_id);
-
-                                if let Some(aid) = admin_id {
-                                    player_id = *aid;
-                                }
-                                if let Some(lobby) = &lobby_ref {
-                                    lobby.add_connection(player_id, tx.clone());
+                            if let Ok(Some(lobby_id)) =
+                                manager.get_lobby_id_from_join_code(join_code)
+                            {
+                                if let Ok(Some(lobby)) = manager.get_lobby(&lobby_id) {
+                                    if let Some(aid) = admin_id {
+                                        player_id = *aid;
+                                    }
+                                    if let Err(e) = lobby.add_connection(player_id, tx.clone()) {
+                                        error!("Failed to add connection: {}", e);
+                                        continue;
+                                    }
+                                    lobby_ref = Some(lobby);
                                 }
                             }
                         }
@@ -161,7 +159,6 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                     _ => {}
                 }
 
-                // Process messages using the cached lobby reference
                 if let Some(ref lobby) = lobby_ref {
                     let event = match client_msg {
                         ClientMessage::JoinLobby { name, .. } => GameEvent {
@@ -169,7 +166,6 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                                 lobby_id: lobby.id(),
                                 sender_id: player_id,
                                 timestamp: now,
-                                is_admin: false,
                             },
                             action: GameAction::Join { name },
                         },
@@ -179,11 +175,12 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                                     lobby_id,
                                     sender_id: player_id,
                                     timestamp: now,
-                                    is_admin: false,
                                 },
                                 action: GameAction::Leave,
                             };
-                            lobby.remove_connection(&player_id);
+                            if let Err(e) = lobby.remove_connection(&player_id) {
+                                error!("Failed to remove connection: {}", e);
+                            }
                             event
                         }
                         ClientMessage::Answer { lobby_id, answer } => GameEvent {
@@ -191,7 +188,6 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                                 lobby_id,
                                 sender_id: player_id,
                                 timestamp: now,
-                                is_admin: false,
                             },
                             action: GameAction::Answer { answer },
                         },
@@ -210,7 +206,9 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                                 },
                                 AdminAction::CloseGame { reason } => {
                                     if let Ok(manager) = state.manager.lock() {
-                                        manager.remove_lobby(&lobby_id);
+                                        if let Err(e) = manager.remove_lobby(&lobby_id) {
+                                            error!("Failed to remove lobby: {}", e);
+                                        }
                                     }
                                     GameAction::CloseGame {
                                         reason: reason.clone(),
@@ -223,31 +221,31 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                                     lobby_id,
                                     sender_id: player_id,
                                     timestamp: now,
-                                    is_admin: true,
                                 },
                                 action: game_action,
                             }
                         }
                     };
 
-                    let responses = lobby.process_event(event);
-                    for response in responses {
-                        let server_msg = convert_to_server_message(&response.payload);
-                        if let Ok(connections) = lobby.connections.read() {
-                            let recipient_ids = match response.recipients {
-                                Recipients::Single(id) => vec![id],
-                                Recipients::Multiple(ids) => ids,
-                                Recipients::AllExcept(exclude_ids) => connections
-                                    .keys()
-                                    .filter(|&&id| !exclude_ids.contains(&id))
-                                    .copied()
-                                    .collect(),
-                                Recipients::All => connections.keys().copied().collect(),
-                            };
+                    if let Ok(responses) = lobby.process_event(event) {
+                        for response in responses {
+                            let server_msg = convert_to_server_message(&response.payload);
+                            if let Ok(connections) = lobby.connections.read() {
+                                let recipient_ids = match response.recipients {
+                                    Recipients::Single(id) => vec![id],
+                                    Recipients::Multiple(ids) => ids,
+                                    Recipients::AllExcept(exclude_ids) => connections
+                                        .keys()
+                                        .filter(|&&id| !exclude_ids.contains(&id))
+                                        .copied()
+                                        .collect(),
+                                    Recipients::All => connections.keys().copied().collect(),
+                                };
 
-                            for id in recipient_ids {
-                                if let Some(sender) = connections.get(&id) {
-                                    let _ = sender.send(server_msg.clone());
+                                for id in recipient_ids {
+                                    if let Some(sender) = connections.get(&id) {
+                                        let _ = sender.send(server_msg.clone());
+                                    }
                                 }
                             }
                         }
@@ -266,11 +264,15 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
 
     // Cleanup on disconnect
     if let Some(lobby) = lobby_ref {
-        lobby.remove_connection(&player_id);
+        if let Err(e) = lobby.remove_connection(&player_id) {
+            error!("Failed to remove connection during cleanup: {}", e);
+        }
 
-        if lobby.is_empty() {
+        if let Ok(true) = lobby.is_empty() {
             if let Ok(manager) = state.manager.lock() {
-                manager.remove_lobby(&lobby.id());
+                if let Err(e) = manager.remove_lobby(&lobby.id()) {
+                    error!("Failed to remove empty lobby: {}", e);
+                }
             }
         }
     }

@@ -100,9 +100,6 @@ pub enum QuestionError {
 
     #[error("Invalid question format: {0}")]
     InvalidFormat(String),
-
-    #[error("Missing required field: {0}")]
-    MissingField(String),
 }
 
 /// Result type alias for question operations

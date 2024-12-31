@@ -5,8 +5,7 @@ use axum::{
     Router,
 };
 use axum_server::tls_rustls::RustlsConfig;
-use axum_server::Server;
-use config::{Config, ConfigError};
+use config::Config;
 use http::HeaderValue;
 use serde::Deserialize;
 use std::net::SocketAddr;

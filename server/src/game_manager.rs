@@ -1,5 +1,5 @@
-use crate::game::{GameEngine, GameEvent, GameResponse, Recipients};
-use crate::messages::{convert_to_server_message, ServerMessage};
+use crate::game::{GameEngine, GameEvent, GameResponse};
+use crate::messages::ServerMessage;
 use crate::question::GameQuestion;
 use std::{
     collections::HashMap,
@@ -10,14 +10,16 @@ use tokio::sync::mpsc::UnboundedSender;
 use tracing::*;
 use uuid::Uuid;
 
-/// Example error type for GameManager
 #[derive(Error, Debug)]
 pub enum GameManagerError {
     #[error("Failed to acquire lock: {0}")]
     LockError(String),
-    #[error("Out of join codes.")]
+
+    #[error("Out of join codes")]
     OutOfJoinCodes,
 }
+
+pub type GameResult<T> = Result<T, GameManagerError>;
 
 /// A single lobby instance that manages its own connection pool and game engine
 pub struct GameLobby {
@@ -48,53 +50,50 @@ impl GameLobby {
         self.id
     }
 
-    pub fn add_connection(&self, player_id: Uuid, sender: UnboundedSender<ServerMessage>) {
-        self.connections.write().unwrap().insert(player_id, sender);
+    pub fn add_connection(
+        &self,
+        player_id: Uuid,
+        sender: UnboundedSender<ServerMessage>,
+    ) -> GameResult<()> {
+        self.connections
+            .write()
+            .map_err(|e| GameManagerError::LockError(e.to_string()))?
+            .insert(player_id, sender);
+        Ok(())
     }
 
-    pub fn remove_connection(&self, player_id: &Uuid) {
-        self.connections.write().unwrap().remove(player_id);
+    pub fn remove_connection(&self, player_id: &Uuid) -> GameResult<()> {
+        self.connections
+            .write()
+            .map_err(|e| GameManagerError::LockError(e.to_string()))?
+            .remove(player_id);
+        Ok(())
     }
 
-    pub fn process_event(&self, event: GameEvent) -> Vec<GameResponse> {
-        let mut engine = self.engine.write().unwrap();
-        engine.process_event(event)
+    pub fn process_event(&self, event: GameEvent) -> GameResult<Vec<GameResponse>> {
+        let res = self
+            .engine
+            .write()
+            .map_err(|e| GameManagerError::LockError(e.to_string()))?
+            .process_event(event)
+            .into_iter()
+            .collect::<Vec<_>>();
+        Ok(res)
     }
 
-    pub fn broadcast_responses(&self, responses: Vec<GameResponse>) {
-        let connections = self.connections.read().unwrap();
-
-        for response in responses {
-            let server_msg = convert_to_server_message(&response.payload);
-
-            let recipient_ids = match response.recipients {
-                Recipients::Single(id) => vec![id],
-                Recipients::Multiple(ids) => ids,
-                Recipients::AllExcept(exclude_ids) => connections
-                    .keys()
-                    .filter(|&&id| !exclude_ids.contains(&id))
-                    .copied()
-                    .collect(),
-                Recipients::All => connections.keys().copied().collect(),
-            };
-
-            for &id in &recipient_ids {
-                if let Some(sender) = connections.get(&id) {
-                    let _ = sender.send(server_msg.clone());
-                }
-            }
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.connections.read().unwrap().is_empty()
+    pub fn is_empty(&self) -> GameResult<bool> {
+        Ok(self
+            .connections
+            .read()
+            .map_err(|e| GameManagerError::LockError(e.to_string()))?
+            .is_empty())
     }
 }
 
-/// The GameManager now focuses purely on lobby lifecycle management
+/// The GameManager focuses purely on lobby lifecycle management
 pub struct GameManager {
-    pub lobbies: Arc<RwLock<HashMap<Uuid, Arc<GameLobby>>>>,
-    pub join_codes: Arc<RwLock<HashMap<String, Uuid>>>,
+    lobbies: Arc<RwLock<HashMap<Uuid, Arc<GameLobby>>>>,
+    join_codes: Arc<RwLock<HashMap<String, Uuid>>>,
 }
 
 impl GameManager {
@@ -105,13 +104,13 @@ impl GameManager {
         }
     }
 
-    fn generate_join_code(&self, lobby_id: Uuid) -> Result<String, GameManagerError> {
+    fn generate_join_code(&self, lobby_id: Uuid) -> GameResult<String> {
         let mut join_codes = self
             .join_codes
             .write()
             .map_err(|e| GameManagerError::LockError(e.to_string()))?;
 
-        // First try 6-digit codes up to a limit.
+        // First try 6-digit codes up to a limit
         for _ in 0..10_000 {
             let code = format!("{:06}", fastrand::u32(0..1_000_000));
             if !join_codes.contains_key(&code) {
@@ -120,7 +119,7 @@ impl GameManager {
             }
         }
 
-        // If many collisions or lobbies, escalate to 7 digits.
+        // If many collisions or lobbies, escalate to 7 digits
         for _ in 0..1_000_000 {
             let code = format!("{:07}", fastrand::u32(0..10_000_00));
             if !join_codes.contains_key(&code) {
@@ -136,7 +135,7 @@ impl GameManager {
         &self,
         questions: Vec<GameQuestion>,
         round_duration: u64,
-    ) -> Result<(Uuid, String, Uuid), GameManagerError> {
+    ) -> GameResult<(Uuid, String, Uuid)> {
         let lobby_id = Uuid::new_v4();
         let admin_id = Uuid::new_v4();
 
@@ -148,44 +147,100 @@ impl GameManager {
         ));
 
         let join_code = self.generate_join_code(lobby_id)?;
-        self.lobbies.write().unwrap().insert(lobby_id, lobby);
+
+        self.lobbies
+            .write()
+            .map_err(|e| GameManagerError::LockError(e.to_string()))?
+            .insert(lobby_id, lobby);
 
         Ok((lobby_id, join_code, admin_id))
     }
 
-    pub fn get_lobby(&self, id: &Uuid) -> Option<Arc<GameLobby>> {
-        self.lobbies.read().unwrap().get(id).cloned()
+    pub fn get_lobby(&self, id: &Uuid) -> GameResult<Option<Arc<GameLobby>>> {
+        Ok(self
+            .lobbies
+            .read()
+            .map_err(|e| GameManagerError::LockError(e.to_string()))?
+            .get(id)
+            .cloned())
     }
 
-    pub fn get_lobby_id_from_join_code(&self, join_code: &str) -> Option<Uuid> {
-        let bind = self.join_codes.read().unwrap();
-        bind.get(join_code).copied()
+    pub fn get_lobby_id_from_join_code(&self, join_code: &str) -> GameResult<Option<Uuid>> {
+        Ok(self
+            .join_codes
+            .read()
+            .map_err(|e| GameManagerError::LockError(e.to_string()))?
+            .get(join_code)
+            .copied())
     }
 
-    pub fn remove_lobby(&self, id: &Uuid) {
-        self.lobbies.write().unwrap().remove(id);
-    }
+    pub fn remove_lobby(&self, id: &Uuid) -> GameResult<()> {
+        let mut lobbies = self
+            .lobbies
+            .write()
+            .map_err(|e| GameManagerError::LockError(e.to_string()))?;
 
-    fn _list_lobbies(&self) -> Vec<Uuid> {
-        self.lobbies.read().unwrap().keys().cloned().collect()
-    }
+        // Also remove from join codes
+        if lobbies.remove(id).is_some() {
+            let mut join_codes = self
+                .join_codes
+                .write()
+                .map_err(|e| GameManagerError::LockError(e.to_string()))?;
 
-    pub fn cleanup_empty_lobbies(&self) {
-        let to_remove: Vec<Uuid> = {
-            let lobbies = self.lobbies.read().unwrap();
-            lobbies
+            // Find and remove any join codes pointing to this lobby
+            let codes_to_remove: Vec<String> = join_codes
                 .iter()
-                .filter(|(_, lobby)| lobby.is_empty())
-                .map(|(&id, _)| id)
-                .collect()
+                .filter(|(_, &lobby_id)| lobby_id == *id)
+                .map(|(code, _)| code.clone())
+                .collect();
+
+            for code in codes_to_remove {
+                join_codes.remove(&code);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn _list_lobbies(&self) -> GameResult<Vec<Uuid>> {
+        Ok(self
+            .lobbies
+            .read()
+            .map_err(|e| GameManagerError::LockError(e.to_string()))?
+            .keys()
+            .copied()
+            .collect())
+    }
+
+    fn _cleanup_empty_lobbies(&self) -> GameResult<()> {
+        let to_remove: Vec<Uuid> = {
+            let lobbies = self
+                .lobbies
+                .read()
+                .map_err(|e| GameManagerError::LockError(e.to_string()))?;
+
+            let mut empty_lobbies = Vec::new();
+            for (&id, lobby) in lobbies.iter() {
+                if lobby.is_empty()? {
+                    empty_lobbies.push(id);
+                }
+            }
+            empty_lobbies
         };
 
         if !to_remove.is_empty() {
-            let mut lobbies = self.lobbies.write().unwrap();
             for id in to_remove {
-                lobbies.remove(&id);
+                self.remove_lobby(&id)?;
                 info!("Cleaned up empty lobby {}", id);
             }
         }
+
+        Ok(())
+    }
+}
+
+impl Default for GameManager {
+    fn default() -> Self {
+        Self::new()
     }
 }

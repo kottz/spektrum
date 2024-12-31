@@ -1,11 +1,9 @@
 use crate::question::{GameQuestion, Question};
 use rand::seq::SliceRandom;
-use rand::Rng;
-use serde::{Deserialize, Serialize};
-use std::{
-    collections::{HashMap, HashSet},
-    time::Instant,
-};
+use serde::Serialize;
+use std::time::Duration;
+use std::{collections::HashMap, time::Instant};
+use tracing::warn;
 use uuid::Uuid;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -41,7 +39,6 @@ pub struct EventContext {
     pub lobby_id: Uuid,
     pub sender_id: Uuid,
     pub timestamp: Instant,
-    pub is_admin: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -136,11 +133,9 @@ pub enum ErrorCode {
     NotAuthorized,
     InvalidPhase,
     InvalidAction,
-    GameClosed,
     PlayerNotFound,
     AlreadyAnswered,
     TimeExpired,
-    LobbyNotFound,
     InvalidName,
 }
 
@@ -178,7 +173,11 @@ fn validate_player_name<'a>(
         return Err(NameValidationError::TooLong);
     }
 
-    let name_regex = regex::Regex::new(r"^[a-zA-Z0-9_\-\. ]+$").unwrap();
+    let name_regex = regex::Regex::new(r"^[a-zA-Z0-9_\-\. ]+$").map_err(|_| {
+        warn!("Failed to compile name regex");
+        NameValidationError::InvalidCharacters
+    })?;
+
     if !name_regex.is_match(name) {
         return Err(NameValidationError::InvalidCharacters);
     }
@@ -196,17 +195,11 @@ pub struct GameState {
     pub admin_id: Uuid,
     pub round_start_time: Option<Instant>,
     pub round_duration: u64,
-    // Remove color specific fields:
-    // pub colors: Vec<ColorDef>,
-    // pub correct_colors: Vec<String>,
-    // pub all_colors: Vec<ColorDef>,
-
-    // Replace song fields with question fields:
     pub current_alternatives: Vec<String>,
     pub correct_answers: Option<Vec<String>>,
     pub current_question: Option<GameQuestion>,
-    pub all_questions: Vec<GameQuestion>, // Replace all_songs
-    pub current_question_index: usize,    // Rename but same functionality
+    pub all_questions: Vec<GameQuestion>,
+    pub current_question_index: usize,
 }
 
 pub struct GameEngine {
@@ -325,7 +318,7 @@ impl GameEngine {
                 payload: ResponsePayload::StateChanged {
                     phase: self.state.phase,
                     question_type: "".to_string(),
-                    alternatives: self.state.current_alternatives.clone(), // Changed from colors
+                    alternatives: self.state.current_alternatives.clone(),
                     scoreboard: self.get_scoreboard(),
                 },
             },
@@ -392,11 +385,13 @@ impl GameEngine {
             }];
         }
 
-        let elapsed = ctx.timestamp.duration_since(
-            self.state
-                .round_start_time
-                .expect("Round start time should be set"),
-        );
+        let elapsed = match self.state.round_start_time {
+            Some(start_time) => ctx.timestamp.duration_since(start_time),
+            None => {
+                warn!("Round start time should be set but was not. Using default duration");
+                Duration::from_secs(self.state.round_duration / 2)
+            }
+        };
 
         if elapsed.as_secs() > self.state.round_duration {
             return vec![GameResponse {
@@ -499,43 +494,42 @@ impl GameEngine {
             }];
         }
 
-        // Reset all players' answer state
         for player in self.state.players.values_mut() {
             player.has_answered = false;
             player.answer = None;
         }
 
-        // Setup the round
         match self.setup_round(specified_alternatives) {
             Ok(()) => {
+                let Some(question) = self.state.current_question.as_ref() else {
+                    return vec![GameResponse {
+                        recipients: Recipients::Single(self.state.admin_id),
+                        payload: ResponsePayload::Error {
+                            code: ErrorCode::InvalidAction,
+                            message: "Game in invalid state: question not set after setup".into(),
+                        },
+                    }];
+                };
+
                 self.state.phase = GamePhase::Question;
                 self.state.round_start_time = Some(ctx.timestamp);
 
-                let mut outputs = Vec::new();
-                outputs.push(GameResponse {
+                let mut outputs = vec![GameResponse {
                     recipients: Recipients::All,
                     payload: ResponsePayload::StateChanged {
                         phase: GamePhase::Question,
-                        question_type: self
-                            .state
-                            .current_question
-                            .as_ref()
-                            .unwrap()
-                            .get_question_type()
-                            .to_string(),
+                        question_type: question.get_question_type().to_string(),
                         alternatives: self.state.current_alternatives.clone(),
                         scoreboard: self.get_scoreboard(),
                     },
-                });
+                }];
 
-                if let Some(question) = &self.state.current_question {
-                    outputs.push(GameResponse {
-                        recipients: Recipients::Single(self.state.admin_id),
-                        payload: ResponsePayload::AdminInfo {
-                            current_question: question.clone(),
-                        },
-                    });
-                }
+                outputs.push(GameResponse {
+                    recipients: Recipients::Single(self.state.admin_id),
+                    payload: ResponsePayload::AdminInfo {
+                        current_question: question.clone(),
+                    },
+                });
 
                 outputs
             }
@@ -602,7 +596,6 @@ impl GameEngine {
             }];
         }
 
-        // Don't mark as used when skipping, just move to the next question
         self.state.current_question = None;
         self.state.current_question_index += 1;
         self.state.current_alternatives.clear();
@@ -761,7 +754,6 @@ mod tests {
             lobby_id: Uuid::new_v4(),
             sender_id: player_id,
             timestamp: Instant::now(),
-            is_admin: false,
         };
 
         let event = GameEvent {
@@ -800,7 +792,6 @@ mod tests {
             lobby_id: Uuid::new_v4(),
             sender_id: admin_id,
             timestamp: Instant::now(),
-            is_admin: true,
         };
 
         let event = GameEvent {
@@ -846,7 +837,6 @@ mod tests {
             lobby_id: Uuid::new_v4(),
             sender_id: player_id,
             timestamp: Instant::now(),
-            is_admin: false,
         };
 
         let event = GameEvent {

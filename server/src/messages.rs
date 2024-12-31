@@ -3,22 +3,6 @@ use crate::question::GameQuestion;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Clone, Debug, Serialize)]
-#[serde(tag = "type")]
-enum QuestionInfo {
-    Color {
-        alternatives: Vec<String>, // Just the color names that clients can map to their color scheme
-    },
-    Character {
-        alternatives: Vec<CharacterOption>,
-    },
-}
-
-#[derive(Clone, Debug, Serialize)]
-struct CharacterOption {
-    name: String,
-    image_url: Option<String>,
-}
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
 pub enum ClientMessage {
@@ -99,13 +83,6 @@ pub enum ServerMessage {
     },
     Error {
         message: String,
-    },
-    InitialPlayerList {
-        players: Vec<(String, i32)>,
-    },
-    PlayerJoined {
-        player_name: String,
-        current_score: i32,
     },
     StateChanged {
         phase: String,
