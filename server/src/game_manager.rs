@@ -175,34 +175,33 @@ impl GameManager {
     }
 
     pub fn remove_lobby(&self, id: &Uuid) -> GameResult<()> {
+        // Acquire write locks for both maps at once to ensure atomic updates
         let mut lobbies = self
             .lobbies
             .write()
             .map_err(|e| GameManagerError::LockError(e.to_string()))?;
 
-        // Also remove from join codes
+        let mut join_codes = self
+            .join_codes
+            .write()
+            .map_err(|e| GameManagerError::LockError(e.to_string()))?;
+
         if lobbies.remove(id).is_some() {
-            let mut join_codes = self
-                .join_codes
-                .write()
-                .map_err(|e| GameManagerError::LockError(e.to_string()))?;
-
-            // Find and remove any join codes pointing to this lobby
-            let codes_to_remove: Vec<String> = join_codes
-                .iter()
-                .filter(|(_, &lobby_id)| lobby_id == *id)
-                .map(|(code, _)| code.clone())
-                .collect();
-
-            for code in codes_to_remove {
-                join_codes.remove(&code);
-            }
+            join_codes.retain(|_, &mut lobby_id| lobby_id != *id);
         }
 
         Ok(())
     }
 
-    fn _list_lobbies(&self) -> GameResult<Vec<Uuid>> {
+    pub fn lobby_exists(&self, id: &Uuid) -> GameResult<bool> {
+        Ok(self
+            .lobbies
+            .read()
+            .map_err(|e| GameManagerError::LockError(e.to_string()))?
+            .contains_key(id))
+    }
+
+    pub fn list_lobbies(&self) -> GameResult<Vec<Uuid>> {
         Ok(self
             .lobbies
             .read()
@@ -212,7 +211,7 @@ impl GameManager {
             .collect())
     }
 
-    fn _cleanup_empty_lobbies(&self) -> GameResult<()> {
+    pub fn cleanup_empty_lobbies(&self) -> GameResult<()> {
         let to_remove: Vec<Uuid> = {
             let lobbies = self
                 .lobbies
