@@ -87,7 +87,7 @@ id,difficulty,song,correct_character,other_characters,spotify_uri,youtube_id
 91,easy,"Main Title ""Somewhere iny My Memory"" (From ""Home Alone"")",kevin_mccallister,lucas;charlie_brown;schindler;john_mcclane;john_bender,4e5583da56af4a97,U89pW3kgOJ0
 92,medium,A Way of Life,last_samurai_tc,collateral_tc;edge_of_tmrw_tc;good_men_tc;maverick_tc;vampire_tc;risky_business_tc;,36c1aa7d3169425e,Vp6_Rjxs9U8
 93,medium,Returns a King,leonidas,maximus;william_wallace;aragorn;conan;boromir,433d98818896406a,N5wBTBCRsmQ
-94,medium,Get Back,les_grossman_tc,rain_main_tc;risky_business_tc;tony_stark;maverick_tc;jerry_maguire_tc,f277205e890740d3,ELPbTvc-3J0
+94,medium,Get Back,les_grossman_tc,rain_man_tc;risky_business_tc;tony_stark;maverick_tc;jerry_maguire_tc,f277205e890740d3,ELPbTvc-3J0
 95,medium,I'm Still Here,long_john_silver,jack_sparrow;blackbeard;hook;moses;captain_phillips_hanks,5b93949e3d2145aa,MUZwblurraA
 96,easy,Star Wars Theme,luke_skywalker,indiana_jones;optimus_prime;neytiri;eleven;ethan_hunt_tc,72f675c015344bef,HrIJT_4Txqw
 97,medium,The Mandalorian Theme,mandalorian,voldemort;gandalf;boromir;black_adam;darth_vader,61135cc40a924d97,xXp4GnC1Z3Q
@@ -206,7 +206,6 @@ id,difficulty,song,correct_character,other_characters,spotify_uri,youtube_id
 213,medium,Lose Yourself,eminem,jesse_pinkman;doakes;rick_grimes;lucas;frank_rossi,aca483741c514be8,xFYQQPAOz7Y
 214,medium,See You Again,paul_walker,lucas;tyler_durden;paul_atreides;oppenheimer;jack_dawson,a6f0f81d93dd4c37,xl8thVrlvjI
 215,medium,We're All in This Together,troy_bolton,alex_russo;hannah_montana;quicksilver;napoleon_dynamite;jack_dawson,e6d644aa7fee4ecc,Bz73c8rz4QA
-216,medium,Skyfall,craig_bond,jason_bourne;ethan_hunt_tc;agent_smith;han_solo;batman,3964a777981b46bb,LJzp_mDxaT0
 217,medium,Both Sides Now,frank_rossi,alex_russo;lucas;aniston;glinda;saruman,e3d243b0c9784f1d,GKevHTbVsbQ
 218,medium,You'll Be in My Heart,tarzan,mufasa;bagheera;spirit;rafiki;beast,2cc8bd6f7fbf4797,PaEEOsZH71M
 219,medium,Live to Win,cartman,rick_sanchez;patrick;genie;nr_one;tj,fc4a1c5f6d524d85,vuHS9NI_xwY
@@ -254,3 +253,9 @@ id,difficulty,song,correct_character,other_characters,spotify_uri,youtube_id
 263,medium,Bean Theme,bean_animated,rick_sanchez;patrick;charlie_brown;tj;perry,9eb9f90e4a2c4744,mjtyTuo_vFk
 264,medium,Kodnamn Grannungarna Theme,nr_one,bamse;rufus;totally_spies;scooby_doo;cartman,9fad3131ef414551,4J_uvw_-Hy8
 271,medium,The Glory Days,mr_incredible,superman;batman;spiderman;tony_stark;optimus_prime,0cd10752665b4d8b,Uaz2MPzBQps
+272,medium,Goldfinger,sean_connery_bond,pierce_brosnan_bond;daniel_craig_bond;timothy_dalton_bond;roger_moore_bond;george_lazenby_bond,7r0EUONfPUZ8SD1vu4ro27,Tvl8KH6WBO8
+273,medium,We Have All The Time In The World,george_lazenby_bond,sean_connery_bond;pierce_brosnan_bond;daniel_craig_bond;timothy_dalton_bond;roger_moore_bond,92508497a3cb4ca2,RMxRDTfzgpU
+274,medium,Nobody Does It Better,roger_moore_bond,george_lazenby_bond;sean_connery_bond;pierce_brosnan_bond;daniel_craig_bond;timothy_dalton_bond,390f069a556542a3,F1oV14KyvG0
+275,medium,A View to a Kill,timothy_dalton_bond,george_lazenby_bond;sean_connery_bond;pierce_brosnan_bond;daniel_craig_bond;roger_moore_bond,218f446acb6d485a,hR2OwmariWk
+276,medium,GoldenEye,pierce_brosnan_bond,timothy_dalton_bond;george_lazenby_bond;sean_connery_bond;daniel_craig_bond;roger_moore_bond,528QhCT2v3HgD71RmrSUNW,1_Aq5rQdPso
+277,medium,Skyfall,daniel_craig_bond,pierce_brosnan_bond;timothy_dalton_bond;george_lazenby_bond;sean_connery_bond;roger_moore_bond,3964a777981b46bb,LJzp_mDxaT0
