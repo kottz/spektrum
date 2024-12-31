@@ -4,6 +4,9 @@
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import AnswerProgress from './answer-progress.svelte';
 	import RoundTimer from './round-timer.svelte';
+	import { PUBLIC_SPEKTRUM_SERVER_URL } from '$env/static/public';
+
+	const imageBaseUrl = $derived(`${PUBLIC_SPEKTRUM_SERVER_URL}/img_avif`);
 
 	/**
 	 * Subscribe to necessary parts of the game store
@@ -152,7 +155,7 @@
 							<!-- Character question: show an image -->
 							<div class="aspect-square w-full">
 								<img
-									src={`http://192.168.1.155:8765/img_avif/${alternative}.avif`}
+									src={`${imageBaseUrl}/${alternative}.avif`}
 									alt={alternative}
 									class="h-full w-full object-contain"
 								/>
