@@ -52,7 +52,6 @@ struct AppConfig {
     questions: QuestionConfig,
     spotify: SpotifyConfig,
     logging: LoggingConfig,
-    static_dir: String,
     cors_origin: String,
     https_cert_path: String,
     https_key_path: String,
@@ -115,10 +114,12 @@ async fn shutdown_signal() {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let settings = Config::builder()
-        .add_source(config::File::with_name("config"))
         .add_source(config::Environment::default())
+        .add_source(
+            config::File::with_name("config").required(false),
+        )
         .build()
-        .map_err(|e| format!("Failed to load config: {}", e))?;
+        .map_err(|e| format!("Failed to build config: {}", e))?;
 
     let app_config: AppConfig = settings
         .try_deserialize()
@@ -148,9 +149,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route("/ws", get(ws_handler))
         .route("/api/lobbies", post(create_lobby_handler))
-        .fallback_service(
-            ServeDir::new(&app_config.static_dir).append_index_html_on_directories(true),
-        )
+        // .fallback_service(
+        //     ServeDir::new(&app_config.static_dir).append_index_html_on_directories(true),
+        // )
         .with_state(state)
         .layer(
             TraceLayer::new_for_http()
