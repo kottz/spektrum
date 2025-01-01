@@ -1,0 +1,12 @@
+fly.toml
+.git/
+/target
+/debug
+**/*.rs.bk
+*.pdb
+.gitignore
+.env
+Dockerfile
+README.md
+*.pem
+config.toml
