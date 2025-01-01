@@ -133,6 +133,7 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
     // Split the WebSocket into sender and receiver streams
     let (mut ws_tx, mut ws_rx) = socket.split();
     let (tx, mut rx) = unbounded_channel::<ServerMessage>();
+    let (pong_tx, mut pong_rx) = unbounded_channel::<Vec<u8>>();
 
     // Track the current lobby reference, if any, and the player's unique ID
     let mut lobby_ref: Option<Arc<GameLobby>> = None;
@@ -140,168 +141,230 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
 
     info!("New WebSocket connection from player {}", player_id);
 
+    // Create a ping interval
+    let mut ping_interval = tokio::time::interval(Duration::from_secs(30));
+
     // Task to handle sending messages to the client
     let send_task = tokio::spawn(async move {
-        while let Some(msg) = rx.recv().await {
-            // Convert the ServerMessage to JSON and send it over the WebSocket
-            match serde_json::to_string(&msg) {
-                Ok(text) => {
-                    if let Err(e) = ws_tx.send(Message::Text(text)).await {
-                        error!("Failed to send WebSocket message: {}", e);
+        loop {
+            tokio::select! {
+                // Handle ping interval
+                _ = ping_interval.tick() => {
+                    if let Err(e) = ws_tx.send(Message::Ping(vec![])).await {
+                        error!("Failed to send ping: {}", e);
                         break;
                     }
                 }
-                Err(e) => {
-                    error!("Failed to serialize server message: {}", e);
+                // Handle regular messages
+                Some(msg) = rx.recv() => {
+                    match serde_json::to_string(&msg) {
+                        Ok(text) => {
+                            if let Err(e) = ws_tx.send(Message::Text(text)).await {
+                                error!("Failed to send WebSocket message: {}", e);
+                                break;
+                            }
+                        }
+                        Err(e) => {
+                            error!("Failed to serialize server message: {}", e);
+                        }
+                    }
                 }
+                // Handle pong messages
+                Some(payload) = pong_rx.recv() => {
+                    if let Err(e) = ws_tx.send(Message::Pong(payload)).await {
+                        error!("Failed to send pong: {}", e);
+                        break;
+                    }
+                }
+                else => break,
             }
         }
     });
 
     // Process incoming messages from the client
-    while let Some(Ok(Message::Text(text))) = ws_rx.next().await {
-        match serde_json::from_str::<ClientMessage>(&text) {
-            Ok(client_msg) => {
-                let now = Instant::now();
+    while let Some(result) = ws_rx.next().await {
+        match result {
+            Ok(msg) => {
+                match msg {
+                    Message::Text(text) => {
+                        match serde_json::from_str::<ClientMessage>(&text) {
+                            Ok(client_msg) => {
+                                let now = Instant::now();
 
-                // Handle the JoinLobby logic for every JoinLobby message,
-                // rather than only on the first one.
-                if let ClientMessage::JoinLobby {
-                    join_code,
-                    admin_id,
-                    name: _,
-                } = &client_msg
-                {
-                    if let Ok(manager) = state.manager.lock() {
-                        info!(
-                            "number of lobbies at open: {}",
-                            manager.list_lobbies().unwrap().len()
-                        );
-                        if let Ok(Some(lobby_id)) = manager.get_lobby_id_from_join_code(join_code) {
-                            if let Ok(Some(lobby)) = manager.get_lobby(&lobby_id) {
-                                // If there's an admin_id, use that as the player ID
-                                if let Some(aid) = admin_id {
-                                    player_id = *aid;
-                                }
-
-                                // Add the connection to the lobby
-                                if let Err(e) = lobby.add_connection(player_id, tx.clone()) {
-                                    error!("Failed to add connection: {}", e);
-                                    // Skip further processing for this message
-                                    continue;
-                                }
-
-                                // Update the tracked lobby reference
-                                lobby_ref = Some(lobby);
-                            }
-                        }
-                    }
-                }
-
-                // Process other client events if we have a lobby
-                if let Some(ref lobby) = lobby_ref {
-                    let event = match client_msg {
-                        ClientMessage::JoinLobby { name, .. } => GameEvent {
-                            context: EventContext {
-                                lobby_id: lobby.id(),
-                                sender_id: player_id,
-                                timestamp: now,
-                            },
-                            action: GameAction::Join { name },
-                        },
-                        ClientMessage::Leave { lobby_id } => {
-                            // Attempt to remove the player from the connections
-                            if let Err(e) = lobby.remove_connection(&player_id) {
-                                error!("Failed to remove connection: {}", e);
-                            }
-                            GameEvent {
-                                context: EventContext {
-                                    lobby_id,
-                                    sender_id: player_id,
-                                    timestamp: now,
-                                },
-                                action: GameAction::Leave,
-                            }
-                        }
-                        ClientMessage::Answer { lobby_id, answer } => GameEvent {
-                            context: EventContext {
-                                lobby_id,
-                                sender_id: player_id,
-                                timestamp: now,
-                            },
-                            action: GameAction::Answer { answer },
-                        },
-                        ClientMessage::AdminAction { lobby_id, action } => {
-                            let game_action = match &action {
-                                AdminAction::StartGame => GameAction::StartGame,
-                                AdminAction::StartRound {
-                                    specified_alternatives,
-                                } => GameAction::StartRound {
-                                    specified_alternatives: specified_alternatives.clone(),
-                                },
-                                AdminAction::EndRound => GameAction::EndRound,
-                                AdminAction::SkipQuestion => GameAction::SkipQuestion,
-                                AdminAction::EndGame { reason } => GameAction::EndGame {
-                                    reason: reason.clone(),
-                                },
-                                AdminAction::CloseGame { reason } => {
-                                    // Remove the entire lobby from the manager
+                                // Handle the JoinLobby logic for every JoinLobby message
+                                if let ClientMessage::JoinLobby {
+                                    join_code,
+                                    admin_id,
+                                    name: _,
+                                } = &client_msg
+                                {
                                     if let Ok(manager) = state.manager.lock() {
-                                        if let Err(e) = manager.remove_lobby(&lobby_id) {
-                                            error!("Failed to remove lobby: {}", e);
+                                        info!(
+                                            "number of lobbies at open: {}",
+                                            manager.list_lobbies().unwrap().len()
+                                        );
+                                        if let Ok(Some(lobby_id)) =
+                                            manager.get_lobby_id_from_join_code(join_code)
+                                        {
+                                            if let Ok(Some(lobby)) = manager.get_lobby(&lobby_id) {
+                                                // If there's an admin_id, use that as the player ID
+                                                if let Some(aid) = admin_id {
+                                                    player_id = *aid;
+                                                }
+
+                                                if let Err(e) =
+                                                    lobby.add_connection(player_id, tx.clone())
+                                                {
+                                                    error!("Failed to add connection: {}", e);
+                                                    continue;
+                                                }
+
+                                                lobby_ref = Some(lobby);
+                                            }
                                         }
                                     }
-                                    GameAction::CloseGame {
-                                        reason: reason.clone(),
+                                }
+
+                                // Process other client events if we have a lobby
+                                if let Some(ref lobby) = lobby_ref {
+                                    let event = match client_msg {
+                                        ClientMessage::JoinLobby { name, .. } => GameEvent {
+                                            context: EventContext {
+                                                lobby_id: lobby.id(),
+                                                sender_id: player_id,
+                                                timestamp: now,
+                                            },
+                                            action: GameAction::Join { name },
+                                        },
+                                        ClientMessage::Leave { lobby_id } => {
+                                            if let Err(e) = lobby.remove_connection(&player_id) {
+                                                error!("Failed to remove connection: {}", e);
+                                            }
+                                            GameEvent {
+                                                context: EventContext {
+                                                    lobby_id,
+                                                    sender_id: player_id,
+                                                    timestamp: now,
+                                                },
+                                                action: GameAction::Leave,
+                                            }
+                                        }
+                                        ClientMessage::Answer { lobby_id, answer } => GameEvent {
+                                            context: EventContext {
+                                                lobby_id,
+                                                sender_id: player_id,
+                                                timestamp: now,
+                                            },
+                                            action: GameAction::Answer { answer },
+                                        },
+                                        ClientMessage::AdminAction { lobby_id, action } => {
+                                            let game_action = match &action {
+                                                AdminAction::StartGame => GameAction::StartGame,
+                                                AdminAction::StartRound {
+                                                    specified_alternatives,
+                                                } => GameAction::StartRound {
+                                                    specified_alternatives: specified_alternatives
+                                                        .clone(),
+                                                },
+                                                AdminAction::EndRound => GameAction::EndRound,
+                                                AdminAction::SkipQuestion => {
+                                                    GameAction::SkipQuestion
+                                                }
+                                                AdminAction::EndGame { reason } => {
+                                                    GameAction::EndGame {
+                                                        reason: reason.clone(),
+                                                    }
+                                                }
+                                                AdminAction::CloseGame { reason } => {
+                                                    if let Ok(manager) = state.manager.lock() {
+                                                        if let Err(e) =
+                                                            manager.remove_lobby(&lobby_id)
+                                                        {
+                                                            error!("Failed to remove lobby: {}", e);
+                                                        }
+                                                    }
+                                                    GameAction::CloseGame {
+                                                        reason: reason.clone(),
+                                                    }
+                                                }
+                                            };
+                                            GameEvent {
+                                                context: EventContext {
+                                                    lobby_id,
+                                                    sender_id: player_id,
+                                                    timestamp: now,
+                                                },
+                                                action: game_action,
+                                            }
+                                        }
+                                    };
+
+                                    // Process the event in the game logic
+                                    if let Ok(responses) = lobby.process_event(event) {
+                                        for response in responses {
+                                            let server_msg =
+                                                convert_to_server_message(&response.payload);
+
+                                            // Determine who receives the message
+                                            if let Ok(connections) = lobby.connections.read() {
+                                                let recipient_ids = match response.recipients {
+                                                    Recipients::Single(id) => vec![id],
+                                                    Recipients::Multiple(ids) => ids,
+                                                    Recipients::AllExcept(exclude_ids) => {
+                                                        connections
+                                                            .keys()
+                                                            .filter(|&&id| {
+                                                                !exclude_ids.contains(&id)
+                                                            })
+                                                            .copied()
+                                                            .collect()
+                                                    }
+                                                    Recipients::All => {
+                                                        connections.keys().copied().collect()
+                                                    }
+                                                };
+
+                                                // Send the message to the chosen recipients
+                                                for id in recipient_ids {
+                                                    if let Some(sender) = connections.get(&id) {
+                                                        let _ = sender.send(server_msg.clone());
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
-                            };
-                            GameEvent {
-                                context: EventContext {
-                                    lobby_id,
-                                    sender_id: player_id,
-                                    timestamp: now,
-                                },
-                                action: game_action,
                             }
-                        }
-                    };
-
-                    // Process the event in the game logic
-                    if let Ok(responses) = lobby.process_event(event) {
-                        for response in responses {
-                            let server_msg = convert_to_server_message(&response.payload);
-
-                            // Determine who receives the message
-                            if let Ok(connections) = lobby.connections.read() {
-                                let recipient_ids = match response.recipients {
-                                    Recipients::Single(id) => vec![id],
-                                    Recipients::Multiple(ids) => ids,
-                                    Recipients::AllExcept(exclude_ids) => connections
-                                        .keys()
-                                        .filter(|&&id| !exclude_ids.contains(&id))
-                                        .copied()
-                                        .collect(),
-                                    Recipients::All => connections.keys().copied().collect(),
+                            Err(e) => {
+                                warn!("Failed to parse client message: {}", e);
+                                let error_msg = ServerMessage::Error {
+                                    message: format!("Invalid message format: {}", e),
                                 };
-
-                                // Send the message to the chosen recipients
-                                for id in recipient_ids {
-                                    if let Some(sender) = connections.get(&id) {
-                                        let _ = sender.send(server_msg.clone());
-                                    }
-                                }
+                                let _ = tx.send(error_msg);
                             }
                         }
                     }
+                    Message::Ping(payload) => {
+                        // Send pong through the channel
+                        if let Err(e) = pong_tx.send(payload) {
+                            error!("Failed to send pong through channel: {}", e);
+                            break;
+                        }
+                    }
+                    Message::Pong(_) => {
+                        // Optional: Log or track pong responses
+                        trace!("Received pong from client");
+                    }
+                    Message::Close(_) => {
+                        info!("Client initiated close for player {}", player_id);
+                        break;
+                    }
+                    _ => {} // Handle other message types if needed
                 }
             }
             Err(e) => {
-                warn!("Failed to parse client message: {}", e);
-                let error_msg = ServerMessage::Error {
-                    message: format!("Invalid message format: {}", e),
-                };
-                let _ = tx.send(error_msg);
+                error!("WebSocket error: {}", e);
+                break;
             }
         }
     }

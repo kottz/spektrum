@@ -13,7 +13,6 @@ use std::path::PathBuf;
 use tokio::signal;
 use tokio::sync::oneshot;
 use tower_http::cors::CorsLayer;
-use tower_http::services::ServeDir;
 use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -115,9 +114,7 @@ async fn shutdown_signal() {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let settings = Config::builder()
         .add_source(config::Environment::default())
-        .add_source(
-            config::File::with_name("config").required(false),
-        )
+        .add_source(config::File::with_name("config").required(false))
         .build()
         .map_err(|e| format!("Failed to build config: {}", e))?;
 
