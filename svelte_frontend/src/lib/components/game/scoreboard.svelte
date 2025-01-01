@@ -20,13 +20,13 @@
         {#each players as player, i}
             <div class="relative">
                 <!-- Background for full width context -->
-                <div class="absolute inset-0 bg-muted rounded-lg" />
+                <div class="absolute inset-0 bg-muted rounded-lg"></div>
                 
                 <!-- Score bar -->
                 <div 
                     class="absolute inset-0 bg-primary/20 rounded-lg transition-all duration-500 ease-out" 
                     style="width: {getScoreWidth(player.score)}"
-                />
+                ></div>
                 
                 <!-- Content -->
                 <div class="relative px-4 py-3 flex justify-between items-center">

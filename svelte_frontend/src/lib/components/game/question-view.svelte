@@ -4,9 +4,9 @@
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import AnswerProgress from './answer-progress.svelte';
 	import RoundTimer from './round-timer.svelte';
-	import { PUBLIC_SPEKTRUM_SERVER_URL } from '$env/static/public';
+	import { PUBLIC_SPEKTRUM_CDN_URL } from '$env/static/public';
 
-	const imageBaseUrl = $derived(`${PUBLIC_SPEKTRUM_SERVER_URL}/img_avif`);
+	const imageBaseUrl = $derived(`${PUBLIC_SPEKTRUM_CDN_URL}/img`);
 
 	/**
 	 * Subscribe to necessary parts of the game store

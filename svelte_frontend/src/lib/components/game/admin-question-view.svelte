@@ -1,12 +1,9 @@
 <script lang="ts">
 	import { gameStore } from '../../stores/game';
 	import { Card, CardContent } from '$lib/components/ui/card';
-	import { PUBLIC_SPEKTRUM_SERVER_URL } from '$env/static/public';
+	import { PUBLIC_SPEKTRUM_CDN_URL } from '$env/static/public';
 
-	/**
-	 * Base URL for images
-	 */
-	const imageBaseUrl = $derived(`${PUBLIC_SPEKTRUM_SERVER_URL}/img_avif`);
+	const imageBaseUrl = $derived(`${PUBLIC_SPEKTRUM_CDN_URL}/img`);
 
 	/**
 	 * Subscribe to parts of the game store
