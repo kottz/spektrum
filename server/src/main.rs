@@ -1,5 +1,5 @@
 use crate::question::{load_questions_from_csv, GameQuestion};
-use crate::server::{create_lobby_handler, ws_handler, AppState};
+use crate::server::{check_sessions_handler, create_lobby_handler, ws_handler, AppState};
 use axum::{
     routing::{get, post},
     Router,
@@ -150,6 +150,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route("/ws", get(ws_handler))
         .route("/api/lobbies", post(create_lobby_handler))
+        .route("/api/check-sessions", post(check_sessions_handler))
         .with_state(state)
         .layer(
             TraceLayer::new_for_http()

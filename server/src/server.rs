@@ -14,9 +14,6 @@ use axum::{
 };
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
-use tokio::sync::RwLock;
-use tokio::task::JoinHandle;
-// ... rest of imports stay the same
 use serde::{Deserialize, Serialize};
 use std::{
     sync::{Arc, Mutex},
@@ -25,6 +22,8 @@ use std::{
 use thiserror::Error;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::RwLock;
+use tokio::task::JoinHandle;
 use tokio::time::Duration;
 use tracing::*;
 use uuid::Uuid;
@@ -131,6 +130,47 @@ pub async fn create_lobby_handler(
         join_code,
         admin_id,
     }))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CheckSessionsRequest {
+    pub sessions: Vec<SessionInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionInfo {
+    pub player_id: Uuid,
+    pub lobby_id: Uuid,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CheckSessionsResponse {
+    pub valid_sessions: Vec<SessionInfo>,
+}
+
+pub async fn check_sessions_handler(
+    State(state): State<AppState>,
+    Json(req): Json<CheckSessionsRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let mut valid_sessions = Vec::new();
+    let mgr = state
+        .manager
+        .lock()
+        .map_err(|e| ApiError::Lock(e.to_string()))?;
+
+    for session in req.sessions.iter() {
+        if let Some(lobby) = mgr
+            .get_lobby(&session.lobby_id)
+            .map_err(|e| ApiError::Lobby(e.to_string()))?
+        {
+            if lobby.is_empty().map_err(|e| ApiError::Lobby(e.to_string()))? {
+                continue;
+            }
+            valid_sessions.push(session.clone());
+        }
+    }
+
+    Ok(Json(CheckSessionsResponse { valid_sessions }))
 }
 
 pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {

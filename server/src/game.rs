@@ -14,7 +14,6 @@ pub enum GamePhase {
     GameOver,
 }
 
-// PlayerState remains mostly the same, just using String for answers
 #[derive(Clone, Debug)]
 pub struct PlayerState {
     pub name: String,

@@ -211,6 +211,24 @@ impl GameLobby {
         Ok(all_long_disconnected && self.is_inactive()?)
     }
 
+    pub fn is_admin_connected(&self) -> GameResult<bool> {
+        let connections = self
+            .connections
+            .read()
+            .map_err(|e| GameManagerError::LockError(e.to_string()))?;
+
+        Ok(connections.values().any(|conn| conn.name == "admin"))
+    }
+
+    pub fn is_empty(&self) -> GameResult<bool> {
+        let connections = self
+            .connections
+            .read()
+            .map_err(|e| GameManagerError::LockError(e.to_string()))?;
+
+        Ok(connections.is_empty())
+    }
+
     pub fn get_active_connections(
         &self,
     ) -> GameResult<Vec<(Uuid, UnboundedSender<ServerMessage>)>> {
