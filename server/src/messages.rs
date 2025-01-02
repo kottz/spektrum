@@ -11,6 +11,10 @@ pub enum ClientMessage {
         admin_id: Option<Uuid>,
         name: String,
     },
+    Reconnect {
+        lobby_id: Uuid,
+        player_id: Uuid,
+    },
     Leave {
         lobby_id: Uuid,
     },
@@ -57,6 +61,22 @@ pub enum AdminQuestion {
 }
 
 #[derive(Clone, Debug, Serialize)]
+pub struct GameState {
+    pub phase: String,
+    pub question_type: String,
+    pub alternatives: Vec<String>,
+    pub scoreboard: Vec<(String, i32)>,
+    pub current_song: Option<CurrentSong>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct CurrentSong {
+    pub song_name: String,
+    pub artist: String,
+    pub youtube_id: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
 #[serde(tag = "type")]
 pub enum ServerMessage {
     JoinedLobby {
@@ -65,6 +85,9 @@ pub enum ServerMessage {
         name: String,
         round_duration: u64,
         players: Vec<(String, i32)>,
+    },
+    ReconnectSuccess {
+        game_state: GameState,
     },
     PlayerLeft {
         name: String,
@@ -98,6 +121,17 @@ pub enum ServerMessage {
     },
 }
 
+impl From<&GamePhase> for String {
+    fn from(phase: &GamePhase) -> String {
+        match phase {
+            GamePhase::Lobby => "lobby".to_string(),
+            GamePhase::Score => "score".to_string(),
+            GamePhase::Question => "question".to_string(),
+            GamePhase::GameOver => "gameover".to_string(),
+        }
+    }
+}
+
 /// Convert a generic `ResponsePayload` from the game logic into a `ServerMessage`.
 pub fn convert_to_server_message(payload: &ResponsePayload) -> ServerMessage {
     match payload {
@@ -114,6 +148,19 @@ pub fn convert_to_server_message(payload: &ResponsePayload) -> ServerMessage {
             round_duration: *round_duration,
             players: current_players.clone(),
         },
+        ResponsePayload::Reconnected { game_state } => ServerMessage::ReconnectSuccess {
+            game_state: GameState {
+                phase: (&game_state.phase).into(),
+                question_type: game_state.question_type.clone(),
+                alternatives: game_state.alternatives.clone(),
+                scoreboard: game_state.scoreboard.clone(),
+                current_song: game_state.current_song.as_ref().map(|song| CurrentSong {
+                    song_name: song.song_name.clone(),
+                    artist: song.artist.clone(),
+                    youtube_id: song.youtube_id.clone(),
+                }),
+            },
+        },
         ResponsePayload::PlayerLeft { name } => ServerMessage::PlayerLeft { name: name.clone() },
         ResponsePayload::PlayerAnswered {
             name,
@@ -129,20 +176,12 @@ pub fn convert_to_server_message(payload: &ResponsePayload) -> ServerMessage {
             question_type,
             alternatives,
             scoreboard,
-        } => {
-            let phase_str = match phase {
-                GamePhase::Lobby => "lobby",
-                GamePhase::Score => "score",
-                GamePhase::Question => "question",
-                GamePhase::GameOver => "gameover",
-            };
-            ServerMessage::StateChanged {
-                phase: phase_str.to_string(),
-                question_type: question_type.clone(),
-                alternatives: alternatives.clone(),
-                scoreboard: scoreboard.clone(),
-            }
-        }
+        } => ServerMessage::StateChanged {
+            phase: phase.into(),
+            question_type: question_type.clone(),
+            alternatives: alternatives.clone(),
+            scoreboard: scoreboard.clone(),
+        },
         ResponsePayload::GameOver {
             final_scores,
             reason,

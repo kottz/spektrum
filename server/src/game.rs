@@ -35,6 +35,22 @@ impl PlayerState {
 }
 
 #[derive(Clone, Debug)]
+pub struct GameStateResponse {
+    pub phase: GamePhase,
+    pub question_type: String,
+    pub alternatives: Vec<String>,
+    pub scoreboard: Vec<(String, i32)>,
+    pub current_song: Option<CurrentSongInfo>,
+}
+
+#[derive(Clone, Debug)]
+pub struct CurrentSongInfo {
+    pub song_name: String,
+    pub artist: String,
+    pub youtube_id: String,
+}
+
+#[derive(Clone, Debug)]
 pub struct EventContext {
     pub lobby_id: Uuid,
     pub sender_id: Uuid,
@@ -69,6 +85,7 @@ pub enum GameAction {
     StartRound {
         specified_alternatives: Option<Vec<String>>,
     },
+    GetState,
     EndRound,
     SkipQuestion,
     EndGame {
@@ -94,6 +111,9 @@ pub enum ResponsePayload {
         name: String,
         round_duration: u64,
         current_players: Vec<(String, i32)>,
+    },
+    Reconnected {
+        game_state: GameStateResponse,
     },
     PlayerLeft {
         name: String,
@@ -256,6 +276,20 @@ impl GameEngine {
             GameAction::StartRound {
                 specified_alternatives,
             } => self.handle_start_round(context, specified_alternatives),
+            GameAction::GetState => vec![GameResponse {
+                recipients: Recipients::Single(context.sender_id),
+                payload: ResponsePayload::StateChanged {
+                    phase: self.state.phase,
+                    question_type: self
+                        .state
+                        .current_question
+                        .as_ref()
+                        .map(|q| q.get_question_type().to_string())
+                        .unwrap_or_default(),
+                    alternatives: self.state.current_alternatives.clone(),
+                    scoreboard: self.get_scoreboard(),
+                },
+            }],
             GameAction::EndRound => self.handle_end_round(context),
             GameAction::SkipQuestion => self.handle_skip_question(context),
             GameAction::EndGame { reason } => self.handle_end_game(context, reason),
@@ -644,12 +678,16 @@ impl GameEngine {
         }]
     }
 
-    fn get_scoreboard(&self) -> Vec<(String, i32)> {
+    pub fn get_scoreboard(&self) -> Vec<(String, i32)> {
         self.state
             .players
             .values()
             .map(|p| (p.name.clone(), p.score))
             .collect()
+    }
+
+    pub fn get_phase(&self) -> GamePhase {
+        self.state.phase
     }
 
     fn setup_round(&mut self, specified_alternatives: Option<Vec<String>>) -> Result<(), String> {
@@ -689,6 +727,32 @@ impl GameEngine {
         let start = self.state.current_question_index;
         let end = std::cmp::min(start + count, self.state.all_questions.len());
         self.state.all_questions[start..end].to_vec()
+    }
+
+    pub fn get_current_state(&self) -> GameStateResponse {
+        GameStateResponse {
+            phase: self.state.phase,
+            question_type: self
+                .state
+                .current_question
+                .as_ref()
+                .map(|q| q.get_question_type().to_string())
+                .unwrap_or_default(),
+            alternatives: self.state.current_alternatives.clone(),
+            scoreboard: self.get_scoreboard(),
+            current_song: self.state.current_question.as_ref().map(|q| match q {
+                GameQuestion::Color(c) => CurrentSongInfo {
+                    song_name: c.song.clone(),
+                    artist: c.artist.clone(),
+                    youtube_id: c.youtube_id.clone(),
+                },
+                GameQuestion::Character(c) => CurrentSongInfo {
+                    song_name: c.song.clone(),
+                    artist: "".to_string(), // Character questions don't have artist
+                    youtube_id: c.youtube_id.clone(),
+                },
+            }),
+        }
     }
 }
 
