@@ -51,7 +51,7 @@ struct AppConfig {
     questions: QuestionConfig,
     spotify: SpotifyConfig,
     logging: LoggingConfig,
-    cors_origin: String,
+    cors_origins: Vec<String>,
     https_cert_path: String,
     https_key_path: String,
 }
@@ -117,21 +117,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .add_source(config::File::with_name("config").required(false))
         .build()
         .map_err(|e| format!("Failed to build config: {}", e))?;
-
     let app_config: AppConfig = settings
         .try_deserialize()
         .map_err(|e| format!("Failed to parse config: {}", e))?;
-
     init_tracing(app_config.logging.json);
 
-    let cors_origin: HeaderValue = app_config
-        .cors_origin
-        .parse()
-        .map_err(|e| format!("Invalid CORS origin: {}", e))?;
+    // Parse all CORS origins
+    let cors_origins: Vec<HeaderValue> = app_config
+        .cors_origins
+        .iter()
+        .map(|origin| {
+            origin
+                .parse()
+                .map_err(|e| format!("Invalid CORS origin '{}': {}", origin, e))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
 
     let cors = CorsLayer::new()
         .allow_methods(vec![http::Method::GET, http::Method::POST])
-        .allow_origin(cors_origin)
+        .allow_origin(cors_origins)
         .allow_credentials(true)
         .allow_headers(vec![
             http::header::CONTENT_TYPE,
@@ -146,9 +150,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route("/ws", get(ws_handler))
         .route("/api/lobbies", post(create_lobby_handler))
-        // .fallback_service(
-        //     ServeDir::new(&app_config.static_dir).append_index_html_on_directories(true),
-        // )
         .with_state(state)
         .layer(
             TraceLayer::new_for_http()
