@@ -1,17 +1,15 @@
 use crate::question::{load_questions_from_csv, GameQuestion};
 use crate::server::{check_sessions_handler, create_lobby_handler, ws_handler, AppState};
 use axum::{
-    routing::{get, post},
+    routing::{any, post},
     Router,
 };
-use axum_server::tls_rustls::RustlsConfig;
 use config::Config;
 use http::HeaderValue;
 use serde::Deserialize;
 use std::net::SocketAddr;
-use std::path::PathBuf;
 use tokio::signal;
-use tokio::sync::oneshot;
+use tokio::time::Duration;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 use tracing::{error, info};
@@ -148,7 +146,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let state = AppState::new(questions);
     let app = Router::new()
-        .route("/ws", get(ws_handler))
+        .route("/ws", any(ws_handler))
         .route("/api/lobbies", post(create_lobby_handler))
         .route("/api/check-sessions", post(check_sessions_handler))
         .with_state(state)
@@ -161,49 +159,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = SocketAddr::from(([0, 0, 0, 0], app_config.server.port));
     info!("Starting server on {}", addr);
 
-    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
-    let shutdown_signal_task = tokio::spawn(async move {
+    // Create server handle for shutdown
+    let handle = axum_server::Handle::new();
+    let handle_clone = handle.clone();
+
+    // Spawn shutdown signal handler
+    tokio::spawn(async move {
         shutdown_signal().await;
-        let _ = shutdown_tx.send(());
+        info!("Shutdown signal received, starting graceful shutdown");
+        handle_clone.graceful_shutdown(Some(Duration::from_secs(3)));
     });
 
-    // Run server with or without TLS
-    let server_result = if app_config.server.https {
-        let tls_config = RustlsConfig::from_pem_file(
-            PathBuf::from(&app_config.https_cert_path),
-            PathBuf::from(&app_config.https_key_path),
-        )
-        .await
-        .map_err(|e| format!("TLS config error: {}", e))?;
+    // Create the server and configure HTTP/2
+    let mut server = axum_server::bind(addr);
+    server.http_builder().http2().enable_connect_protocol();
 
-        let server = axum_server::bind_rustls(addr, tls_config).serve(app.into_make_service());
+    // Run the server
+    server
+        .handle(handle)
+        .serve(app.into_make_service_with_connect_info::<SocketAddr>())
+        .await?;
 
-        tokio::select! {
-            result = server => result.map_err(|e| format!("Server error: {}", e).into()),
-            _ = shutdown_rx => {
-                info!("Shutdown signal received, starting graceful shutdown");
-                Ok(())
-            }
-        }
-    } else {
-        let server = axum_server::bind(addr).serve(app.into_make_service());
-
-        tokio::select! {
-            result = server => result.map_err(|e| format!("Server error: {}", e).into()),
-            _ = shutdown_rx => {
-                info!("Shutdown signal received, starting graceful shutdown");
-                Ok(())
-            }
-        }
-    };
-
-    if let Err(e) = server_result {
-        error!("Server error: {}", e);
-        return Err(e);
-    }
-
-    // Wait for shutdown signal handler to complete
-    let _ = shutdown_signal_task.await;
     info!("Server shutdown complete");
     Ok(())
 }
