@@ -1,9 +1,10 @@
 // src/lib/stores/websocket.ts
+
 import { writable, get } from 'svelte/store';
 import type { ServerMessage, ClientMessage } from '../types/game';
 import { PUBLIC_SPEKTRUM_WS_SERVER_URL } from '$env/static/public';
 
-// Store state interface
+// Define our store shape
 interface WebSocketState {
 	connected: boolean;
 	messages: ServerMessage[];
@@ -12,7 +13,6 @@ interface WebSocketState {
 }
 
 function createWebSocketStore() {
-	// Initialize the store with default state
 	const { subscribe, set, update } = writable<WebSocketState>({
 		connected: false,
 		messages: [],
@@ -20,13 +20,9 @@ function createWebSocketStore() {
 		isConnecting: false
 	});
 
-	// WebSocket instance
 	let socket: WebSocket | null = null;
-	// Reconnection timeout handle
 	let reconnectTimeout: number | null = null;
-	// Number of reconnection attempts
 	let reconnectAttempts = 0;
-	// Maximum number of reconnection attempts
 	const MAX_RECONNECT_ATTEMPTS = 3;
 
 	function clearReconnectTimeout() {
@@ -36,9 +32,35 @@ function createWebSocketStore() {
 		}
 	}
 
-	const connect = (joinCode: string, playerName: string, adminId?: string) => {
-		// Clean up any existing connection first
-		disconnect();
+	/**
+	 * Tries reconnecting via a 'Reconnect' message
+	 * if we have credentials stored in localStorage.
+	 * Returns true if a reconnect message was sent,
+	 * or false if no credentials were found.
+	 */
+	function tryReconnect(): boolean {
+		const lobbyId = localStorage.getItem('lobbyId');
+		const playerId = localStorage.getItem('playerId');
+		if (lobbyId && playerId) {
+			console.log('Attempting to reconnect with stored credentials...');
+			const reconnectMsg: ClientMessage = {
+				type: 'Reconnect',
+				lobby_id: lobbyId,
+				player_id: playerId
+			};
+			send(reconnectMsg);
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Connect to the backend WebSocket server.
+	 * If joinCode/playerName are provided, attempt a normal 'JoinLobby'.
+	 * Otherwise, try to 'Reconnect' if we have stored credentials.
+	 */
+	function connect(joinCode?: string, playerName?: string, adminId?: string) {
+		disconnect(); // Clean up any existing connection
 
 		update(state => ({ ...state, isConnecting: true }));
 
@@ -55,17 +77,21 @@ function createWebSocketStore() {
 				isConnecting: false
 			}));
 
-			// Send join message once connected
-			const joinMsg: ClientMessage = {
-				type: 'JoinLobby',
-				join_code: joinCode,
-				name: playerName,
-				admin_id: adminId
-			};
-			send(joinMsg);
+			// Attempt reconnect first if credentials exist
+			const didReconnect = tryReconnect();
+			if (!didReconnect && joinCode && playerName) {
+				// No stored credentials or forced new join
+				const joinMsg: ClientMessage = {
+					type: 'JoinLobby',
+					join_code: joinCode,
+					name: playerName,
+					admin_id: adminId
+				};
+				send(joinMsg);
+			}
 		};
 
-		socket.onmessage = (event) => {
+		socket.onmessage = event => {
 			try {
 				const message = JSON.parse(event.data) as ServerMessage;
 				console.log('Received message:', message);
@@ -75,7 +101,7 @@ function createWebSocketStore() {
 					messages: [...state.messages, message]
 				}));
 
-				// Clear error state on successful message
+				// Clear any previous error if we got a non-error message
 				if (message.type !== 'Error') {
 					update(state => ({ ...state, error: null }));
 				}
@@ -88,7 +114,7 @@ function createWebSocketStore() {
 			}
 		};
 
-		socket.onclose = (event) => {
+		socket.onclose = event => {
 			console.log('WebSocket closed:', event);
 
 			const wasConnected = get({ subscribe }).connected;
@@ -98,14 +124,14 @@ function createWebSocketStore() {
 				isConnecting: false
 			}));
 
-			// Only attempt reconnect if we were previously connected
-			// and it wasn't a normal closure
+			// Attempt reconnection if the socket was previously open
+			// and the closure wasn’t clean (code != 1000)
 			if (wasConnected && event.code !== 1000) {
 				attemptReconnect(joinCode, playerName, adminId);
 			}
 		};
 
-		socket.onerror = (error) => {
+		socket.onerror = error => {
 			console.error('WebSocket error:', error);
 			update(state => ({
 				...state,
@@ -113,9 +139,12 @@ function createWebSocketStore() {
 				isConnecting: false
 			}));
 		};
-	};
+	}
 
-	const attemptReconnect = (joinCode: string, playerName: string, adminId?: string) => {
+	/**
+	 * If reconnectAttempts < MAX, increment and retry connecting.
+	 */
+	function attemptReconnect(joinCode?: string, playerName?: string, adminId?: string) {
 		if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
 			update(state => ({
 				...state,
@@ -129,42 +158,46 @@ function createWebSocketStore() {
 
 		clearReconnectTimeout();
 		reconnectTimeout = window.setTimeout(() => {
-			console.log(`Attempting reconnect ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`);
+			console.log(`Attempting reconnect ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}...`);
 			connect(joinCode, playerName, adminId);
 		}, delay);
-	};
+	}
 
-	const send = (message: ClientMessage) => {
+	/**
+	 * Send a message if the socket is open.
+	 */
+	function send(message: ClientMessage) {
 		if (socket?.readyState === WebSocket.OPEN) {
 			console.log('Sending message:', message);
 			socket.send(JSON.stringify(message));
 		} else {
-			console.error('Cannot send message: connection not available');
+			console.error('Cannot send message: connection not open');
 			update(state => ({
 				...state,
 				error: 'Connection not available'
 			}));
 		}
-	};
+	}
 
-	const disconnect = () => {
+	/**
+	 * Clean up the connection.
+	 */
+	function disconnect() {
 		clearReconnectTimeout();
 		reconnectAttempts = 0;
 
 		if (socket) {
-			// Close the connection cleanly
-			socket.close(1000, 'Client disconnecting');
+			socket.close(1000, 'Client disconnecting'); // normal closure
 			socket = null;
 		}
 
-		// Reset the store state
 		set({
 			connected: false,
 			messages: [],
 			error: null,
 			isConnecting: false
 		});
-	};
+	}
 
 	return {
 		subscribe,

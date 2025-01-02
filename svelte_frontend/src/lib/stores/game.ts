@@ -1,11 +1,30 @@
 // src/lib/stores/game.ts
-import { writable, derived, get } from 'svelte/store';
+
+import { writable, get } from 'svelte/store';
 import { websocketStore } from './websocket';
 import { browser } from '$app/environment';
 import type { GameState, ServerMessage } from '../types/game';
 import { GamePhase } from '../types/game';
 import { youtubeStore } from './youtube-store';
 
+// Utility functions for localStorage
+function saveCredentials(lobbyId: string, playerId: string, joinCode: string, playerName: string) {
+    if (!browser) return;
+    localStorage.setItem('lobbyId', lobbyId);
+    localStorage.setItem('playerId', playerId);
+    localStorage.setItem('joinCode', joinCode);
+    localStorage.setItem('playerName', playerName);
+}
+
+function clearCredentials() {
+    if (!browser) return;
+    localStorage.removeItem('lobbyId');
+    localStorage.removeItem('playerId');
+    localStorage.removeItem('joinCode');
+    localStorage.removeItem('playerName');
+}
+
+// Initial client-side game state
 const initialState: GameState = {
     phase: GamePhase.Lobby,
     isAdmin: false,
@@ -13,14 +32,14 @@ const initialState: GameState = {
     lobbyId: undefined,
     roundDuration: 60,
     players: new Map(),
-    currentAnswers: [],
+    currentAnswers: []
 };
 
 function createGameStore() {
     const store = writable<GameState>(initialState);
-    const { subscribe, set } = store;
+    const { subscribe, set, update } = store;
 
-    // Subscribe to WebSocket messages
+    // Listen for new messages in the websocket store
     websocketStore.subscribe(ws => {
         if (ws.messages.length > 0) {
             const lastMessage = ws.messages[ws.messages.length - 1];
@@ -31,15 +50,24 @@ function createGameStore() {
     function handleServerMessage(message: ServerMessage) {
         console.log('Handling server message:', message);
 
+        // If the server announces the game is closed, clean up entirely
         if (message.type === 'GameClosed') {
             console.log('Game closed, cleaning up...');
             cleanup();
             return;
         }
 
-        store.update(state => {
+        update(state => {
             switch (message.type) {
-                case 'JoinedLobby':
+                case 'JoinedLobby': {
+                    // Store credentials for reconnect
+                    saveCredentials(
+                        message.lobby_id,
+                        message.player_id,
+                        message.join_code ?? '',
+                        message.name
+                    );
+
                     return {
                         ...state,
                         lobbyId: message.lobby_id,
@@ -47,85 +75,120 @@ function createGameStore() {
                         playerName: message.name,
                         roundDuration: message.round_duration,
                         joinCode: message.join_code,
-                        isAdmin: false, // Ensure we're not admin when joining
-                        players: new Map(message.players.map(([name, score]) => [
-                            name,
-                            {
+                        isAdmin: false, // Not admin unless set otherwise
+                        players: new Map(
+                            message.players.map(([name, score]) => [
                                 name,
-                                score,
-                                hasAnswered: false,
-                                answer: null
-                            }
-                        ]))
+                                {
+                                    name,
+                                    score,
+                                    hasAnswered: false,
+                                    answer: null
+                                }
+                            ])
+                        )
                     };
-                    case 'StateChanged': {
-                        console.log('State changed:', message);
-                        // Update players from scoreboard
-                        const newPlayers = new Map(state.players);
-                        message.scoreboard.forEach(([name, score]) => {
-                            newPlayers.set(name, {
-                                name,
-                                score,
-                                hasAnswered: false,
-                                answer: null
-                            });
-                        });
+                }
 
-                        const newPhase = message.phase.toLowerCase() as GamePhase;
+                // If the backend supports 'ReconnectSuccess', handle that here
+                case 'ReconnectSuccess': {
+                    // Attempt to restore the same lobbyId/playerId from localStorage
+                    const storedLobbyId = browser ? localStorage.getItem('lobbyId') : null;
+                    const storedPlayerId = browser ? localStorage.getItem('playerId') : null;
+                    const storedPlayerName = browser ? localStorage.getItem('playerName') : null;
 
-                        // Handle video playback based on phase
-                        youtubeStore.handlePhaseChange(newPhase);
-
-                        return {
-                            ...state,
-                            phase: newPhase,
-                            players: newPlayers,
-                            // Clear answers when entering score phase
-                            currentAnswers: newPhase === 'score' ? [] : state.currentAnswers,
-                            currentQuestion: message.alternatives ? {
-                                type: message.question_type,
-                                alternatives: message.alternatives
-                            } : undefined
-                        };
-                    }
                     return {
                         ...state,
-                        phase: message.phase.toLowerCase() as GamePhase,
-                        players: newPlayers,
-                        // Clear answers when entering score phase (round ended)
-                        currentAnswers: message.phase.toLowerCase() === 'score' ? [] : state.currentAnswers,
-                        currentQuestion: message.alternatives ? {
-                            type: message.question_type,
-                            alternatives: message.alternatives
-                        } : undefined
+                        // If either is missing in localStorage, at least keep the old state
+                        lobbyId: storedLobbyId ?? state.lobbyId,
+                        playerId: storedPlayerId ?? state.playerId,
+                        playerName: storedPlayerName ?? state.playerName,
+
+                        // Now apply the rest of the game_state details from the message
+                        phase: message.game_state.phase as GamePhase,
+                        currentQuestion: message.game_state.alternatives
+                            ? {
+                                type: message.game_state.question_type,
+                                alternatives: message.game_state.alternatives
+                            }
+                            : undefined,
+                        players: new Map(
+                            message.game_state.scoreboard.map(([name, score]) => [
+                                name,
+                                {
+                                    name,
+                                    score,
+                                    hasAnswered: false,
+                                    answer: null
+                                }
+                            ])
+                        )
                     };
+                }
+
+                case 'StateChanged': {
+                    console.log('State changed:', message);
+                    // Update players from the scoreboard
+                    const newPlayers = new Map(state.players);
+                    message.scoreboard.forEach(([name, score]) => {
+                        newPlayers.set(name, {
+                            name,
+                            score,
+                            hasAnswered: false,
+                            answer: null
+                        });
+                    });
+
+                    const newPhase = message.phase.toLowerCase() as GamePhase;
+
+                    // Handle video playback based on phase
+                    youtubeStore.handlePhaseChange(newPhase);
+
+                    return {
+                        ...state,
+                        phase: newPhase,
+                        players: newPlayers,
+                        // Clear answers when entering score phase
+                        currentAnswers: newPhase === 'score' ? [] : state.currentAnswers,
+                        currentQuestion: message.alternatives
+                            ? {
+                                type: message.question_type,
+                                alternatives: message.alternatives
+                            }
+                            : undefined
+                    };
+                }
+
                 case 'GameOver':
                     return {
                         ...state,
                         phase: 'gameover'
                     };
+
                 case 'AdminInfo': {
-                    // Update game state
+                    // Optionally load video from message.question
                     if (message.question) {
                         const { youtube_id, song_name, artist } = message.question;
                         console.log('Received song info:', { youtube_id, song_name, artist });
-                        
-                        // Load the video in YouTube player
+
                         if (youtube_id) {
                             youtubeStore.loadVideo(youtube_id);
                         }
                     }
                     return {
                         ...state,
-                        currentSong: message.question ? {
-                            songName: message.question.song_name,
-                            artist: message.question.artist,
-                            youtubeId: message.question.youtube_id
-                        } : undefined
+                        currentSong: message.question
+                            ? {
+                                songName: message.question.song_name,
+                                artist: message.question.artist,
+                                youtubeId: message.question.youtube_id
+                            }
+                            : undefined
                     };
                 }
+
                 case 'AdminNextQuestions': {
-                    // Load the next video regardless of current phase
+                    // Load the next video for preview
                     const nextQuestion = message.upcoming_questions[0];
                     if (nextQuestion?.youtube_id) {
                         console.log('Loading next video:', nextQuestion.youtube_id);
@@ -136,15 +199,16 @@ function createGameStore() {
                         upcomingQuestions: message.upcoming_questions
                     };
                 }
-                case 'PlayerAnswered':
-                    // Don't add duplicate answers
-                    if (state.currentAnswers?.some(a => a.name === message.name)) {
+
+                case 'PlayerAnswered': {
+                    // Avoid adding duplicate answers
+                    if (state.currentAnswers.some(a => a.name === message.name)) {
                         return state;
                     }
                     return {
                         ...state,
                         currentAnswers: [
-                            ...(state.currentAnswers || []),
+                            ...state.currentAnswers,
                             {
                                 name: message.name,
                                 correct: message.correct,
@@ -152,6 +216,13 @@ function createGameStore() {
                             }
                         ]
                     };
+                }
+
+                case 'Error':
+                    // If a reconnect attempt fails, clear credentials so we don't loop
+                    clearCredentials();
+                    return state;
+
                 default:
                     return state;
             }
@@ -160,38 +231,41 @@ function createGameStore() {
 
     function cleanup() {
         console.log('Running cleanup...');
-        if (browser) {
-            localStorage.removeItem('gameState');
-        }
+        clearCredentials(); // Clear localStorage
         websocketStore.disconnect();
         set(initialState);
     }
 
     return {
         subscribe,
+
         setAdmin: (adminId: string) => {
-            store.update(state => ({
+            update(state => ({
                 ...state,
                 isAdmin: true,
                 adminId
             }));
         },
+
         setJoinCode: (joinCode: string) => {
-            store.update(state => ({
+            update(state => ({
                 ...state,
                 joinCode
             }));
         },
+
         setLobbyId: (lobbyId: string) => {
-            store.update(state => ({
+            update(state => ({
                 ...state,
                 lobbyId
             }));
         },
+
         getState: () => get(store),
         cleanup,
+
         clearError: () => {
-            store.update(state => ({
+            update(state => ({
                 ...state,
                 error: undefined
             }));

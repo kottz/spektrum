@@ -1,6 +1,9 @@
 // src/lib/types/game.ts
 
-// Core game enums and types that mirror the backend
+/**
+ * Core phases as defined by the backend. 
+ * Matches the enum GamePhase { Lobby, Score, Question, GameOver }.
+ */
 export enum GamePhase {
 	Lobby = 'lobby',
 	Score = 'score',
@@ -8,6 +11,9 @@ export enum GamePhase {
 	GameOver = 'gameover'
 }
 
+/**
+ * Possible error codes the server can send for invalid actions or states.
+ */
 export enum ErrorCode {
 	NotAuthorized = 'NotAuthorized',
 	InvalidPhase = 'InvalidPhase',
@@ -20,13 +26,18 @@ export enum ErrorCode {
 	InvalidName = 'InvalidName'
 }
 
+/**
+ * Information for a single answer in the current round.
+ */
 export interface PlayerAnswer {
 	name: string;
 	correct: boolean;
 	timestamp: number;
 }
 
-// Player state
+/**
+ * Represents a single player’s state on the client side.
+ */
 export interface PlayerState {
 	name: string;
 	score: number;
@@ -34,7 +45,9 @@ export interface PlayerState {
 	answer: string | null;
 }
 
-// Game state managed by frontend
+/**
+ * Frontend store for the overall game state.
+ */
 export interface GameState {
 	phase: GamePhase;
 	lobbyId?: string;
@@ -66,7 +79,9 @@ export interface GameState {
 	currentAnswers: PlayerAnswer[];
 }
 
-// Game question type
+/**
+ * Represents a single quiz question.
+ */
 export interface GameQuestion {
 	type: string;
 	song_name: string;
@@ -76,15 +91,37 @@ export interface GameQuestion {
 	correct_answer: string;
 }
 
-// Messages from server to client
+/* ------------------------------------------------------------------
+   SERVER -> CLIENT MESSAGES
+------------------------------------------------------------------ */
+
+/**
+ * Extended server messages reflecting the new server.rs protocol.
+ */
 export type ServerMessage =
 	| {
-		type: 'Joined';
+		// Sent when the client has successfully joined a lobby
+		type: 'JoinedLobby';
 		player_id: string;
 		lobby_id: string;
 		name: string;
 		round_duration: number;
-		current_players: [string, number][];  // Tuple of [name, score]
+		players: [string, number][]; // Tuple [playerName, score]
+	}
+	| {
+		// Sent when a previously connected player is successfully reconnected
+		type: 'ReconnectSuccess';
+		game_state: {
+			phase: string; // same as GamePhase, but might come as a string
+			question_type: string;
+			alternatives: string[];
+			scoreboard: [string, number][]; // [playerName, score]
+			current_song?: {
+				song_name: string;
+				artist: string;
+				youtube_id: string;
+			};
+		};
 	}
 	| {
 		type: 'PlayerLeft';
@@ -98,14 +135,14 @@ export type ServerMessage =
 	}
 	| {
 		type: 'StateChanged';
-		phase: GamePhase;
+		phase: string; // e.g. 'lobby', 'score', 'question', 'gameover'
 		question_type: string;
 		alternatives: string[];
-		scoreboard: [string, number][];
+		scoreboard: [string, number][]; // [playerName, score]
 	}
 	| {
 		type: 'GameOver';
-		final_scores: [string, number][];
+		scores: [string, number][]; // final scores
 		reason: string;
 	}
 	| {
@@ -114,10 +151,12 @@ export type ServerMessage =
 	}
 	| {
 		type: 'AdminInfo';
-		current_question: GameQuestion;
+		// Provides extra info about a question to the admin
+		question: GameQuestion;
 	}
 	| {
 		type: 'AdminNextQuestions';
+		// Provides upcoming questions (could be used for preview, etc.)
 		upcoming_questions: GameQuestion[];
 	}
 	| {
@@ -126,13 +165,21 @@ export type ServerMessage =
 		message: string;
 	};
 
-// Messages from client to server
+/* ------------------------------------------------------------------
+   CLIENT -> SERVER MESSAGES
+------------------------------------------------------------------ */
+
 export type ClientMessage =
 	| {
 		type: 'JoinLobby';
 		join_code: string;
 		name: string;
-		admin_id?: string;  // Only used when joining as admin
+		admin_id?: string; // Only if joining as admin
+	}
+	| {
+		type: 'Reconnect';
+		lobby_id: string;
+		player_id: string;
 	}
 	| {
 		type: 'Leave';
@@ -149,7 +196,9 @@ export type ClientMessage =
 		action: AdminAction;
 	};
 
-// Admin actions that can be sent to server
+/**
+ * Administrative actions that can be performed in the lobby.
+ */
 export type AdminAction =
 	| { type: 'StartGame' }
 	| { type: 'StartRound'; specified_alternatives?: string[] }
@@ -158,14 +207,18 @@ export type AdminAction =
 	| { type: 'EndGame'; reason: string }
 	| { type: 'CloseGame'; reason: string };
 
-// Name validation error types
+/**
+ * Common name validation errors that might be returned by the server or client.
+ */
 export type NameValidationError =
 	| 'TooShort'
 	| 'TooLong'
 	| 'InvalidCharacters'
 	| 'AlreadyTaken';
 
-// Helper function to get user-friendly error messages
+/**
+ * Returns a user-friendly description for a name validation error.
+ */
 export function getNameValidationErrorMessage(error: NameValidationError): string {
 	switch (error) {
 		case 'TooShort':
