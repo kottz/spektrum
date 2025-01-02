@@ -12,6 +12,7 @@ use axum::{
     response::IntoResponse,
     Json,
 };
+use bytes::Bytes;
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
@@ -163,7 +164,10 @@ pub async fn check_sessions_handler(
             .get_lobby(&session.lobby_id)
             .map_err(|e| ApiError::Lobby(e.to_string()))?
         {
-            if lobby.is_empty().map_err(|e| ApiError::Lobby(e.to_string()))? {
+            if lobby
+                .is_empty()
+                .map_err(|e| ApiError::Lobby(e.to_string()))?
+            {
                 continue;
             }
             valid_sessions.push(session.clone());
@@ -194,28 +198,20 @@ impl WSConnectionState {
     }
 }
 
-/// Handle a new WebSocket connection
 pub async fn handle_socket(socket: WebSocket, state: AppState) {
     let (ws_tx, mut ws_rx) = socket.split();
     let (tx, rx) = unbounded_channel::<ServerMessage>();
-    let (pong_tx, pong_rx) = unbounded_channel::<Vec<u8>>();
+    let (pong_tx, pong_rx) = unbounded_channel::<Bytes>();
 
     let conn_state = Arc::new(RwLock::new(WSConnectionState::new(tx.clone())));
 
     // Spawn the sender task
     let send_task = spawn_sender_task(ws_tx, rx, pong_rx);
 
-    // Process incoming messages - pass state by reference
-    process_incoming_messages(
-        &mut ws_rx,
-        conn_state.clone(),
-        &state, // Pass by reference
-        tx.clone(),
-        pong_tx,
-    )
-    .await;
+    // Process incoming messages
+    process_incoming_messages(&mut ws_rx, conn_state.clone(), &state, tx.clone(), pong_tx).await;
 
-    // Cleanup - pass state by reference
+    // Cleanup
     handle_disconnect(conn_state, &state).await;
     send_task.abort();
 }
@@ -224,7 +220,7 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
 fn spawn_sender_task(
     mut ws_tx: SplitSink<WebSocket, Message>,
     mut rx: UnboundedReceiver<ServerMessage>,
-    mut pong_rx: UnboundedReceiver<Vec<u8>>,
+    mut pong_rx: UnboundedReceiver<Bytes>,
 ) -> JoinHandle<()> {
     let mut ping_interval = tokio::time::interval(Duration::from_secs(30));
 
@@ -232,7 +228,8 @@ fn spawn_sender_task(
         loop {
             tokio::select! {
                 _ = ping_interval.tick() => {
-                    if let Err(e) = ws_tx.send(Message::Ping(vec![])).await {
+                    let ping_payload: Bytes = Bytes::new();
+                    if let Err(e) = ws_tx.send(Message::Ping(ping_payload)).await {
                         error!("Failed to send ping: {}", e);
                         break;
                     }
@@ -259,15 +256,15 @@ fn spawn_sender_task(
 async fn process_incoming_messages(
     ws_rx: &mut SplitStream<WebSocket>,
     conn_state: Arc<RwLock<WSConnectionState>>,
-    state: &AppState, // Changed to reference
+    state: &AppState,
     tx: UnboundedSender<ServerMessage>,
-    pong_tx: UnboundedSender<Vec<u8>>,
+    pong_tx: UnboundedSender<Bytes>,
 ) {
     while let Some(result) = ws_rx.next().await {
         match result {
             Ok(msg) => match msg {
                 Message::Text(text) => {
-                    handle_text_message(text, &conn_state, &state, &tx).await;
+                    handle_text_message(text.to_string(), &conn_state, state, &tx).await;
                 }
                 Message::Ping(payload) => {
                     if let Err(e) = pong_tx.send(payload) {
@@ -552,7 +549,7 @@ async fn send_server_message(
     msg: ServerMessage,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let text = serde_json::to_string(&msg)?;
-    ws_tx.send(Message::Text(text)).await?;
+    ws_tx.send(Message::Text(text.into())).await?;
     Ok(())
 }
 

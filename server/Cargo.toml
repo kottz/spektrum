@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 tokio = { version = "1.42.0", features = ["full"] }
-axum = { version = "0.7.9", features = ["ws", "http2", "macros"] }
+axum = { version = "0.8.1", features = ["ws", "http2", "macros"] }
 axum-server = { version = "0.7.1", features = ["tls-rustls"] }
 reqwest = { version = "0.12.9", features = ["json"] }
 serde = { version = "1.0.216", features = ["derive"] }
@@ -25,3 +25,4 @@ regex = "1.11.1"
 lazy_static = "1.5.0"
 http = "1.2.0"
 config = "0.15.4"
+bytes = "1.9.0"
