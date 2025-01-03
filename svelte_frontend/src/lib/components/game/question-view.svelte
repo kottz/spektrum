@@ -65,41 +65,40 @@
 		const styles: string[] = [];
 		styles.push('aspect-square', 'rounded-lg', 'transition-all', 'duration-150', 'relative');
 
-		// If this alternative is the one the player clicked
-		if (alternative === clickedAnswer) {
-			styles.push('ring-4', 'ring-offset-2', 'z-10');
+		// First establish base background for character type
+		if (questionType === 'character') {
+			styles.push('p-0', 'overflow-hidden');
+			// Only add the muted background if it's not a clicked answer
+			if (!(alternative === clickedAnswer && myAnswer)) {
+				styles.push('bg-gray-200');
+			}
+		} else if (questionType !== 'color') {
+			styles.push('bg-muted');
+		}
 
-			// If we already have an answer result for this player
+		// Handle correct/incorrect answer styling
+		if (alternative === clickedAnswer) {
+			styles.push('ring-4', 'z-10');
 			if (myAnswer) {
 				if (wasCorrect) {
-					styles.push('ring-green-500', 'bg-green-500/20');
+					styles.push('ring-green-500', 'bg-green-500/50');
 				} else {
-					styles.push('ring-red-500', 'bg-red-500/20');
+					styles.push('ring-red-500', 'bg-red-500/50');
 				}
 			} else {
 				styles.push('ring-primary');
 			}
 		}
 
-		// Dim the other buttons if one has already been clicked
+		// Rest of the styles remain the same
 		if (clickedAnswer && alternative !== clickedAnswer) {
 			styles.push('opacity-40');
 		}
 
-		// Only show hover ring/scale if no button has been clicked yet
 		if (!clickedAnswer) {
 			styles.push('hover:ring-2', 'hover:ring-muted-foreground', 'hover:scale-[1.02]');
 		}
 
-		// If it's a character question, show an image instead
-		if (questionType === 'character') {
-			styles.push('p-0', 'overflow-hidden');
-		} else if (questionType !== 'color') {
-			// Non-color questions get a muted background
-			styles.push('bg-muted');
-		}
-
-		// For color questions, add the metallic class if needed
 		if (questionType === 'color') {
 			const lower = alternative.toLowerCase();
 			if (lower === 'gold') {
@@ -109,9 +108,7 @@
 			}
 		}
 
-		// Disable pointer events after clicking
 		styles.push(clickedAnswer ? 'cursor-not-allowed' : 'cursor-pointer');
-
 		return styles.join(' ');
 	}
 </script>
@@ -125,9 +122,9 @@
 	</Card>
 
 	<!-- Round timer (time left for the player to answer) -->
-	<Card>
+	<Card class="mb-4">
 		<CardContent class="p-4">
-			<RoundTimer class="mb-4" />
+			<RoundTimer />
 		</CardContent>
 	</Card>
 
