@@ -12,7 +12,7 @@ use tokio::signal;
 use tokio::time::Duration;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::{DefaultMakeSpan, TraceLayer};
-use tracing::{error, info};
+use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod game;
@@ -24,7 +24,6 @@ mod server;
 #[derive(Debug, Deserialize)]
 struct ServerConfig {
     port: u16,
-    https: bool,
 }
 
 #[derive(Default, Debug, Deserialize)]
@@ -39,19 +38,11 @@ struct QuestionConfig {
 }
 
 #[derive(Debug, Deserialize)]
-struct SpotifyConfig {
-    no_spotify: bool,
-}
-
-#[derive(Debug, Deserialize)]
 struct AppConfig {
     server: ServerConfig,
     questions: QuestionConfig,
-    spotify: SpotifyConfig,
     logging: LoggingConfig,
     cors_origins: Vec<String>,
-    https_cert_path: String,
-    https_key_path: String,
 }
 
 fn init_tracing(json_logging: bool) {
