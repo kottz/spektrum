@@ -16,6 +16,7 @@ interface SessionInfo {
     playerId: string;
     playerName: string;
     joinCode: string;
+    createdAt: string;
 }
 
 function loadSessions(): SessionInfo[] {
@@ -157,11 +158,19 @@ function createGameStore() {
                 switch (message.type) {
                     case 'JoinedLobby': {
                         // We now know the actual playerId, so we can store a session.
+                        const time = new Date();
+                        const timeString = time.toLocaleTimeString('en-US', {
+                            hour12: false,
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+
                         const session: SessionInfo = {
                             lobbyId: message.lobby_id,
                             playerId: message.player_id,
                             playerName: message.name,
-                            joinCode: message.join_code ?? ''
+                            joinCode: message.join_code ?? '',
+                            createdAt: timeString
                         };
                         saveSession(session);
 

@@ -120,7 +120,7 @@
 				<CardContent class="grid gap-2">
 					{#each storedSessions as sess}
 						<Button size="lg" class="w-full" on:click={() => reconnectToSession(sess)}>
-							Reconnect to Lobby: (Player: {sess.playerName}, code: {sess.joinCode})
+							Reconnect to Lobby: (Player: {sess.playerName}, Join Time: {sess.createdAt})
 						</Button>
 					{/each}
 				</CardContent>
