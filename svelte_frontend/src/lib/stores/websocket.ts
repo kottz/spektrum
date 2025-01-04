@@ -41,97 +41,117 @@ function createWebSocketStore() {
 	 * want to do a fresh JoinLobby. Otherwise, if the gameStore
 	 * already has (lobbyId, playerId), we can attempt a Reconnect.
 	 */
-	function connect(joinCode?: string, playerName?: string, adminId?: string) {
-		// Clean up any existing connection
-		disconnect();
-
-		update(state => ({ ...state, isConnecting: true }));
-
-		const wsUrl = PUBLIC_SPEKTRUM_WS_SERVER_URL;
-		socket = new WebSocket(wsUrl);
-
-		socket.onopen = () => {
-			console.log('WebSocket connected');
-			reconnectAttempts = 0;
-			update(state => ({
-				...state,
-				connected: true,
-				error: null,
-				isConnecting: false
-			}));
-
-			// If we were passed explicit join data, do a JoinLobby
-			if (joinCode && playerName) {
-				const joinMsg: ClientMessage = {
-					type: 'JoinLobby',
-					join_code: joinCode,
-					name: playerName,
-					admin_id: adminId
-				};
-				send(joinMsg);
-				return;
-			}
-
-			// Otherwise, see if gameStore already has a (lobbyId, playerId)
-			const { lobbyId, playerId } = get(gameStore);
-			if (lobbyId && playerId) {
-				console.log('Attempting an automatic Reconnect...');
-				const reconnectMsg: ClientMessage = {
-					type: 'Reconnect',
-					lobby_id: lobbyId,
-					player_id: playerId
-				};
-				send(reconnectMsg);
-			}
-		};
-
-		socket.onmessage = event => {
-			try {
-				const message = JSON.parse(event.data) as ServerMessage;
-				console.log('Received message:', message);
-
-				update(state => ({
-					...state,
-					messages: [...state.messages, message]
-				}));
-
-				if (message.type !== 'Error') {
-					update(state => ({ ...state, error: null }));
+	function connect(joinCode?: string, playerName?: string, adminId?: string): Promise<void> {
+		return new Promise((resolve, reject) => {
+			// Set a connection timeout
+			const connectionTimeout = setTimeout(() => {
+				if (socket) {
+					socket.close();
 				}
-			} catch (e) {
-				console.error('Failed to parse message:', e);
+				reject(new Error("Connection timeout - couldn't reach the server"));
+			}, 5000); // 5 second timeout
+
+			// Clean up any existing connection
+			disconnect();
+			update(state => ({ ...state, isConnecting: true }));
+
+			const wsUrl = PUBLIC_SPEKTRUM_WS_SERVER_URL;
+			socket = new WebSocket(wsUrl);
+
+			socket.onopen = () => {
+				clearTimeout(connectionTimeout);
+				console.log('WebSocket connected');
+				reconnectAttempts = 0;
 				update(state => ({
 					...state,
-					error: 'Failed to parse server message'
+					connected: true,
+					error: null,
+					isConnecting: false
 				}));
-			}
-		};
 
-		socket.onclose = event => {
-			console.log('WebSocket closed:', event);
+				// If we were passed explicit join data, do a JoinLobby
+				if (joinCode && playerName) {
+					const joinMsg: ClientMessage = {
+						type: 'JoinLobby',
+						join_code: joinCode,
+						name: playerName,
+						admin_id: adminId
+					};
+					send(joinMsg);
+				} else {
+					// Otherwise, see if gameStore already has a (lobbyId, playerId)
+					const { lobbyId, playerId } = get(gameStore);
+					if (lobbyId && playerId) {
+						console.log('Attempting an automatic Reconnect...');
+						const reconnectMsg: ClientMessage = {
+							type: 'Reconnect',
+							lobby_id: lobbyId,
+							player_id: playerId
+						};
+						send(reconnectMsg);
+					}
+				}
+				resolve();
+			};
 
-			// If we used to be connected and this wasn't a normal closure (code=1000),
-			// attempt auto-reconnect
-			const wasConnected = get({ subscribe }).connected;
-			update(state => ({
-				...state,
-				connected: false,
-				isConnecting: false
-			}));
+			socket.onmessage = event => {
+				try {
+					const message = JSON.parse(event.data) as ServerMessage;
+					console.log('Received message:', message);
+					update(state => ({
+						...state,
+						messages: [...state.messages, message]
+					}));
 
-			if (wasConnected && event.code !== 1000) {
-				attemptReconnect();
-			}
-		};
+					// If we receive an error message from the server
+					if (message.type === 'Error') {
+						reject(new Error(message.error || 'Server error'));
+						return;
+					}
 
-		socket.onerror = (error) => {
-			console.error('WebSocket error:', error);
-			update(state => ({
-				...state,
-				error: 'WebSocket connection error',
-				isConnecting: false
-			}));
-		};
+					update(state => ({ ...state, error: null }));
+				} catch (e) {
+					console.error('Failed to parse message:', e);
+					const error = new Error('Failed to parse server message');
+					update(state => ({ ...state, error: error.message }));
+					reject(error);
+				}
+			};
+
+			socket.onclose = event => {
+				clearTimeout(connectionTimeout);
+				console.log('WebSocket closed:', event);
+				const wasConnected = get({ subscribe }).connected;
+				update(state => ({
+					...state,
+					connected: false,
+					isConnecting: false
+				}));
+
+				// If this happens during initial connection, reject the promise
+				if (get({ subscribe }).isConnecting) {
+					reject(new Error('Connection closed before it could be established'));
+					return;
+				}
+
+				// For existing connections, attempt reconnect
+				if (wasConnected && event.code !== 1000) {
+					attemptReconnect();
+				}
+			};
+
+			socket.onerror = (error) => {
+				clearTimeout(connectionTimeout);
+				console.error('WebSocket error:', error);
+				const errorMessage = 'Failed to connect to game server';
+				update(state => ({
+					...state,
+					error: errorMessage,
+					isConnecting: false
+				}));
+				reject(new Error(errorMessage));
+			};
+		});
 	}
 
 	/**

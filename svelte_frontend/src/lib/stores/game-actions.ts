@@ -13,7 +13,7 @@ class GameActions {
      */
     public async joinGame(joinCode: string, playerName: string) {
         try {
-            websocketStore.connect(joinCode, playerName);
+            await websocketStore.connect(joinCode, playerName);
         } catch (error) {
             console.error('Failed to join game:', error);
             throw error;
@@ -63,6 +63,7 @@ class GameActions {
         console.log('Attempting to reconnect...');
         websocketStore.connect();
     }
+
 
     /**
      * Submit an answer to the current question.

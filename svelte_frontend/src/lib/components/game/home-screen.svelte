@@ -5,6 +5,8 @@
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { gameActions } from '../../stores/game-actions';
 	import { gameStore } from '../../stores/game';
+	import { notifications } from '../../stores/notification-store';
+	import NotificationList from '$lib/components/NotificationList.svelte';
 
 	/**
 	 * The user can still enter a playerName for joining,
@@ -37,7 +39,7 @@
 			// We pass no playerName — the default 'Admin' is used in createGame()
 		} catch (error) {
 			console.error('Error creating lobby:', error);
-			alert('Failed to create lobby. Please try again.');
+			notifications.add('Failed to create lobby.', 'destructive');
 		} finally {
 			isCreating = false;
 		}
@@ -57,7 +59,7 @@
 			await gameActions.joinGame(lobbyCode, playerName);
 		} catch (error) {
 			console.error('Error joining game:', error);
-			joinError = 'Failed to join game. Please check your code and try again.';
+			notifications.add(`Failed to join game.`, 'destructive');
 		} finally {
 			isJoining = false;
 		}
@@ -89,6 +91,7 @@
 	}
 </script>
 
+<NotificationList />
 <div class="container flex min-h-screen flex-col items-center justify-center gap-8 py-8">
 	<div class="flex items-center gap-3">
 		<span class="text-2xl">🎵</span>
@@ -116,11 +119,7 @@
 				</CardHeader>
 				<CardContent class="grid gap-2">
 					{#each storedSessions as sess}
-						<Button
-							size="lg"
-							class="w-full"
-							on:click={() => reconnectToSession(sess)}
-						>
+						<Button size="lg" class="w-full" on:click={() => reconnectToSession(sess)}>
 							Reconnect to Lobby: (Player: {sess.playerName}, code: {sess.joinCode})
 						</Button>
 					{/each}
@@ -161,6 +160,5 @@
 				</Button>
 			</CardContent>
 		</Card>
-
 	</div>
 </div>
