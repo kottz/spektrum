@@ -101,6 +101,9 @@
 
 		if (questionType === 'color') {
 			const lower = alternative.toLowerCase();
+			if (lower === 'white') {
+				styles.push('border-2', 'border-black'); //, 'border-black');
+			}
 			if (lower === 'gold') {
 				styles.push('metallic-gold');
 			} else if (lower === 'silver') {
