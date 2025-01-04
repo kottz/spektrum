@@ -5,6 +5,7 @@
 	import AnswerProgress from './answer-progress.svelte';
 	import RoundTimer from './round-timer.svelte';
 	import { PUBLIC_SPEKTRUM_CDN_URL } from '$env/static/public';
+	import { timerStore } from '../../stores/timer-store';
 
 	const imageBaseUrl = $derived(`${PUBLIC_SPEKTRUM_CDN_URL}/img`);
 
@@ -53,6 +54,7 @@
 	function handleAnswer(answer: string) {
 		if (!hasAnswered) {
 			clickedAnswer = answer;
+			timerStore.stopTimer();
 			gameActions.submitAnswer(answer);
 		}
 	}

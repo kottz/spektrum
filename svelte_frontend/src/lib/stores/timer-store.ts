@@ -1,48 +1,25 @@
 // src/lib/stores/timer-store.ts
+import { writable } from 'svelte/store';
 import { browser } from '$app/environment';
-import { gameStore } from './game';
-import { writable, derived, get } from 'svelte/store';
 
 function createTimerStore() {
     const timeLeft = writable(60);
-    let intervalId: number | undefined;
-    let startTime: number | null = null;
-
-    if (browser) {
-        // Subscribe to phase changes
-        gameStore.subscribe(state => {
-            if (state.phase === 'question' && !intervalId) {
-                // Only start timer if not already running
-                startTimer();
-            } else if (state.phase !== 'question') {
-                // Stop and reset only on phase change
-                stopTimer();
-                timeLeft.set(60);
-            }
-        });
-    }
+    let interval: number | undefined;
 
     function startTimer() {
-        startTime = Date.now();
-        if (intervalId) clearInterval(intervalId);
-
-        intervalId = window.setInterval(() => {
-            if (startTime) {
-                const elapsed = (Date.now() - startTime) / 1000;
-                timeLeft.set(Math.max(0, 60 - elapsed));
-
-                const currentTimeLeft = get(timeLeft);
-                if (currentTimeLeft <= 0 && intervalId) {
-                    clearInterval(intervalId);
-                }
-            }
-        }, 100);
+        if (browser) {
+            timeLeft.set(60);
+            if (interval) clearInterval(interval);
+            interval = window.setInterval(() => {
+                timeLeft.update(t => Math.max(0, t - 0.1));
+            }, 100);
+        }
     }
 
     function stopTimer() {
-        if (intervalId) {
-            clearInterval(intervalId);
-            intervalId = undefined;
+        if (interval) {
+            clearInterval(interval);
+            interval = undefined;
         }
     }
 

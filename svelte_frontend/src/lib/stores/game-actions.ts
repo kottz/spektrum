@@ -3,6 +3,7 @@
 import { websocketStore } from './websocket';
 import { gameStore } from './game';
 import { youtubeStore } from './youtube-store';
+import { timerStore } from './timer-store';
 import type { ClientMessage, AdminAction } from '../types/game';
 import { PUBLIC_SPEKTRUM_SERVER_URL } from '$env/static/public';
 
@@ -116,6 +117,7 @@ class GameActions {
     }
 
     public endRound() {
+        timerStore.stopTimer();
         this.sendAdminAction({ type: 'EndRound' });
     }
 

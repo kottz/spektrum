@@ -1,47 +1,11 @@
 <script lang="ts">
-	import { Card, CardContent } from '$lib/components/ui/card';
 	import { Progress } from '$lib/components/ui/progress';
+	import { timerStore } from '../../stores/timer-store';
 	import { gameStore } from '../../stores/game';
 
-	let timeLeft = $state($gameStore.roundDuration);
-	let progress = $state(100);
-	let timer: number;
-
-	$effect(() => {
-		const phase = $gameStore.phase;
-		const isAdmin = $gameStore.isAdmin;
-
-		// Start timer in question phase
-		if (phase === 'question') {
-			// Always reset timer for admin, reset for players only if no timer running
-			if (isAdmin || !timer) {
-				timeLeft = $gameStore.roundDuration;
-				progress = 100;
-				timer = window.setInterval(() => {
-					if (timeLeft > 0) {
-						timeLeft = Math.max(0.0, timeLeft - 0.1);
-						progress = (timeLeft / $gameStore.roundDuration) * 100;
-					} else if (timer && !isAdmin) {
-						// Only clear interval for non-admin when reaching 0
-						clearInterval(timer);
-						timer = undefined;
-					}
-				}, 100);
-			}
-		} else if (phase !== 'question') {
-			// Clear timer when leaving question phase
-			if (timer) {
-				clearInterval(timer);
-				timer = undefined;
-			}
-		}
-
-		return () => {
-			if (timer) {
-				clearInterval(timer);
-			}
-		};
-	});
+	// Just subscribe to the time
+	const timeLeft = $derived($timerStore);
+	const progress = $derived((timeLeft / $gameStore.roundDuration) * 100);
 </script>
 
 <div class="space-y-2">

@@ -3,6 +3,7 @@
 import { writable, get } from 'svelte/store';
 import { browser } from '$app/environment';
 import { youtubeStore } from './youtube-store';
+import { timerStore } from './timer-store';
 
 import type { GameState, ServerMessage } from '../types/game';
 import { GamePhase } from '../types/game';
@@ -227,6 +228,12 @@ function createGameStore() {
                         });
                         const newPhase = message.phase.toLowerCase() as GamePhase;
                         youtubeStore.handlePhaseChange(newPhase);
+
+                        // Start timer if entering question phase
+                        if (newPhase === 'question') {
+                            timerStore.startTimer();
+                        }
+
                         return {
                             ...state,
                             phase: newPhase,
