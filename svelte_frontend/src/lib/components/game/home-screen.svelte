@@ -5,39 +5,47 @@
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { gameActions } from '../../stores/game-actions';
 	import { gameStore } from '../../stores/game';
-	import { get } from 'svelte/store';
 
-	export let playerName = "";
-	export let lobbyCode = "";
+	/**
+	 * The user can still enter a playerName for joining,
+	 * but we don't allow custom admin names when creating a new lobby.
+	 */
+	export let playerName = '';
+	export let lobbyCode = '';
 
 	let isJoining = false;
 	let isCreating = false;
 	let joinError = '';
-	let hasStoredCredentials = false; 
 
-	onMount(() => {
-		// Check if we have stored credentials
-		const storedLobbyId = localStorage.getItem('lobbyId');
-		const storedPlayerId = localStorage.getItem('playerId');
-		if (storedLobbyId && storedPlayerId) {
-			hasStoredCredentials = true;
-		}
+	// For listing multiple saved sessions (from localStorage)
+	let storedSessions = [];
+
+	onMount(async () => {
+		// If we have a server URL from env or config:
+		storedSessions = await gameStore.checkSessions();
 	});
 
+	/**
+	 * Creates a new lobby as Admin, but no custom admin name is needed.
+	 * The backend or the store logic will set us to "Admin" automatically.
+	 */
 	const handleCreateLobby = async () => {
 		if (isCreating) return;
-		
 		try {
 			isCreating = true;
-			await gameActions.createGame(playerName || 'Admin');
+			await gameActions.createGame();
+			// We pass no playerName — the default 'Admin' is used in createGame()
 		} catch (error) {
-			console.error("Error creating lobby:", error);
+			console.error('Error creating lobby:', error);
 			alert('Failed to create lobby. Please try again.');
 		} finally {
 			isCreating = false;
 		}
 	};
 
+	/**
+	 * Joins an existing lobby with a user-provided name and code.
+	 */
 	const handleJoinGame = async () => {
 		if (!lobbyCode || !playerName) {
 			alert('Please enter both lobby code and player name');
@@ -48,16 +56,37 @@
 			joinError = '';
 			await gameActions.joinGame(lobbyCode, playerName);
 		} catch (error) {
-			console.error("Error joining game:", error);
+			console.error('Error joining game:', error);
 			joinError = 'Failed to join game. Please check your code and try again.';
 		} finally {
 			isJoining = false;
 		}
 	};
 
+	/**
+	 * If you want to reconnect to the *active* credentials (lobby/player)
+	 * from gameStore or localStorage. (Single-lobby approach.)
+	 */
 	const handleReconnect = () => {
 		gameActions.reconnectGame();
 	};
+
+	/**
+	 * Called when the user wants to reconnect to a *specific* saved session.
+	 * (If you implement a multi-lobby approach, you might do something like
+	 * `websocketStore.connect(...)`, or another custom flow.)
+	 */
+	function reconnectToSession(sess) {
+		console.log('Reconnecting to session:', sess);
+
+		// Step 1: Set store state to the chosen session
+		gameStore.setLobbyId(sess.lobbyId);
+		gameStore.setPlayerId(sess.playerId);
+		gameStore.setPlayerName(sess.playerName);
+
+		// Step 2: Call connect() with no arguments
+		gameActions.reconnectGame();
+	}
 </script>
 
 <div class="container flex min-h-screen flex-col items-center justify-center gap-8 py-8">
@@ -65,35 +94,44 @@
 		<span class="text-2xl">🎵</span>
 		<h1 class="text-3xl font-bold">Music Quiz</h1>
 	</div>
+
 	<div class="grid w-full max-w-lg gap-6">
-		<!-- Create Lobby Card -->
+		<!-- Create Lobby Card (No custom admin name field) -->
 		<Card>
 			<CardHeader>
 				<CardTitle>Create New Lobby</CardTitle>
 			</CardHeader>
 			<CardContent>
-				<Input
-					name="playerName"
-					placeholder="Your name (optional, defaults to Admin)"
-					bind:value={playerName}
-					disabled={isCreating}
-					class="mb-4"
-				/>
-				<Button
-					size="lg"
-					class="w-full"
-					on:click={handleCreateLobby}
-					disabled={isCreating}
-				>
+				<!-- No text input for admin name -->
+				<Button size="lg" class="w-full" on:click={handleCreateLobby} disabled={isCreating}>
 					{isCreating ? 'Creating...' : 'Create Lobby'}
 				</Button>
 			</CardContent>
 		</Card>
 
+		{#if storedSessions.length > 0}
+			<Card>
+				<CardHeader>
+					<CardTitle>Saved Sessions</CardTitle>
+				</CardHeader>
+				<CardContent class="grid gap-2">
+					{#each storedSessions as sess}
+						<Button
+							size="lg"
+							class="w-full"
+							on:click={() => reconnectToSession(sess)}
+						>
+							Reconnect to Lobby: (Player: {sess.playerName}, code: {sess.joinCode})
+						</Button>
+					{/each}
+				</CardContent>
+			</Card>
+		{/if}
+
 		<!-- Join Lobby Card -->
 		<Card>
 			<CardHeader>
-				<CardTitle>Join Game</CardTitle>
+				<CardTitle>Join Existing Lobby</CardTitle>
 			</CardHeader>
 			<CardContent class="grid gap-4">
 				<Input
@@ -124,22 +162,5 @@
 			</CardContent>
 		</Card>
 
-		<!-- Optional Reconnect Button if credentials exist in localStorage -->
-		{#if hasStoredCredentials}
-			<Card>
-				<CardHeader>
-					<CardTitle>Reconnect to Existing Game</CardTitle>
-				</CardHeader>
-				<CardContent>
-					<Button
-						size="lg"
-						class="w-full"
-						on:click={handleReconnect}
-					>
-						Try Reconnect
-					</Button>
-				</CardContent>
-			</Card>
-		{/if}
 	</div>
 </div>
