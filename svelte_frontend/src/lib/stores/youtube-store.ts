@@ -1,5 +1,6 @@
 import { writable, get } from 'svelte/store';
-import { gameStore } from './game';
+import { info } from '$lib/utils/logger';
+import { warn } from '$lib/utils/logger';
 
 interface YouTubeState {
     player: YT.Player | null;
@@ -22,7 +23,7 @@ function createYouTubeStore() {
     let apiInitialized = false;
 
     function initializeAPI() {
-        console.log('Initializing YouTube API');
+        info('Initializing YouTube API');
 
         // Remove existing script if it exists
         const existingScript = document.querySelector('script[src*="youtube.com/iframe_api"]');
@@ -45,21 +46,21 @@ function createYouTubeStore() {
 
     function loadVideo(videoId: string) {
         const state = get({ subscribe });
-        console.log('Load video requested:', videoId, 'Player ready:', state.isPlayerReady);
+        info('Load video requested:', videoId, 'Player ready:', state.isPlayerReady);
 
         if (!apiInitialized) {
-            console.log('API not initialized, initializing first');
+            info('API not initialized, initializing first');
             initializeAPI();
         }
 
         if (!state.isPlayerReady || !state.player) {
-            console.log('Player not ready, storing video ID for later:', videoId);
+            info('Player not ready, storing video ID for later:', videoId);
             update(state => ({ ...state, pendingVideoId: videoId }));
             return;
         }
 
         if (state.currentVideoId !== videoId) {
-            console.log('Loading new video:', videoId);
+            info('Loading new video:', videoId);
             state.player.cueVideoById(videoId);
             update(state => ({
                 ...state,
@@ -67,33 +68,33 @@ function createYouTubeStore() {
                 pendingVideoId: null
             }));
         } else {
-            console.log('Video already loaded:', videoId);
+            info('Video already loaded:', videoId);
         }
     }
 
     async function verifyAndPlayVideo(expectedVideoId: string): Promise<boolean> {
         const state = get({ subscribe });
         if (!state.player || !state.isPlayerReady) {
-            console.log('Player not ready for verification');
+            info('Player not ready for verification');
             return false;
         }
 
         try {
             const currentVideoId = state.player.getVideoData()?.video_id;
-            console.log('Verifying video before play:', { current: currentVideoId, expected: expectedVideoId });
+            info('Verifying video before play:', { current: currentVideoId, expected: expectedVideoId });
 
             if (currentVideoId !== expectedVideoId) {
-                console.log('Video mismatch, loading correct video');
+                info('Video mismatch, loading correct video');
                 state.player.loadVideoById(expectedVideoId);
                 update(state => ({ ...state, currentVideoId: expectedVideoId }));
                 return true;
             } else {
-                console.log('Correct video already loaded, playing');
+                info('Correct video already loaded, playing');
                 state.player.playVideo();
                 return true;
             }
         } catch (error) {
-            console.error('Error verifying video:', error);
+            warn('Error verifying video:', error);
             return false;
         }
     }
@@ -102,26 +103,26 @@ function createYouTubeStore() {
         const state = get({ subscribe });
         if (!state.player || !state.isPlayerReady) {
             if (phase === 'question') {
-                console.log('Setting autoplay pending due to player not ready');
+                info('Setting autoplay pending due to player not ready');
                 autoplayPending = true;
             }
             return;
         }
 
-        console.log('Handling phase change:', phase);
+        info('Handling phase change:', phase);
 
         switch (phase.toLowerCase()) {
             case 'question':
                 if (state.currentVideoId || state.pendingVideoId) {
                     const videoId = state.currentVideoId || state.pendingVideoId;
-                    console.log('Question phase: verifying and playing video:', videoId);
+                    info('Question phase: verifying and playing video:', videoId);
                     verifyAndPlayVideo(videoId!);
                 }
                 break;
             case 'score':
             case 'lobby':
             case 'gameover':
-                console.log('Stopping video');
+                info('Stopping video');
                 state.player.stopVideo();
                 break;
         }
@@ -131,7 +132,7 @@ function createYouTubeStore() {
         subscribe,
         initializeAPI,
         setPlayer: (player: YT.Player) => {
-            console.log('Setting player');
+            info('Setting player');
             const state = get({ subscribe });
 
             update(state => ({
@@ -141,12 +142,12 @@ function createYouTubeStore() {
             }));
 
             if (state.pendingVideoId) {
-                console.log('Loading pending video:', state.pendingVideoId);
+                info('Loading pending video:', state.pendingVideoId);
                 loadVideo(state.pendingVideoId);
             }
 
             if (autoplayPending && state.currentVideoId) {
-                console.log('Executing pending autoplay');
+                info('Executing pending autoplay');
                 player.playVideo();
                 autoplayPending = false;
             }
@@ -154,7 +155,7 @@ function createYouTubeStore() {
         loadVideo,
         handlePhaseChange,
         cleanup: () => {
-            console.log('Cleaning up YouTube player');
+            info('Cleaning up YouTube player');
             const state = get({ subscribe });
 
             if (state.player) {

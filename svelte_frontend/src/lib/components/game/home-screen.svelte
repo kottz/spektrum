@@ -7,6 +7,7 @@
 	import { gameStore } from '../../stores/game';
 	import { notifications } from '../../stores/notification-store';
 	import NotificationList from '$lib/components/NotificationList.svelte';
+	import { info, warn } from '$lib/utils/logger';
 
 	/**
 	 * The user can still enter a playerName for joining,
@@ -38,7 +39,7 @@
 			await gameActions.createGame();
 			// We pass no playerName — the default 'Admin' is used in createGame()
 		} catch (error) {
-			console.error('Error creating lobby:', error);
+			warn('Error creating lobby:', error);
 			notifications.add('Failed to create lobby.', 'destructive');
 		} finally {
 			isCreating = false;
@@ -58,7 +59,7 @@
 			joinError = '';
 			await gameActions.joinGame(lobbyCode, playerName);
 		} catch (error) {
-			console.error('Error joining game:', error);
+			warn('Error joining game:', error);
 			notifications.add(`Failed to join game.`, 'destructive');
 		} finally {
 			isJoining = false;
@@ -79,7 +80,7 @@
 	 * `websocketStore.connect(...)`, or another custom flow.)
 	 */
 	function reconnectToSession(sess) {
-		console.log('Reconnecting to session:', sess);
+		info('Reconnecting to session:', sess);
 
 		// Step 1: Set store state to the chosen session
 		gameStore.setLobbyId(sess.lobbyId);

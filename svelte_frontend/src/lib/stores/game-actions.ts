@@ -4,6 +4,8 @@ import { websocketStore } from './websocket';
 import { gameStore } from './game';
 import { youtubeStore } from './youtube-store';
 import { timerStore } from './timer-store';
+import { info, warn } from '$lib/utils/logger';
+
 import type { ClientMessage, AdminAction } from '../types/game';
 import { PUBLIC_SPEKTRUM_SERVER_URL } from '$env/static/public';
 
@@ -16,7 +18,7 @@ class GameActions {
         try {
             await websocketStore.connect(joinCode, playerName);
         } catch (error) {
-            console.error('Failed to join game:', error);
+            warn('Failed to join game:', error);
             throw error;
         }
     }
@@ -51,7 +53,7 @@ class GameActions {
 
             return data.join_code;
         } catch (error) {
-            console.error('Failed to create game:', error);
+            warn('Failed to create game:', error);
             throw error;
         }
     }
@@ -61,7 +63,7 @@ class GameActions {
      * If the server recognizes the lobby/player, it will restore the session.
      */
     public reconnectGame() {
-        console.log('Attempting to reconnect...');
+        info('Attempting to reconnect...');
         websocketStore.connect();
     }
 
@@ -72,7 +74,7 @@ class GameActions {
     public submitAnswer(answer: string) {
         const state = gameStore.getState();
         if (!state.lobbyId) {
-            console.error('No active lobby');
+            warn('No active lobby');
             return;
         }
 
@@ -91,7 +93,7 @@ class GameActions {
     private sendAdminAction(action: AdminAction) {
         const state = gameStore.getState();
         if (!state.lobbyId || !state.isAdmin) {
-            console.error('Not authorized to perform admin action');
+            warn('Not authorized to perform admin action');
             return;
         }
 
@@ -101,7 +103,7 @@ class GameActions {
             action
         };
 
-        console.log('Sending admin action:', message);
+        info('Sending admin action:', message);
         websocketStore.send(message);
     }
 

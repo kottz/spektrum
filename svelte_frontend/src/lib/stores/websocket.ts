@@ -4,6 +4,7 @@ import { writable, get } from 'svelte/store';
 import type { ServerMessage, ClientMessage } from '../types/game';
 import { PUBLIC_SPEKTRUM_WS_SERVER_URL } from '$env/static/public';
 import { gameStore } from './game'; // We'll read current lobby/player from here
+import { info, warn } from '$lib/utils/logger';
 
 // Define our store shape
 interface WebSocketState {
@@ -60,7 +61,7 @@ function createWebSocketStore() {
 
 			socket.onopen = () => {
 				clearTimeout(connectionTimeout);
-				console.log('WebSocket connected');
+				info('WebSocket connected');
 				reconnectAttempts = 0;
 				update(state => ({
 					...state,
@@ -82,7 +83,7 @@ function createWebSocketStore() {
 					// Otherwise, see if gameStore already has a (lobbyId, playerId)
 					const { lobbyId, playerId } = get(gameStore);
 					if (lobbyId && playerId) {
-						console.log('Attempting an automatic Reconnect...');
+						info('Attempting an automatic Reconnect...');
 						const reconnectMsg: ClientMessage = {
 							type: 'Reconnect',
 							lobby_id: lobbyId,
@@ -97,7 +98,7 @@ function createWebSocketStore() {
 			socket.onmessage = event => {
 				try {
 					const message = JSON.parse(event.data) as ServerMessage;
-					console.log('Received message:', message);
+					info('Received message:', message);
 					update(state => ({
 						...state,
 						messages: [...state.messages, message]
@@ -111,7 +112,7 @@ function createWebSocketStore() {
 
 					update(state => ({ ...state, error: null }));
 				} catch (e) {
-					console.error('Failed to parse message:', e);
+					warn('Failed to parse message:', e);
 					const error = new Error('Failed to parse server message');
 					update(state => ({ ...state, error: error.message }));
 					reject(error);
@@ -120,7 +121,7 @@ function createWebSocketStore() {
 
 			socket.onclose = event => {
 				clearTimeout(connectionTimeout);
-				console.log('WebSocket closed:', event);
+				info('WebSocket closed:', event);
 				const wasConnected = get({ subscribe }).connected;
 				update(state => ({
 					...state,
@@ -142,7 +143,7 @@ function createWebSocketStore() {
 
 			socket.onerror = (error) => {
 				clearTimeout(connectionTimeout);
-				console.error('WebSocket error:', error);
+				warn('WebSocket error:', error);
 				const errorMessage = 'Failed to connect to game server';
 				update(state => ({
 					...state,
@@ -170,7 +171,7 @@ function createWebSocketStore() {
 		// Check if there's an actual game in progress
 		const { lobbyId, playerId } = get(gameStore);
 		if (!lobbyId || !playerId) {
-			console.log('No valid lobby/player in gameStore, skipping auto-reconnect');
+			info('No valid lobby/player in gameStore, skipping auto-reconnect');
 			return;
 		}
 
@@ -179,7 +180,7 @@ function createWebSocketStore() {
 
 		clearReconnectTimeout();
 		reconnectTimeout = window.setTimeout(() => {
-			console.log(`Attempting reconnect #${reconnectAttempts}...`);
+			info(`Attempting reconnect #${reconnectAttempts}...`);
 			// Call connect() with no new join data so we do a Reconnect automatically in onopen
 			connect();
 		}, delay);
@@ -190,10 +191,10 @@ function createWebSocketStore() {
 	 */
 	function send(message: ClientMessage) {
 		if (socket?.readyState === WebSocket.OPEN) {
-			console.log('Sending message:', message);
+			info('Sending message:', message);
 			socket.send(JSON.stringify(message));
 		} else {
-			console.error('Cannot send message: connection not open');
+			warn('Cannot send message: connection not open');
 			update(state => ({
 				...state,
 				error: 'Connection not available'

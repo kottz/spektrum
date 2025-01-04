@@ -3,16 +3,17 @@
 	import { youtubeStore } from '../../stores/youtube-store';
 	import { gameStore } from '../../stores/game';
 	import { Card, CardContent } from '$lib/components/ui/card';
+	import { info, warn } from '$lib/utils/logger';
 
 	let playerId = 'youtube-player';
 
 	onMount(() => {
-		console.log('YouTube component mounted');
+		info('YouTube component mounted');
 		youtubeStore.initializeAPI();
 
 		// Define global callback for YouTube API
 		(window as any).onYouTubeIframeAPIReady = () => {
-			console.log('YouTube API Ready');
+			info('YouTube API Ready');
 			const player = new YT.Player(playerId, {
 				height: '360',
 				width: '640',
@@ -23,11 +24,11 @@
 				},
 				events: {
 					onReady: (event) => {
-						console.log('Player ready');
+						info('Player ready');
 						youtubeStore.setPlayer(event.target);
 					},
 					onError: (event) => {
-						console.error('YouTube player error:', event);
+						warn('YouTube player error:', event);
 					}
 				}
 			});

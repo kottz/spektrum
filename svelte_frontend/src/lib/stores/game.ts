@@ -4,6 +4,7 @@ import { writable, get } from 'svelte/store';
 import { browser } from '$app/environment';
 import { youtubeStore } from './youtube-store';
 import { timerStore } from './timer-store';
+import { info, warn } from '$lib/utils/logger';
 
 import type { GameState, ServerMessage } from '../types/game';
 import { GamePhase } from '../types/game';
@@ -72,14 +73,14 @@ async function checkSessionsFromServer(): Promise<SessionInfo[]> {
             })
         });
         if (!res.ok) {
-            console.error('Failed to check sessions:', res.status, res.statusText);
+            warn('Failed to check sessions:', res.status, res.statusText);
             return sessions; // Return unfiltered on error
         }
 
         const data = await res.json() as {
             valid_sessions: Array<{ lobby_id: string; player_id: string }>;
         };
-        console.log('Valid sessions:', data.valid_sessions);
+        info('Valid sessions:', data.valid_sessions);
 
         // Build a set of valid combos
         const validSet = new Set(
@@ -94,7 +95,7 @@ async function checkSessionsFromServer(): Promise<SessionInfo[]> {
         saveSessions(validSessions);
         return validSessions;
     } catch (err) {
-        console.error('Error checking sessions:', err);
+        warn('Error checking sessions:', err);
         return sessions; // Return unfiltered on fetch error
     }
 }
@@ -121,7 +122,7 @@ function createGameStore() {
      */
     function cleanup() {
         update(state => {
-            console.log('Running cleanup...');
+            info('Running cleanup...');
             // If we have an active session in memory, remove from localStorage
             if (state.lobbyId && state.playerId) {
                 removeSession(state.lobbyId, state.playerId);
@@ -147,10 +148,10 @@ function createGameStore() {
          * We do NOT import websocketStore here to avoid circular imports.
          */
         processServerMessage(message: ServerMessage) {
-            console.log('Handling server message:', message);
+            info('Handling server message:', message);
 
             if (message.type === 'GameClosed') {
-                console.log('Game closed, cleaning up...');
+                info('Game closed, cleaning up...');
                 cleanup();
                 return;
             }
@@ -254,7 +255,7 @@ function createGameStore() {
                     case 'AdminInfo': {
                         if (message.question) {
                             const { youtube_id, song_name, artist } = message.question;
-                            console.log('Received song info:', { youtube_id, song_name, artist });
+                            info('Received song info:', { youtube_id, song_name, artist });
                             if (youtube_id) {
                                 youtubeStore.loadVideo(youtube_id);
                             }
@@ -274,7 +275,7 @@ function createGameStore() {
                     case 'AdminNextQuestions': {
                         const nextQuestion = message.upcoming_questions[0];
                         if (nextQuestion?.youtube_id) {
-                            console.log('Loading next video:', nextQuestion.youtube_id);
+                            info('Loading next video:', nextQuestion.youtube_id);
                             youtubeStore.loadVideo(nextQuestion.youtube_id);
                         }
                         return {
