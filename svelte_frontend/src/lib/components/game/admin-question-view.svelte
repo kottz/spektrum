@@ -89,12 +89,10 @@
 					<button
 						class={getButtonStyles(alternative)}
 						disabled={true}
-						style={
-							questionType === 'color' &&
-							!(alternative.toLowerCase() === 'gold' || alternative.toLowerCase() === 'silver')
-								? `background-color: ${colorMap[alternative.toLowerCase()]};`
-								: ''
-						}
+						style={questionType === 'color' &&
+						!(alternative.toLowerCase() === 'gold' || alternative.toLowerCase() === 'silver')
+							? `background-color: ${colorMap[alternative.toLowerCase()]};`
+							: ''}
 					>
 						{#if questionType === 'character'}
 							<div class="aspect-square w-full">

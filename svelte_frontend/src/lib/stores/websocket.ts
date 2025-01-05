@@ -54,7 +54,7 @@ function createWebSocketStore() {
 
 			// Clean up any existing connection
 			disconnect();
-			update(state => ({ ...state, isConnecting: true }));
+			update((state) => ({ ...state, isConnecting: true }));
 
 			const wsUrl = PUBLIC_SPEKTRUM_WS_SERVER_URL;
 			socket = new WebSocket(wsUrl);
@@ -63,7 +63,7 @@ function createWebSocketStore() {
 				clearTimeout(connectionTimeout);
 				info('WebSocket connected');
 				reconnectAttempts = 0;
-				update(state => ({
+				update((state) => ({
 					...state,
 					connected: true,
 					error: null,
@@ -95,11 +95,11 @@ function createWebSocketStore() {
 				resolve();
 			};
 
-			socket.onmessage = event => {
+			socket.onmessage = (event) => {
 				try {
 					const message = JSON.parse(event.data) as ServerMessage;
 					info('Received message:', message);
-					update(state => ({
+					update((state) => ({
 						...state,
 						messages: [...state.messages, message]
 					}));
@@ -110,20 +110,20 @@ function createWebSocketStore() {
 						return;
 					}
 
-					update(state => ({ ...state, error: null }));
+					update((state) => ({ ...state, error: null }));
 				} catch (e) {
 					warn('Failed to parse message:', e);
 					const error = new Error('Failed to parse server message');
-					update(state => ({ ...state, error: error.message }));
+					update((state) => ({ ...state, error: error.message }));
 					reject(error);
 				}
 			};
 
-			socket.onclose = event => {
+			socket.onclose = (event) => {
 				clearTimeout(connectionTimeout);
 				info('WebSocket closed:', event);
 				const wasConnected = get({ subscribe }).connected;
-				update(state => ({
+				update((state) => ({
 					...state,
 					connected: false,
 					isConnecting: false
@@ -145,7 +145,7 @@ function createWebSocketStore() {
 				clearTimeout(connectionTimeout);
 				warn('WebSocket error:', error);
 				const errorMessage = 'Failed to connect to game server';
-				update(state => ({
+				update((state) => ({
 					...state,
 					error: errorMessage,
 					isConnecting: false
@@ -161,7 +161,7 @@ function createWebSocketStore() {
 	 */
 	function attemptReconnect() {
 		if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-			update(state => ({
+			update((state) => ({
 				...state,
 				error: 'Failed to reconnect after multiple attempts'
 			}));
@@ -195,7 +195,7 @@ function createWebSocketStore() {
 			socket.send(JSON.stringify(message));
 		} else {
 			warn('Cannot send message: connection not open');
-			update(state => ({
+			update((state) => ({
 				...state,
 				error: 'Connection not available'
 			}));
@@ -227,7 +227,7 @@ function createWebSocketStore() {
 		connect,
 		send,
 		disconnect,
-		clearError: () => update(state => ({ ...state, error: null }))
+		clearError: () => update((state) => ({ ...state, error: null }))
 	};
 }
 

@@ -1,7 +1,7 @@
 // src/lib/types/game.ts
 
 /**
- * Core phases as defined by the backend. 
+ * Core phases as defined by the backend.
  * Matches the enum GamePhase { Lobby, Score, Question, GameOver }.
  */
 export enum GamePhase {
@@ -100,70 +100,70 @@ export interface GameQuestion {
  */
 export type ServerMessage =
 	| {
-		// Sent when the client has successfully joined a lobby
-		type: 'JoinedLobby';
-		player_id: string;
-		lobby_id: string;
-		name: string;
-		round_duration: number;
-		players: [string, number][]; // Tuple [playerName, score]
-	}
+			// Sent when the client has successfully joined a lobby
+			type: 'JoinedLobby';
+			player_id: string;
+			lobby_id: string;
+			name: string;
+			round_duration: number;
+			players: [string, number][]; // Tuple [playerName, score]
+	  }
 	| {
-		// Sent when a previously connected player is successfully reconnected
-		type: 'ReconnectSuccess';
-		game_state: {
-			phase: string; // same as GamePhase, but might come as a string
+			// Sent when a previously connected player is successfully reconnected
+			type: 'ReconnectSuccess';
+			game_state: {
+				phase: string; // same as GamePhase, but might come as a string
+				question_type: string;
+				alternatives: string[];
+				scoreboard: [string, number][]; // [playerName, score]
+				current_song?: {
+					song_name: string;
+					artist: string;
+					youtube_id: string;
+				};
+			};
+	  }
+	| {
+			type: 'PlayerLeft';
+			name: string;
+	  }
+	| {
+			type: 'PlayerAnswered';
+			name: string;
+			correct: boolean;
+			new_score: number;
+	  }
+	| {
+			type: 'StateChanged';
+			phase: string; // e.g. 'lobby', 'score', 'question', 'gameover'
 			question_type: string;
 			alternatives: string[];
 			scoreboard: [string, number][]; // [playerName, score]
-			current_song?: {
-				song_name: string;
-				artist: string;
-				youtube_id: string;
-			};
-		};
-	}
+	  }
 	| {
-		type: 'PlayerLeft';
-		name: string;
-	}
+			type: 'GameOver';
+			scores: [string, number][]; // final scores
+			reason: string;
+	  }
 	| {
-		type: 'PlayerAnswered';
-		name: string;
-		correct: boolean;
-		new_score: number;
-	}
+			type: 'GameClosed';
+			reason: string;
+	  }
 	| {
-		type: 'StateChanged';
-		phase: string; // e.g. 'lobby', 'score', 'question', 'gameover'
-		question_type: string;
-		alternatives: string[];
-		scoreboard: [string, number][]; // [playerName, score]
-	}
+			type: 'AdminInfo';
+			// Provides extra info about a question to the admin
+			question: GameQuestion;
+	  }
 	| {
-		type: 'GameOver';
-		scores: [string, number][]; // final scores
-		reason: string;
-	}
+			type: 'AdminNextQuestions';
+			// Provides upcoming questions (could be used for preview, etc.)
+			upcoming_questions: GameQuestion[];
+	  }
 	| {
-		type: 'GameClosed';
-		reason: string;
-	}
-	| {
-		type: 'AdminInfo';
-		// Provides extra info about a question to the admin
-		question: GameQuestion;
-	}
-	| {
-		type: 'AdminNextQuestions';
-		// Provides upcoming questions (could be used for preview, etc.)
-		upcoming_questions: GameQuestion[];
-	}
-	| {
-		type: 'Error';
-		code: ErrorCode;
-		message: string;
-	};
+			type: 'Error';
+			code: ErrorCode;
+			message: string;
+	  };
 
 /* ------------------------------------------------------------------
    CLIENT -> SERVER MESSAGES
@@ -171,30 +171,30 @@ export type ServerMessage =
 
 export type ClientMessage =
 	| {
-		type: 'JoinLobby';
-		join_code: string;
-		name: string;
-		admin_id?: string; // Only if joining as admin
-	}
+			type: 'JoinLobby';
+			join_code: string;
+			name: string;
+			admin_id?: string; // Only if joining as admin
+	  }
 	| {
-		type: 'Reconnect';
-		lobby_id: string;
-		player_id: string;
-	}
+			type: 'Reconnect';
+			lobby_id: string;
+			player_id: string;
+	  }
 	| {
-		type: 'Leave';
-		lobby_id: string;
-	}
+			type: 'Leave';
+			lobby_id: string;
+	  }
 	| {
-		type: 'Answer';
-		lobby_id: string;
-		answer: string;
-	}
+			type: 'Answer';
+			lobby_id: string;
+			answer: string;
+	  }
 	| {
-		type: 'AdminAction';
-		lobby_id: string;
-		action: AdminAction;
-	};
+			type: 'AdminAction';
+			lobby_id: string;
+			action: AdminAction;
+	  };
 
 /**
  * Administrative actions that can be performed in the lobby.
@@ -210,11 +210,7 @@ export type AdminAction =
 /**
  * Common name validation errors that might be returned by the server or client.
  */
-export type NameValidationError =
-	| 'TooShort'
-	| 'TooLong'
-	| 'InvalidCharacters'
-	| 'AlreadyTaken';
+export type NameValidationError = 'TooShort' | 'TooLong' | 'InvalidCharacters' | 'AlreadyTaken';
 
 /**
  * Returns a user-friendly description for a name validation error.
