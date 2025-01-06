@@ -261,3 +261,9 @@ id,difficulty,song,correct_character,other_characters,spotify_uri,youtube_id
 277,medium,Skyfall,daniel_craig_bond,pierce_brosnan_bond;timothy_dalton_bond;george_lazenby_bond;sean_connery_bond;roger_moore_bond,3964a777981b46bb,LJzp_mDxaT0
 278,medium,Where Everybody Knows Your Name,sam_malone,alan_alda;baretta;billy_rosewood;don_johnson;jr_ewing,51f03e4760154982,bfy8EJAPmT4
 278,medium,Unchained Melody,ghost,laurie_strode;macgyver;mick_belker;billy_rosewood;rose,246d909db1874004,Zv8czIoAw5w
+279,medium,20th Century Fox Intro,20th_century_fox,universal;columbia_pictures;disney;warner_brothers;thx,TEMP,xjFzdK0X4AY
+280,medium,Universal Intro,universal,20th_century_fox;columbia_pictures;disney;warner_brothers;thx,TEMP,bNJW113tbKk
+281,medium,Columbia Pictures Intro,columbia_pictures,20th_century_fox;universal;disney;warner_brothers;thx,TEMP,q4T4vdAV5Vk
+282,medium,Disney Intro,disney,universal;columbia_pictures;20th_century_fox;warner_brothers;thx,TEMP,k9bUTfFF3_4
+283,medium,Warner Brothers Intro,warner_brothers,universal;columbia_pictures;disney;20th_century_fox;thx,TEMP,OT9HsNszYCI
+284,medium,THX Intro,thx,universal;columbia_pictures;disney;warner_brothers;20th_century_fox,TEMP,PomZJao7Raw
