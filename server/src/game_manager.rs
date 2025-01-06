@@ -292,7 +292,7 @@ impl GameManager {
 
         // If many collisions, escalate to 7 digits
         for _ in 0..1_000_000 {
-            let code = format!("{:07}", fastrand::u32(0..10_000_00));
+            let code = format!("{:07}", fastrand::u32(0..10_000_000));
             if !join_codes.contains_key(&code) {
                 join_codes.insert(code.clone(), lobby_id);
                 return Ok(code);
