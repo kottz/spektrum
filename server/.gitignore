@@ -3,3 +3,4 @@ cert*
 key*
 *.pem
 config*.toml
+fly.toml
