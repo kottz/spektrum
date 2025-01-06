@@ -156,11 +156,22 @@
 						{#if questionType === 'character'}
 							<!-- Character question: show an image -->
 							<div class="aspect-square w-full">
-								<img
-									src={`${imageBaseUrl}/${alternative}.avif`}
-									alt={alternative}
-									class="h-full w-full object-contain"
-								/>
+								{#if alternative.endsWith('_video')}
+									<video
+										src={`${imageBaseUrl}/${alternative}.webm`}
+										class="h-full w-full object-contain"
+										autoplay
+										loop
+										muted
+										playsinline
+									></video>
+								{:else}
+									<img
+										src={`${imageBaseUrl}/${alternative}.avif`}
+										alt={alternative}
+										class="h-full w-full object-contain"
+									/>
+								{/if}
 							</div>
 						{:else if questionType === 'color'}
 							<!-- For color questions, label is hidden with sr-only -->
