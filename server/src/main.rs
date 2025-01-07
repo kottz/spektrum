@@ -24,6 +24,7 @@ mod server;
 #[derive(Debug, Deserialize)]
 struct ServerConfig {
     port: u16,
+    cors_origins: Vec<String>,
 }
 
 #[derive(Default, Debug, Deserialize)]
@@ -42,7 +43,6 @@ struct AppConfig {
     server: ServerConfig,
     questions: QuestionConfig,
     logging: LoggingConfig,
-    cors_origins: Vec<String>,
 }
 
 fn init_tracing(json_logging: bool) {
@@ -113,6 +113,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Parse all CORS origins
     let cors_origins: Vec<HeaderValue> = app_config
+        .server
         .cors_origins
         .iter()
         .map(|origin| {
