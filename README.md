@@ -26,8 +26,9 @@ If you want to deploy your own instance there is a provided Dockerfile that pair
 
 ### Frontend Setup
 ```bash
+cd frontend
 npm run dev --host    # Development
-npm run build        # Production
+npm run build         # Production
 ```
 
 ### Creating Custom Questions
