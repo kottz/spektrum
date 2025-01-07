@@ -212,8 +212,8 @@ id,difficulty,song,correct_character,other_characters,spotify_uri,youtube_id
 222,medium,Ghostbusters Theme,marshmallow,pennywise;jack_skellington;buzz_lightyear;apollo13_hanks;doc_brown,863fd0cdd3ba47d0,TaV1r341wYk
 223,medium,The Sims Theme,sim,steve;mario;link;perry;ash_ketchum,b2a083a0054240e9,BirBa_qXmho
 224,medium,Här kommer bumbibjörnarna,bumbi,meeko;uggla_fabel;bamse;cartman;bjorne,57fcb08acdc846e1,RJglAxMaJeQ
-225,medium,Rederiet Theme,joker_brost,lasse_holmquist;skargardsdoktorn;lasse_holm;helmer;ghost,https://www.youtube.com/watch?v=zTfKcRcibyg,zTfKcRcibyg
-226,medium,Kan du vissla Johanna,per_oscarsson,lasse_berghagen;allan_svensson;brasse;paradis_oskar;rudolf_haber,https://www.youtube.com/watch?v=OyOAVQ1yclk,OyOAVQ1yclk
+225,medium,Rederiet Theme,joker_brost,lasse_holmquist;skargardsdoktorn;lasse_holm;helmer;ghost,TEMP,zTfKcRcibyg
+226,medium,Kan du vissla Johanna,per_oscarsson,lasse_berghagen;allan_svensson;brasse;paradis_oskar;rudolf_haber,TEMP,OyOAVQ1yclk
 227,medium,Macken,roger_macken,tjorven;bosse_bildoktor;rudolf_haber;bjorne;allan_svensson,15456296d48944a2,_CxpyAOIQAM
 228,medium,Svensson Svensson,allan_svensson,rudolf_haber;skargardsdoktorn;yrrol;helmer;husvagn,6e583cf95e54474a,oK3bWsOF0vU
 229,medium,Stockholm i mitt hjärta,lasse_berghagen,lasse_holmquist;helmer;lasse_holm;truckdriver;gabriella,c7b69c32dd2c4a20,FMA9cgbq-v0
