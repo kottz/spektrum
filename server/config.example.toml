@@ -1,0 +1,10 @@
+[server]
+port = 8765
+cors_origins = ["http://localhost:5173", "https://quiz.myawesomedomain.com"]
+
+[logging]
+json = false
+
+[questions]
+color_questions_csv = "data/color_quiz.csv"
+character_questions_csv = "data/movie_character_quiz.csv"
