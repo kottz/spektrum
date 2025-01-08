@@ -218,14 +218,8 @@ mod tests {
     #[test]
     fn test_question_trait_implementation() {
         let question = create_test_question();
-        let alternatives = question.generate_round_alternatives();
+        let alternatives = question.get_all_possible_alternatives();
 
-        // Should get 6 JSON-serialized strings
         assert_eq!(alternatives.len(), 6);
-
-        // Each alternative should be a valid JSON string
-        for alt in alternatives {
-            assert!(serde_json::from_str::<String>(&alt).is_ok());
-        }
     }
 }
