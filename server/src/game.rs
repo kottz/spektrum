@@ -634,15 +634,7 @@ impl GameEngine {
         self.state.current_alternatives.clear();
         self.state.correct_answers = None;
 
-        let mut responses = vec![GameResponse {
-            recipients: Recipients::All,
-            payload: ResponsePayload::StateChanged {
-                phase: GamePhase::Score,
-                question_type: "".to_string(),
-                alternatives: Vec::new(),
-                scoreboard: self.get_scoreboard(),
-            },
-        }];
+        let mut responses = Vec::new();
 
         // Send next 3 upcoming questions to admin
         let upcoming = self.get_upcoming_questions(3);
