@@ -1,6 +1,6 @@
 # 🎵 Spektrum
 
-An interactive multiplayer music quiz where players compete to identify songs through colors and characters. Play now at https://quiz.kottz.se.
+An interactive multiplayer music quiz where players compete to identify songs through colors and characters.
 
 ## How to Play
 
