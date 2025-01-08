@@ -3,38 +3,9 @@ use csv::StringRecord;
 use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum Difficulty {
-    Easy,
-    Medium,
-    Challenging,
-    VeryChallenging,
-    Expert,
-    UltraHard,
-}
-
-impl Difficulty {
-    fn from_str(s: &str) -> QuestionResult<Self> {
-        match s.trim().to_lowercase().as_str() {
-            "easy" => Ok(Difficulty::Easy),
-            "medium" => Ok(Difficulty::Medium),
-            "challenging" => Ok(Difficulty::Challenging),
-            "very challenging" => Ok(Difficulty::VeryChallenging),
-            "expert" => Ok(Difficulty::Expert),
-            "ultra hard" => Ok(Difficulty::UltraHard),
-            _ => Err(QuestionError::InvalidFormat(format!(
-                "Invalid difficulty: {}",
-                s
-            ))),
-        }
-    }
-}
-
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct CharacterQuestion {
     pub id: u32,
-    pub difficulty: Difficulty,
     pub song: String,
     pub correct_character: String,
     pub other_characters: Vec<String>,
@@ -45,7 +16,6 @@ pub struct CharacterQuestion {
 impl CharacterQuestion {
     pub fn new(
         id: u32,
-        difficulty: Difficulty,
         song: String,
         correct_character: String,
         other_characters: Vec<String>,
@@ -54,7 +24,6 @@ impl CharacterQuestion {
     ) -> Self {
         Self {
             id,
-            difficulty,
             song,
             correct_character,
             other_characters,
@@ -126,16 +95,14 @@ impl Question for CharacterQuestion {
 }
 
 pub fn load_from_record(record: &StringRecord) -> QuestionResult<CharacterQuestion> {
-    if record.len() < 7 {
+    if record.len() < 6 {
         return Err(QuestionError::InvalidFormat(
             "Record does not have enough fields".into(),
         ));
     }
 
-    let difficulty = Difficulty::from_str(&record[1])?;
-
     // Split and process other characters
-    let other_characters: Vec<String> = record[4]
+    let other_characters: Vec<String> = record[3]
         .split(';')
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
@@ -145,12 +112,11 @@ pub fn load_from_record(record: &StringRecord) -> QuestionResult<CharacterQuesti
         id: record[0]
             .parse()
             .map_err(|_| QuestionError::InvalidFormat("Invalid ID".into()))?,
-        difficulty,
-        song: record[2].trim().to_string(),
-        correct_character: record[3].trim().to_string(),
+        song: record[1].trim().to_string(),
+        correct_character: record[2].trim().to_string(),
         other_characters,
-        spotify_uri: record[5].to_string(),
-        youtube_id: record[6].to_string(),
+        spotify_uri: record[4].to_string(),
+        youtube_id: record[5].to_string(),
     };
 
     question.validate_alternatives()?;
@@ -164,7 +130,6 @@ mod tests {
     fn create_test_question() -> CharacterQuestion {
         CharacterQuestion::new(
             1,
-            Difficulty::Easy,
             "Test Song".into(),
             "Main Character".into(),
             vec![
@@ -177,16 +142,6 @@ mod tests {
             "spotify:uri".into(),
             "youtube123".into(),
         )
-    }
-
-    #[test]
-    fn test_difficulty_from_str() {
-        assert!(matches!(Difficulty::from_str("easy"), Ok(Difficulty::Easy)));
-        assert!(matches!(
-            Difficulty::from_str(" MEDIUM "),
-            Ok(Difficulty::Medium)
-        ));
-        assert!(Difficulty::from_str("invalid").is_err());
     }
 
     #[test]

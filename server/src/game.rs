@@ -750,7 +750,7 @@ impl GameEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::question::character::{CharacterQuestion, Difficulty};
+    use crate::question::character::CharacterQuestion;
     use crate::question::color::{Color, ColorQuestion};
 
     fn setup_test_data() -> Vec<GameQuestion> {
@@ -775,7 +775,6 @@ mod tests {
 
         let character_questions = vec![GameQuestion::Character(CharacterQuestion::new(
             3,
-            Difficulty::Easy,
             "Test Song 3".to_string(),
             "Character A".to_string(),
             vec!["Character B".to_string(), "Character C".to_string()],
