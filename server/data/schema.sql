@@ -16,7 +16,7 @@ CREATE TABLE questions (
    id INTEGER PRIMARY KEY,
    type TEXT NOT NULL CHECK (type IN ('color', 'character', 'text', 'year')),
    text TEXT NOT NULL,
-   media_id INTEGER REFERENCES media(id),
+   media_id INTEGER REFERENCES media(id) NOT NULL,
    image_url TEXT,
    created_at TEXT DEFAULT (datetime('now')),
    is_active INTEGER DEFAULT 1
