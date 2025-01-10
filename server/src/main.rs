@@ -1,4 +1,4 @@
-use crate::question::{load_questions_from_csv, GameQuestion};
+use crate::question::{GameQuestion, QuestionManager};
 use crate::server::{check_sessions_handler, create_lobby_handler, ws_handler, AppState};
 use axum::{
     routing::{any, post},
@@ -33,16 +33,10 @@ struct LoggingConfig {
 }
 
 #[derive(Debug, Deserialize)]
-struct QuestionConfig {
-    color_questions_csv: String,
-    character_questions_csv: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
 struct AppConfig {
     server: ServerConfig,
-    questions: QuestionConfig,
     logging: LoggingConfig,
+    question_path: String,
 }
 
 fn init_tracing(json_logging: bool) {
@@ -60,20 +54,20 @@ fn init_tracing(json_logging: bool) {
     }
 }
 
-fn load_all_questions(
-    config: &QuestionConfig,
-) -> Result<Vec<GameQuestion>, Box<dyn std::error::Error>> {
-    let mut questions = load_questions_from_csv(&config.color_questions_csv)
-        .map_err(|e| format!("Failed to load color questions: {}", e))?;
-
-    if let Some(character_path) = &config.character_questions_csv {
-        let character_questions = load_questions_from_csv(character_path)
-            .map_err(|e| format!("Failed to load character questions: {}", e))?;
-        questions.extend(character_questions);
-    }
-
-    Ok(questions)
-}
+// fn load_all_questions(
+//     config: &QuestionConfig,
+// ) -> Result<Vec<GameQuestion>, Box<dyn std::error::Error>> {
+//     let mut questions = load_questions_from_csv(&config.color_questions_csv)
+//         .map_err(|e| format!("Failed to load color questions: {}", e))?;
+//
+//     if let Some(character_path) = &config.character_questions_csv {
+//         let character_questions = load_questions_from_csv(character_path)
+//             .map_err(|e| format!("Failed to load character questions: {}", e))?;
+//         questions.extend(character_questions);
+//     }
+//
+//     Ok(questions)
+// }
 
 async fn shutdown_signal() {
     let ctrl_c = async {
@@ -102,7 +96,7 @@ async fn shutdown_signal() {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let settings = Config::builder()
-        .add_source(config::Environment::default())
+        .add_source(config::Environment::default().separator("__"))
         .add_source(config::File::with_name("config").required(false))
         .build()
         .map_err(|e| format!("Failed to build config: {}", e))?;
@@ -133,8 +127,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             http::header::ACCEPT,
         ]);
 
-    let questions = load_all_questions(&app_config.questions)?;
-    info!("Loaded {} questions successfully", questions.len());
+    let question_manager = QuestionManager::new(&app_config.question_path).await?;
+    let questions = question_manager.get_questions().await?;
 
     let state = AppState::new(questions);
     let app = Router::new()

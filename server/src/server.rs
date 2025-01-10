@@ -67,10 +67,10 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(questions: Vec<GameQuestion>) -> Self {
+    pub fn new(questions: Arc<Vec<GameQuestion>>) -> Self {
         let state = Self {
             manager: Arc::new(Mutex::new(GameManager::new())),
-            questions: Arc::new(questions),
+            questions,
         };
 
         let manager = state.manager.clone();

@@ -67,15 +67,7 @@ export interface GameState {
 		youtubeId: string;
 	};
 	error?: string;
-	upcomingQuestions?: Array<{
-		type: 'character' | 'color';
-		song: string;
-		artist?: string;
-		spotify_url?: string;
-		youtube_id: string;
-		correct_character?: string;
-		colors?: string[];
-	}>;
+	upcomingQuestions?: GameQuestion[];
 	currentAnswers: PlayerAnswer[];
 }
 
@@ -83,12 +75,17 @@ export interface GameState {
  * Represents a single quiz question.
  */
 export interface GameQuestion {
-	type: string;
-	song_name: string;
-	artist: string;
+	id: number;
+	question_type: string;
+	title: string;
+	artist?: string;
 	youtube_id: string;
-	alternatives: string[];
-	correct_answer: string;
+	options: GameQuestionOption[];
+}
+
+export interface GameQuestionOption {
+	option: String;
+	is_correct: boolean;
 }
 
 /* ------------------------------------------------------------------

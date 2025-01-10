@@ -1,5 +1,5 @@
 use crate::game::{GamePhase, ResponsePayload};
-use crate::question::GameQuestion;
+use crate::question::{GameQuestion, QuestionType};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -193,17 +193,18 @@ pub fn convert_to_server_message(payload: &ResponsePayload) -> ServerMessage {
             reason: reason.clone(),
         },
         ResponsePayload::AdminInfo { current_question } => {
-            let question = match current_question {
-                GameQuestion::Color(q) => AdminQuestion::ColorQuestion {
-                    song_name: q.song.clone(),
-                    artist: q.artist.clone(),
-                    youtube_id: q.youtube_id.clone(),
+            let question = match current_question.question_type {
+                QuestionType::Color => AdminQuestion::ColorQuestion {
+                    song_name: current_question.title.clone(),
+                    artist: current_question.artist.clone().unwrap_or("".to_string()),
+                    youtube_id: current_question.youtube_id.clone(),
                 },
-                GameQuestion::Character(q) => AdminQuestion::CharacterQuestion {
-                    song: q.song.clone(),
-                    youtube_id: q.youtube_id.clone(),
+                QuestionType::Character => AdminQuestion::CharacterQuestion {
+                    song: current_question.title.clone(),
+                    youtube_id: current_question.youtube_id.clone(),
                     character_context: "TODO".to_string(),
                 },
+                _ => unreachable!(),
             };
             ServerMessage::AdminInfo { question }
         }

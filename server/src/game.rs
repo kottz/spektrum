@@ -1,4 +1,4 @@
-use crate::question::{GameQuestion, Question};
+use crate::question::GameQuestion;
 use rand::seq::SliceRandom;
 use serde::Serialize;
 use std::time::Duration;
@@ -720,31 +720,31 @@ impl GameEngine {
         self.state.all_questions[start..end].to_vec()
     }
 
-    pub fn get_current_state(&self) -> GameStateResponse {
-        GameStateResponse {
-            phase: self.state.phase,
-            question_type: self
-                .state
-                .current_question
-                .as_ref()
-                .map(|q| q.get_question_type().to_string())
-                .unwrap_or_default(),
-            alternatives: self.state.current_alternatives.clone(),
-            scoreboard: self.get_scoreboard(),
-            current_song: self.state.current_question.as_ref().map(|q| match q {
-                GameQuestion::Color(c) => CurrentSongInfo {
-                    song_name: c.song.clone(),
-                    artist: c.artist.clone(),
-                    youtube_id: c.youtube_id.clone(),
-                },
-                GameQuestion::Character(c) => CurrentSongInfo {
-                    song_name: c.song.clone(),
-                    artist: "".to_string(), // Character questions don't have artist
-                    youtube_id: c.youtube_id.clone(),
-                },
-            }),
-        }
-    }
+    // pub fn get_current_state(&self) -> GameStateResponse {
+    //     GameStateResponse {
+    //         phase: self.state.phase,
+    //         question_type: self
+    //             .state
+    //             .current_question
+    //             .as_ref()
+    //             .map(|q| q.get_question_type().to_string())
+    //             .unwrap_or_default(),
+    //         alternatives: self.state.current_alternatives.clone(),
+    //         scoreboard: self.get_scoreboard(),
+    //         current_song: self.state.current_question.as_ref().map(|q| match q {
+    //             GameQuestion::Color(c) => CurrentSongInfo {
+    //                 song_name: c.song.clone(),
+    //                 artist: c.artist.clone(),
+    //                 youtube_id: c.youtube_id.clone(),
+    //             },
+    //             GameQuestion::Character(c) => CurrentSongInfo {
+    //                 song_name: c.song.clone(),
+    //                 artist: "".to_string(), // Character questions don't have artist
+    //                 youtube_id: c.youtube_id.clone(),
+    //             },
+    //         }),
+    //     }
+    // }
 }
 
 #[cfg(test)]
