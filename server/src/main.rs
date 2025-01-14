@@ -10,15 +10,16 @@ use serde::Deserialize;
 use std::net::SocketAddr;
 use tokio::signal;
 use tokio::time::Duration;
+use tower_http::compression::{CompressionLayer, CompressionLevel};
 use tower_http::cors::CorsLayer;
 use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+mod db;
 mod game;
 mod game_manager;
 mod messages;
-mod db;
 mod question;
 mod server;
 
@@ -140,6 +141,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(DefaultMakeSpan::default().include_headers(true)),
+        )
+        .layer(
+            CompressionLayer::new()
+                .quality(CompressionLevel::Default)
+                .gzip(true),
         )
         .layer(cors);
 
