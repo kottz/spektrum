@@ -18,6 +18,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 mod game;
 mod game_manager;
 mod messages;
+mod db;
 mod question;
 mod server;
 
