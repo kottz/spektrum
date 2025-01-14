@@ -2,24 +2,22 @@
 	import { gameStore } from '../../stores/game';
 	import { Card, CardContent } from '$lib/components/ui/card';
 	import { PUBLIC_SPEKTRUM_CDN_URL } from '$env/static/public';
-
 	const imageBaseUrl = $derived(`${PUBLIC_SPEKTRUM_CDN_URL}/img`);
 
-	/**
-	 * Subscribe to parts of the game store
-	 */
 	const alternatives = $derived($gameStore.currentQuestion?.alternatives || []);
 	const questionType = $derived($gameStore.currentQuestion?.type || 'default');
 	const upcomingQuestions = $derived($gameStore.upcomingQuestions || []);
 
 	/**
-	 * Get the correct answer from the first upcoming question
+	 * Get all correct answers from the first upcoming question
 	 */
-	const correctAnswer = $derived(
+	const correctAnswers = $derived(
 		questionType === 'character'
-			? upcomingQuestions[0]?.options.find((opt) => opt.is_correct)?.option
-			: upcomingQuestions[0]?.options.filter((opt) => opt.is_correct).map((opt) => opt.option)[0] ||
-					''
+			? [upcomingQuestions[0]?.options.find((opt) => opt.is_correct)?.option].filter(Boolean)
+			: upcomingQuestions[0]?.options
+					.filter((opt) => opt.is_correct)
+					.map((opt) => opt.option)
+					.filter(Boolean) || []
 	);
 
 	/**
@@ -54,19 +52,16 @@
 			'pointer-events-none' // admin view is read-only
 		];
 
-		// First establish base background for character type
 		if (questionType === 'character') {
 			styles.push('p-0', 'overflow-hidden', 'bg-gray-200');
 		} else if (questionType !== 'color') {
 			styles.push('bg-muted');
 		}
 
-		// Check if this is the correct answer
-		if (alternative === correctAnswer) {
+		if (correctAnswers.includes(alternative)) {
 			styles.push('ring-4', 'ring-green-500', 'bg-green-500/50', 'z-10');
 		}
 
-		// Handle special color cases
 		if (questionType === 'color') {
 			const lower = alternative.toLowerCase();
 			if (lower === 'white') {
