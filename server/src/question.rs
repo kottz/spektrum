@@ -1,12 +1,19 @@
+use crate::db::{QuestionDatabase, QuestionSet};
+use lazy_static::lazy_static;
 use rand::seq::SliceRandom;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::Mutex;
 use thiserror::Error;
 use tokio::sync::RwLock;
 
-use crate::db::{QuestionDatabase, QuestionSet};
+lazy_static! {
+    pub(crate) static ref COLOR_WEIGHTS: Mutex<HashMap<Color, f64>> = Mutex::new(HashMap::new());
+}
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum QuestionType {
     Color,
@@ -38,6 +45,13 @@ impl Color {
         &[
             Red, Green, Blue, Yellow, Purple, Gold, Silver, Pink, Black, White, Brown, Orange, Gray,
         ]
+    }
+
+    fn get_weight(&self) -> f64 {
+        COLOR_WEIGHTS
+            .lock()
+            .map(|weights| weights.get(self).copied().unwrap_or(0.15))
+            .unwrap_or(0.15) // Fallback weight if lock fails
     }
 
     pub fn to_string(&self) -> String {
@@ -153,17 +167,40 @@ impl GameQuestion {
             .filter_map(|opt| opt.option.parse().ok())
             .collect();
 
-        // Add additional random colors to reach target size
-        let colors_needed = TARGET_SIZE - round_colors.len();
-
-        let mut additional_colors: Vec<_> = Color::all()
+        // Get available colors (excluding ones we already have)
+        let mut available_colors: Vec<(Color, f64)> = Color::all()
             .iter()
             .copied()
             .filter(|color| !round_colors.contains(color))
-            .take(colors_needed)
+            .map(|color| (color, color.get_weight()))
             .collect();
-        additional_colors.shuffle(&mut rng);
-        round_colors.extend(additional_colors);
+
+        // Select additional colors based on weights until we have TARGET_SIZE
+        while round_colors.len() < TARGET_SIZE && !available_colors.is_empty() {
+            let total_weight: f64 = available_colors.iter().map(|(_, w)| w).sum();
+
+            if total_weight <= 0.0 {
+                // Fallback to random selection if weights are invalid
+                let idx = rng.gen_range(0..available_colors.len());
+                let (color, _) = available_colors.remove(idx);
+                round_colors.push(color);
+                continue;
+            }
+
+            let mut selection = rng.gen_range(0.0..total_weight);
+            let mut selected_idx = 0;
+
+            for (idx, (_, weight)) in available_colors.iter().enumerate() {
+                selection -= weight;
+                if selection <= 0.0 {
+                    selected_idx = idx;
+                    break;
+                }
+            }
+
+            let (color, _) = available_colors.remove(selected_idx);
+            round_colors.push(color);
+        }
 
         round_colors.shuffle(&mut rng);
         round_colors.into_iter().map(|c| c.to_string()).collect()

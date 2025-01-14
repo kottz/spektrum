@@ -1,5 +1,6 @@
-use crate::question::{GameQuestion, GameQuestionOption, QuestionType};
+use crate::question::{Color, GameQuestion, GameQuestionOption, QuestionType, COLOR_WEIGHTS};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use thiserror::Error;
@@ -123,8 +124,44 @@ impl QuestionDatabase {
             return Err(DbError::NoQuestions);
         }
 
+        let weights = Self::calculate_color_weights(&game_questions);
+        if let Ok(mut stored_weights) = COLOR_WEIGHTS.lock() {
+            *stored_weights = weights;
+        }
+
         info!("Loaded {} questions", game_questions.len());
         Ok((game_questions, stored_data.sets))
+    }
+
+    fn calculate_color_weights(questions: &[GameQuestion]) -> HashMap<Color, f64> {
+        let mut color_counts: HashMap<Color, usize> = HashMap::new();
+        let total_questions = questions.len();
+
+        // Count color occurrences
+        for question in questions {
+            if question.question_type == QuestionType::Color {
+                for option in question.get_correct_options() {
+                    if let Ok(color) = option.option.parse::<Color>() {
+                        *color_counts.entry(color).or_insert(0) += 1;
+                    }
+                }
+            }
+        }
+
+        // Calculate weights using the same formula as before
+        let mut weights = HashMap::new();
+        for &color in Color::all() {
+            let count = color_counts.get(&color).copied().unwrap_or(0);
+            let base_proportion = if total_questions > 0 {
+                count as f64 / total_questions as f64
+            } else {
+                0.0
+            };
+            let weight = base_proportion.sqrt() + 0.15; // Same formula as original
+            weights.insert(color, weight);
+        }
+
+        weights
     }
 
     pub fn add_question(&self, new_question: QuestionInput) -> Result<(), DbError> {
