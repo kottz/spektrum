@@ -13,10 +13,13 @@
 	const upcomingQuestions = $derived($gameStore.upcomingQuestions || []);
 
 	/**
-	 * Identify the correct answer from the next question in queue
+	 * Get the correct answer from the first upcoming question
 	 */
 	const correctAnswer = $derived(
-		upcomingQuestions[0]?.correct_character || upcomingQuestions[0]?.colors?.[0] || ''
+		questionType === 'character'
+			? upcomingQuestions[0]?.options.find((opt) => opt.is_correct)?.option
+			: upcomingQuestions[0]?.options.filter((opt) => opt.is_correct).map((opt) => opt.option)[0] ||
+					''
 	);
 
 	/**
@@ -40,7 +43,6 @@
 
 	/**
 	 * Builds the list of CSS classes for each alternative.
-	 * Uses the same metallic approach as the updated question-view.
 	 */
 	function getButtonStyles(alternative: string) {
 		const styles = [
@@ -52,28 +54,29 @@
 			'pointer-events-none' // admin view is read-only
 		];
 
-		// Check if this is the correct answer
-		if (alternative === correctAnswer) {
-			styles.push('ring-4', 'ring-offset-2', 'ring-green-500', 'bg-green-500/20', 'z-10');
+		// First establish base background for character type
+		if (questionType === 'character') {
+			styles.push('p-0', 'overflow-hidden', 'bg-gray-200');
+		} else if (questionType !== 'color') {
+			styles.push('bg-muted');
 		}
 
-		// If it's a color question, apply metallic class if needed
+		// Check if this is the correct answer
+		if (alternative === correctAnswer) {
+			styles.push('ring-4', 'ring-green-500', 'bg-green-500/50', 'z-10');
+		}
+
+		// Handle special color cases
 		if (questionType === 'color') {
 			const lower = alternative.toLowerCase();
+			if (lower === 'white') {
+				styles.push('border-2', 'border-black');
+			}
 			if (lower === 'gold') {
 				styles.push('metallic-gold');
 			} else if (lower === 'silver') {
 				styles.push('metallic-silver');
 			}
-		}
-
-		// If it's a character question, show an image
-		if (questionType === 'character') {
-			styles.push('p-0', 'overflow-hidden');
-		}
-		// For non-color questions (other than character), use a muted background
-		else if (questionType !== 'color') {
-			styles.push('bg-muted');
 		}
 
 		return styles.join(' ');
