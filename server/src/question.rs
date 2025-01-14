@@ -49,20 +49,20 @@ impl std::str::FromStr for Color {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_uppercase().as_str() {
-            "RED" => Ok(Color::Red),
-            "GREEN" => Ok(Color::Green),
-            "BLUE" => Ok(Color::Blue),
-            "YELLOW" => Ok(Color::Yellow),
-            "PURPLE" => Ok(Color::Purple),
-            "GOLD" => Ok(Color::Gold),
-            "SILVER" => Ok(Color::Silver),
-            "PINK" => Ok(Color::Pink),
-            "BLACK" => Ok(Color::Black),
-            "WHITE" => Ok(Color::White),
-            "BROWN" => Ok(Color::Brown),
-            "ORANGE" => Ok(Color::Orange),
-            "GRAY" | "GREY" => Ok(Color::Gray),
+        match s.trim() {
+            "Red" => Ok(Color::Red),
+            "Green" => Ok(Color::Green),
+            "Blue" => Ok(Color::Blue),
+            "Yellow" => Ok(Color::Yellow),
+            "Purple" => Ok(Color::Purple),
+            "Gold" => Ok(Color::Gold),
+            "Silver" => Ok(Color::Silver),
+            "Pink" => Ok(Color::Pink),
+            "Black" => Ok(Color::Black),
+            "White" => Ok(Color::White),
+            "Brown" => Ok(Color::Brown),
+            "Orange" => Ok(Color::Orange),
+            "Gray" | "Grey" => Ok(Color::Gray),
             _ => Err(format!("Invalid color: {}", s)),
         }
     }
@@ -143,31 +143,30 @@ impl GameQuestion {
     }
 
     fn generate_color_alternatives(&self) -> Vec<String> {
+        const TARGET_SIZE: usize = 6;
         let mut rng = rand::thread_rng();
-        let correct_colors: Vec<Color> = self
+
+        // Get initial colors from correct options
+        let mut round_colors: Vec<Color> = self
             .get_correct_options()
             .iter()
-            .filter_map(|opt| opt.option.parse::<Color>().ok())
+            .filter_map(|opt| opt.option.parse().ok())
             .collect();
 
-        let mut round_colors = correct_colors.clone();
+        // Add additional random colors to reach target size
+        let colors_needed = TARGET_SIZE - round_colors.len();
 
-        if round_colors.len() >= 6 {
-            round_colors.shuffle(&mut rng);
-            return round_colors.iter().map(|c| c.to_string()).collect();
-        }
-
-        let mut available_colors: Vec<Color> = Color::all()
+        let mut additional_colors: Vec<_> = Color::all()
             .iter()
             .copied()
             .filter(|color| !round_colors.contains(color))
+            .take(colors_needed)
             .collect();
+        additional_colors.shuffle(&mut rng);
+        round_colors.extend(additional_colors);
 
-        available_colors.shuffle(&mut rng);
-        round_colors.extend(available_colors.iter().take(6 - round_colors.len()));
         round_colors.shuffle(&mut rng);
-
-        round_colors.iter().map(|c| c.to_string()).collect()
+        round_colors.into_iter().map(|c| c.to_string()).collect()
     }
 
     fn generate_year_alternatives(&self, correct_year: i32) -> Vec<String> {
