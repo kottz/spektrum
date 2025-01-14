@@ -119,17 +119,19 @@ class Converter:
                 )
                 self.next_question_id += 1
 
-                option = QuestionOption(
-                    id=self.next_option_id,
-                    question_id=question.id,
-                    option_text=row["color"],
-                    is_correct=True,
-                )
-                self.next_option_id += 1
+                for color in row["color"].split(";"):
+                    if color := color.strip():
+                        option = QuestionOption(
+                            id=self.next_option_id,
+                            question_id=question.id,
+                            option_text=color,
+                            is_correct=True,
+                        )
+                        self.next_option_id += 1
+                        self.data.options.append(option)
 
                 self.data.media.append(media)
                 self.data.questions.append(question)
-                self.data.options.append(option)
 
         # Load character questions
         if Path(character_csv).exists():
