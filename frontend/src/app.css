@@ -1,115 +1,108 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
- 
+
 @layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 72.22% 50.59%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --radius: 0.5rem;
-  }
-  .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-  }
+	:root {
+		--background: 0 0% 100%;
+		--foreground: 0 0% 3.9%;
+		--card: 0 0% 100%;
+		--card-foreground: 0 0% 3.9%;
+		--popover: 0 0% 100%;
+		--popover-foreground: 0 0% 3.9%;
+		--primary: 0 0% 9%;
+		--primary-foreground: 0 0% 98%;
+		--secondary: 0 0% 96.1%;
+		--secondary-foreground: 0 0% 9%;
+		--muted: 0 0% 96.1%;
+		--muted-foreground: 0 0% 45.1%;
+		--accent: 0 0% 96.1%;
+		--accent-foreground: 0 0% 9%;
+		--destructive: 0 72.22% 50.59%;
+		--destructive-foreground: 0 0% 98%;
+		--border: 0 0% 89.8%;
+		--input: 0 0% 89.8%;
+		--ring: 0 0% 3.9%;
+		--radius: 0.5rem;
+	}
+	.dark {
+		--background: 0 0% 3.9%;
+		--foreground: 0 0% 98%;
+		--card: 0 0% 3.9%;
+		--card-foreground: 0 0% 98%;
+		--popover: 0 0% 3.9%;
+		--popover-foreground: 0 0% 98%;
+		--primary: 0 0% 98%;
+		--primary-foreground: 0 0% 9%;
+		--secondary: 0 0% 14.9%;
+		--secondary-foreground: 0 0% 98%;
+		--muted: 0 0% 14.9%;
+		--muted-foreground: 0 0% 63.9%;
+		--accent: 0 0% 14.9%;
+		--accent-foreground: 0 0% 98%;
+		--destructive: 0 62.8% 30.6%;
+		--destructive-foreground: 0 0% 98%;
+		--border: 0 0% 14.9%;
+		--input: 0 0% 14.9%;
+		--ring: 0 0% 83.1%;
+	}
 }
- 
+
 @layer base {
-  {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
+	:root {
+		@apply border-border;
+	}
+	body {
+		@apply bg-background text-foreground;
+	}
 }
 
 .metallic-gold {
-  background: linear-gradient(
-    45deg,
-    #B17F02 5%,
-    #FED851 10%,
-    #D4AF37 30%,
-    #FED851 50%,
-    #D4AF37 70%,
-    #FED851 80%,
-    #B17F02 95%
-  );
+	background: linear-gradient(
+		45deg,
+		#b17f02 5%,
+		#fed851 10%,
+		#d4af37 30%,
+		#fed851 50%,
+		#d4af37 70%,
+		#fed851 80%,
+		#b17f02 95%
+	);
 }
 
 .metallic-silver {
-  background: linear-gradient(
-    45deg,
-    #999 5%,
-    #fff 10%,
-    #ccc 30%,
-    #ddd 50%,
-    #ccc 70%,
-    #fff 80%,
-    #999 95%
-  );
+	background: linear-gradient(
+		45deg,
+		#999 5%,
+		#fff 10%,
+		#ccc 30%,
+		#ddd 50%,
+		#ccc 70%,
+		#fff 80%,
+		#999 95%
+	);
 }
 
 /* If you want hover effects for color buttons */
 .color-button:not(:disabled):hover {
-  transform: scale(1.05);
-  box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+	transform: scale(1.05);
+	box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
 }
 
 /* Metallic-specific hover states */
 .metallic-gold:not(:disabled):hover {
-  background: linear-gradient(
-    45deg,
-    #FED851 5%,
-    #D4AF37 30%,
-    #FED851 50%,
-    #D4AF37 70%,
-    #FED851 95%
-  );
-  box-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
+	background: linear-gradient(
+		45deg,
+		#fed851 5%,
+		#d4af37 30%,
+		#fed851 50%,
+		#d4af37 70%,
+		#fed851 95%
+	);
+	box-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
 }
 
 .metallic-silver:not(:disabled):hover {
-  background: linear-gradient(
-    45deg,
-    #fff 5%,
-    #ccc 30%,
-    #fff 50%,
-    #ccc 70%,
-    #fff 95%
-  );
-  box-shadow: 0 0 15px rgba(192, 192, 192, 0.4);
+	background: linear-gradient(45deg, #fff 5%, #ccc 30%, #fff 50%, #ccc 70%, #fff 95%);
+	box-shadow: 0 0 15px rgba(192, 192, 192, 0.4);
 }
