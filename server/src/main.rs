@@ -1,5 +1,7 @@
-use crate::question::{GameQuestion, QuestionManager};
-use crate::server::{check_sessions_handler, create_lobby_handler, ws_handler, AppState};
+use crate::question::QuestionStore;
+use crate::server::{
+    check_sessions_handler, create_lobby_handler, get_stored_data_handler, ws_handler, AppState,
+};
 use axum::{
     routing::{any, post},
     Router,
@@ -129,14 +131,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             http::header::ACCEPT,
         ]);
 
-    let question_manager = QuestionManager::new(&app_config.question_path).await?;
-    let questions = question_manager.get_questions().await?;
+    let question_store = QuestionStore::new(&app_config.question_path).await?;
 
-    let state = AppState::new(questions);
+    let state = AppState::new(question_store);
     let app = Router::new()
         .route("/ws", any(ws_handler))
         .route("/api/lobbies", post(create_lobby_handler))
         .route("/api/check-sessions", post(check_sessions_handler))
+        .route("/api/questions", post(get_stored_data_handler))
         .with_state(state)
         .layer(
             TraceLayer::new_for_http()

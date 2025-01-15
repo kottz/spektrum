@@ -4,7 +4,7 @@ use crate::game::{
 use crate::game_manager::{GameLobby, GameManager};
 use crate::messages::GameState;
 use crate::messages::{convert_to_server_message, AdminAction, ClientMessage, ServerMessage};
-use crate::GameQuestion;
+use crate::question::QuestionStore;
 use axum::{
     extract::ws::{Message, WebSocket},
     extract::State,
@@ -34,6 +34,12 @@ pub enum ApiError {
     #[error("Validation error: {0}")]
     Validation(String),
 
+    #[error("Unauthorized")]
+    Unauthorized,
+
+    #[error("Database error: {0}")]
+    Database(String),
+
     #[error("Lobby error: {0}")]
     Lobby(String),
 
@@ -45,6 +51,11 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> axum::response::Response {
         let (status, error_message) = match &self {
             ApiError::Validation(_) => (axum::http::StatusCode::BAD_REQUEST, self.to_string()),
+            ApiError::Unauthorized => (axum::http::StatusCode::UNAUTHORIZED, self.to_string()),
+            ApiError::Database(_) => (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                self.to_string(),
+            ),
             ApiError::Lobby(_) => (axum::http::StatusCode::BAD_REQUEST, self.to_string()),
             ApiError::Lock(_) => (
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
@@ -63,14 +74,15 @@ impl IntoResponse for ApiError {
 #[derive(Clone)]
 pub struct AppState {
     pub manager: Arc<Mutex<GameManager>>,
-    pub questions: Arc<Vec<GameQuestion>>,
+    //pub questions: Arc<Vec<GameQuestion>>,
+    pub store: Arc<QuestionStore>,
 }
 
 impl AppState {
-    pub fn new(questions: Arc<Vec<GameQuestion>>) -> Self {
+    pub fn new(question_manager: QuestionStore) -> Self {
         let state = Self {
             manager: Arc::new(Mutex::new(GameManager::new())),
-            questions,
+            store: Arc::new(question_manager),
         };
 
         let manager = state.manager.clone();
@@ -109,7 +121,7 @@ pub struct CreateLobbyResponse {
 pub async fn create_lobby_handler(
     State(state): State<AppState>,
     Json(req): Json<CreateLobbyRequest>,
-) -> Result<impl IntoResponse, ApiError> {
+) -> Result<Json<CreateLobbyResponse>, ApiError> {
     let round_duration = req.round_duration.unwrap_or(60);
     if round_duration < 10 {
         return Err(ApiError::Validation(
@@ -117,13 +129,14 @@ pub async fn create_lobby_handler(
         ));
     }
 
+    let questions = state.store.questions.read().await;
     let mgr = state
         .manager
         .lock()
         .map_err(|e| ApiError::Lock(e.to_string()))?;
 
     let (lobby_id, join_code, admin_id) = mgr
-        .create_lobby(state.questions.to_vec(), round_duration)
+        .create_lobby(questions.clone(), round_duration)
         .map_err(|e| ApiError::Lobby(e.to_string()))?;
 
     Ok(Json(CreateLobbyResponse {
@@ -131,6 +144,27 @@ pub async fn create_lobby_handler(
         join_code,
         admin_id,
     }))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GetStoredDataRequest {
+    password: String,
+}
+
+pub async fn get_stored_data_handler(
+    State(state): State<AppState>,
+    Json(req): Json<GetStoredDataRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    if req.password != "test123" {
+        return Err(ApiError::Unauthorized);
+    }
+
+    let stored_data = state
+        .store
+        .get_stored_data()
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+
+    Ok(Json(stored_data))
 }
 
 #[derive(Debug, Deserialize)]

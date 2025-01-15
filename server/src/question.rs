@@ -1,3 +1,4 @@
+use crate::db::{DbError, StoredData};
 use crate::db::{QuestionDatabase, QuestionSet};
 use lazy_static::lazy_static;
 use rand::seq::SliceRandom;
@@ -240,13 +241,13 @@ impl GameQuestion {
     }
 }
 
-pub struct QuestionManager {
-    questions: RwLock<Arc<Vec<GameQuestion>>>,
+pub struct QuestionStore {
+    pub questions: RwLock<Arc<Vec<GameQuestion>>>,
     sets: RwLock<Arc<Vec<QuestionSet>>>,
     db: QuestionDatabase,
 }
 
-impl QuestionManager {
+impl QuestionStore {
     pub async fn new(file_path: &str) -> Result<Self, QuestionError> {
         let db = QuestionDatabase::new(file_path);
         let manager = Self {
@@ -270,6 +271,10 @@ impl QuestionManager {
         *self.sets.write().await = Arc::new(sets);
 
         Ok(())
+    }
+
+    pub fn get_stored_data(&self) -> Result<StoredData, DbError> {
+        self.db.read_stored_data()
     }
 
     pub async fn get_questions(&self) -> Result<Arc<Vec<GameQuestion>>, QuestionError> {

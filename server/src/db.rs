@@ -47,18 +47,18 @@ struct QuestionOption {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct StoredData {
-    media: Vec<Media>,
-    questions: Vec<Question>,
-    options: Vec<QuestionOption>,
-    sets: Vec<QuestionSet>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QuestionSet {
     pub id: i64,
     pub name: String,
     pub question_ids: Vec<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StoredData {
+    media: Vec<Media>,
+    questions: Vec<Question>,
+    options: Vec<QuestionOption>,
+    sets: Vec<QuestionSet>,
 }
 
 pub struct QuestionDatabase {
@@ -72,7 +72,7 @@ impl QuestionDatabase {
         }
     }
 
-    fn read_stored_data(&self) -> Result<StoredData, DbError> {
+    pub fn read_stored_data(&self) -> Result<StoredData, DbError> {
         if Path::new(&self.file_path).exists() {
             let content = fs::read_to_string(&self.file_path)?;
             Ok(serde_json::from_str(&content)?)

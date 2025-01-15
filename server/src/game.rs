@@ -1,6 +1,7 @@
 use crate::question::GameQuestion;
 use rand::seq::SliceRandom;
 use serde::Serialize;
+use std::sync::Arc;
 use std::time::Duration;
 use std::{collections::HashMap, time::Instant};
 use tracing::warn;
@@ -217,7 +218,8 @@ pub struct GameState {
     pub current_alternatives: Vec<String>,
     pub correct_answers: Option<Vec<String>>,
     pub current_question: Option<GameQuestion>,
-    pub all_questions: Vec<GameQuestion>,
+    pub all_questions: Arc<Vec<GameQuestion>>,
+    pub shuffled_question_indices: Vec<usize>,
     pub current_question_index: usize,
 }
 
@@ -226,9 +228,12 @@ pub struct GameEngine {
 }
 
 impl GameEngine {
-    pub fn new(admin_id: Uuid, mut questions: Vec<GameQuestion>, round_duration: u64) -> Self {
+    pub fn new(admin_id: Uuid, questions: Arc<Vec<GameQuestion>>, round_duration: u64) -> Self {
         let mut rng = rand::thread_rng();
-        questions.shuffle(&mut rng);
+        let question_count = questions.len();
+        let mut indices: Vec<usize> = (0..question_count).collect();
+        indices.shuffle(&mut rng);
+        // TODO: USE THE INDICES
         Self {
             state: GameState {
                 phase: GamePhase::Lobby,
@@ -240,6 +245,7 @@ impl GameEngine {
                 correct_answers: None,
                 current_question: None,
                 all_questions: questions,
+                shuffled_question_indices: indices,
                 current_question_index: 0,
             },
         }
@@ -682,11 +688,13 @@ impl GameEngine {
     }
 
     fn setup_round(&mut self, specified_alternatives: Option<Vec<String>>) -> Result<(), String> {
-        if self.state.current_question_index >= self.state.all_questions.len() {
+        if self.state.current_question_index >= self.state.shuffled_question_indices.len() {
             return Err("No more questions available".to_string());
         }
 
-        let next_question = &self.state.all_questions[self.state.current_question_index];
+        let shuffled_idx = self.state.shuffled_question_indices[self.state.current_question_index];
+        let next_question = &self.state.all_questions[shuffled_idx];
+
         self.state.current_question = Some(next_question.clone());
         self.state.correct_answers = Some(next_question.get_correct_answer());
 
@@ -707,17 +715,21 @@ impl GameEngine {
             let mut rng = rand::thread_rng();
             self.state.current_alternatives.shuffle(&mut rng);
         }
-
         Ok(())
     }
 
     fn get_upcoming_questions(&self, count: usize) -> Vec<GameQuestion> {
-        if self.state.current_question_index >= self.state.all_questions.len() {
+        if self.state.current_question_index >= self.state.shuffled_question_indices.len() {
             return Vec::new(); // Return empty vec if we're at or past the end
         }
+
         let start = self.state.current_question_index;
-        let end = std::cmp::min(start + count, self.state.all_questions.len());
-        self.state.all_questions[start..end].to_vec()
+        let end = std::cmp::min(start + count, self.state.shuffled_question_indices.len());
+
+        self.state.shuffled_question_indices[start..end]
+            .iter()
+            .map(|&idx| self.state.all_questions[idx].clone())
+            .collect()
     }
 
     // pub fn get_current_state(&self) -> GameStateResponse {
@@ -750,8 +762,8 @@ impl GameEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::question::character::CharacterQuestion;
-    use crate::question::color::{Color, ColorQuestion};
+    use crate::question::Color;
+    use crate::question::GameQuestion;
 
     fn setup_test_data() -> Vec<GameQuestion> {
         let color_questions = vec![

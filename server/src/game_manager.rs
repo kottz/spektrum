@@ -86,7 +86,7 @@ impl GameLobby {
     pub fn new(
         id: Uuid,
         admin_id: Uuid,
-        questions: Vec<GameQuestion>,
+        questions: Arc<Vec<GameQuestion>>,
         round_duration: u64,
     ) -> Self {
         let now = Instant::now();
@@ -304,7 +304,7 @@ impl GameManager {
 
     pub fn create_lobby(
         &self,
-        questions: Vec<GameQuestion>,
+        questions: Arc<Vec<GameQuestion>>,
         round_duration: u64,
     ) -> GameResult<(Uuid, String, Uuid)> {
         let lobby_id = Uuid::new_v4();
