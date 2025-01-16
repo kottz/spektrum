@@ -58,21 +58,6 @@ fn init_tracing(json_logging: bool) {
     }
 }
 
-// fn load_all_questions(
-//     config: &QuestionConfig,
-// ) -> Result<Vec<GameQuestion>, Box<dyn std::error::Error>> {
-//     let mut questions = load_questions_from_csv(&config.color_questions_csv)
-//         .map_err(|e| format!("Failed to load color questions: {}", e))?;
-//
-//     if let Some(character_path) = &config.character_questions_csv {
-//         let character_questions = load_questions_from_csv(character_path)
-//             .map_err(|e| format!("Failed to load character questions: {}", e))?;
-//         questions.extend(character_questions);
-//     }
-//
-//     Ok(questions)
-// }
-
 async fn shutdown_signal() {
     let ctrl_c = async {
         signal::ctrl_c()
