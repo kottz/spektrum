@@ -227,7 +227,7 @@
                                                     class:ring-2={option.is_correct}
                                                     class:ring-green-500={option.is_correct}
                                                 />
-                                                <span class="mt-1 text-center text-xs" class:text-green-600={option.is_correct}>
+                                                <span class="mt-1 truncate text-center text-xs w-12" title={option.option_text} class:text-green-600={option.is_correct}>
                                                     {option.option_text}
                                                 </span>
                                             </div>
