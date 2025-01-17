@@ -1,8 +1,8 @@
 export enum QuestionType {
-    Color = 'Color',
-    Character = 'Character',
-    Text = 'Text',
-    Year = 'Year'
+    Color = 'color',
+    Character = 'character',
+    Text = 'text',
+    Year = 'year'
 }
 
 export interface Media {

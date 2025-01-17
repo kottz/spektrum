@@ -3,20 +3,45 @@
     import { Button } from '$lib/components/ui/button';
     import { Input } from '$lib/components/ui/input';
     import { adminStore } from '$lib/stores/admin-data';
-    import type { Question } from '$lib/types';
+    import type { Question, QuestionOption } from '$lib/types';
     import { QuestionType } from '$lib/types';
+    import CharacterBank from '$lib/components/character-bank.svelte';
+    import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
 
     // Pagination state
     let currentPage = 0;
     let itemsPerPage = 10;
     let searchTerm = '';
+    let showCharacterBank = false;
+    let selectedTypes = new Set(Object.values(QuestionType));
 
     // Filtered and paginated data
-    $: filteredData = $adminStore.questions.filter(
-        (question) =>
-            question.question_text?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            question.id.toString().includes(searchTerm)
-    );
+    $: filteredData = $adminStore.questions.filter((question) => {
+        const searchLower = searchTerm.toLowerCase();
+        
+        // Check if question type is selected
+        if (!selectedTypes.has(question.question_type)) {
+            return false;
+        }
+
+        // Check question ID and text
+        if (question.id.toString().includes(searchLower) ||
+            question.question_text?.toLowerCase().includes(searchLower)) {
+            return true;
+        }
+        
+        // Check related media title
+        const media = $adminStore.media.find(m => m.id === question.media_id);
+        if (media?.title.toLowerCase().includes(searchLower)) {
+            return true;
+        }
+        
+        // Check character names in options
+        const questionOptions = $adminStore.options.filter(opt => opt.question_id === question.id);
+        return questionOptions.some(opt => 
+            opt.option_text.toLowerCase().includes(searchLower)
+        );
+    });
 
     $: totalPages = Math.ceil(filteredData.length / itemsPerPage);
 
@@ -34,6 +59,52 @@
     // Get question options
     function getQuestionOptions(questionId: number) {
         return $adminStore.options.filter(opt => opt.question_id === questionId);
+    }
+
+    function handleDrop(event: DragEvent, questionId: number) {
+        event.preventDefault();
+        const charName = event.dataTransfer?.getData('text/plain');
+        if (!charName) return;
+
+        // Create a new option for the question
+        const newOption: QuestionOption = {
+            id: Math.max(0, ...($adminStore.options.map(o => o.id))) + 1, // Temporary ID
+            question_id: questionId,
+            option_text: charName,
+            is_correct: false
+        };
+
+        adminStore.update(state => ({
+            ...state,
+            options: [...state.options, newOption]
+        }));
+    }
+
+    function removeOption(questionId: number, optionId: number) {
+        adminStore.update(state => ({
+            ...state,
+            options: state.options.filter(opt => opt.id !== optionId)
+        }));
+    }
+
+    function toggleCorrectOption(option: QuestionOption) {
+        adminStore.update(state => ({
+            ...state,
+            options: state.options.map(opt => 
+                opt.id === option.id 
+                    ? { ...opt, is_correct: !opt.is_correct }
+                    : opt
+            )
+        }));
+    }
+
+    function toggleQuestionType(type: QuestionType) {
+        if (selectedTypes.has(type)) {
+            selectedTypes.delete(type);
+        } else {
+            selectedTypes.add(type);
+        }
+        selectedTypes = selectedTypes; // Trigger reactivity
     }
 
     function nextPage() {
@@ -73,6 +144,11 @@
                 bind:value={searchTerm} 
                 class="max-w-sm"
             />
+            {#if $adminStore.questions.some(q => q.question_type.toLowerCase() === QuestionType.Character)}
+                <Button variant="outline" on:click={() => showCharacterBank = !showCharacterBank}>
+                    Toggle Character Bank
+                </Button>
+            {/if}
         </div>
         <Button on:click={handleAddQuestion}>Add Question</Button>
     </div>
@@ -83,7 +159,30 @@
                 <Table.Row>
                     <Table.Head>ID</Table.Head>
                     <Table.Head>Media</Table.Head>
-                    <Table.Head>Type</Table.Head>
+                    <Table.Head>
+                        <div class="flex items-center gap-2">
+                            Type
+                            <DropdownMenu.Root>
+                                <DropdownMenu.Trigger asChild let:builder>
+                                    <Button variant="outline" size="sm" builders={[builder]}>
+                                        Filter
+                                    </Button>
+                                </DropdownMenu.Trigger>
+                                <DropdownMenu.Content class="w-56">
+                                    <DropdownMenu.Label>Question Types</DropdownMenu.Label>
+                                    <DropdownMenu.Separator />
+                                    {#each Object.values(QuestionType) as type}
+                                        <DropdownMenu.CheckboxItem 
+                                            checked={selectedTypes.has(type)}
+                                            onCheckedChange={() => toggleQuestionType(type)}
+                                        >
+                                            {type.charAt(0).toUpperCase() + type.slice(1)}
+                                        </DropdownMenu.CheckboxItem>
+                                    {/each}
+                                </DropdownMenu.Content>
+                            </DropdownMenu.Root>
+                        </div>
+                    </Table.Head>
                     <Table.Head>Question</Table.Head>
                     <Table.Head>Options</Table.Head>
                     <Table.Head>Status</Table.Head>
@@ -106,20 +205,55 @@
                                     />
                                 </div>
                             {/if}
-                            {question.question_text || 'No question text'}
+                            {question.question_text || 'N/A'}
                         </Table.Cell>
                         <Table.Cell>
-                            <div class="flex flex-col gap-1">
-                                {#each getQuestionOptions(question.id) as option}
-                                    <div class:text-green-600={option.is_correct}>
-                                        {option.option_text}
-                                    </div>
-                                {/each}
-                            </div>
+                            {#if question.question_type.toLowerCase() === QuestionType.Character}
+                                <div 
+                                    class="flex min-h-[60px] flex-wrap gap-2 rounded-lg border-2 border-dashed border-gray-300 p-2"
+                                    on:dragover|preventDefault
+                                    on:drop={(e) => handleDrop(e, question.id)}
+                                >
+                                    {#each getQuestionOptions(question.id) as option}
+                                        <div class="group relative">
+                                            <div 
+                                                class="flex cursor-pointer flex-col items-center"
+                                                on:click={() => toggleCorrectOption(option)}
+                                            >
+                                                <img 
+                                                    src={`/img/${option.option_text}.avif`} 
+                                                    alt={option.option_text} 
+                                                    class="h-12 w-12 rounded transition-transform hover:scale-105"
+                                                    class:ring-2={option.is_correct}
+                                                    class:ring-green-500={option.is_correct}
+                                                />
+                                                <span class="mt-1 text-center text-xs" class:text-green-600={option.is_correct}>
+                                                    {option.option_text}
+                                                </span>
+                                            </div>
+                                            <button
+                                                class="absolute -right-2 -top-2 hidden h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white group-hover:flex"
+                                                on:click={() => removeOption(question.id, option.id)}
+                                            >
+                                                ×
+                                            </button>
+                                        </div>
+                                    {/each}
+                                </div>
+                            {:else}
+                                <div class="flex flex-col gap-1">
+                                    {#each getQuestionOptions(question.id) as option}
+                                        <div class:text-green-600={option.is_correct}>
+                                            {option.option_text}
+                                        </div>
+                                    {/each}
+                                </div>
+                            {/if}
                         </Table.Cell>
                         <Table.Cell>
-                            <span class={`inline-flex rounded-full px-2 py-1 text-xs font-semibold
-                                ${question.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                            <span class={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                                question.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                            }`}>
                                 {question.is_active ? 'Active' : 'Inactive'}
                             </span>
                         </Table.Cell>
@@ -175,3 +309,5 @@
         </div>
     </div>
 </div>
+
+<CharacterBank bind:show={showCharacterBank} />
