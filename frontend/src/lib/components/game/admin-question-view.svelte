@@ -34,7 +34,7 @@
 		pink: '#FFC0CB',
 		black: '#000000',
 		white: '#FFFFFF',
-		brown: '#3D251E',
+		brown: '#964B00',
 		orange: '#FFA500',
 		gray: '#808080'
 	};
