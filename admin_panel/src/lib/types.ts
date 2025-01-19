@@ -5,6 +5,22 @@ export enum QuestionType {
 	Year = 'year'
 }
 
+export enum Color {
+    Red = 'Red',
+    Green = 'Green',
+    Blue = 'Blue',
+    Yellow = 'Yellow',
+    Purple = 'Purple',
+    Gold = 'Gold',
+    Silver = 'Silver',
+    Pink = 'Pink',
+    Black = 'Black',
+    White = 'White',
+    Brown = 'Brown',
+    Orange = 'Orange',
+    Gray = 'Gray'
+}
+
 export interface Media {
 	id: number;
 	title: string;

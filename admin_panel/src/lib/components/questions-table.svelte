@@ -2,11 +2,17 @@
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
+	import { Switch } from '$lib/components/ui/switch';
+	import * as Popover from '$lib/components/ui/popover/index.js';
+	import * as Command from '$lib/components/ui/command';
 	import { adminStore } from '$lib/stores/admin-data';
 	import type { Question, QuestionOption } from '$lib/types';
 	import { QuestionType } from '$lib/types';
 	import CharacterBank from '$lib/components/character-bank.svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import { Check, ChevronsUpDown } from 'lucide-svelte';
+	import { Color } from '$lib/types';
+	import { cn } from '$lib/utils';
 
 	// Pagination state
 	let currentPage = 0;
@@ -18,7 +24,7 @@
 	// Filtered and paginated data
 	$: filteredData = $adminStore.questions.filter((question) => {
 		const searchLower = searchTerm.toLowerCase();
-		currentPage = 0; // Reset to first page when we change search term
+		currentPage = 0; // move to first page when searching
 
 		// Check if question type is selected
 		if (!selectedTypes.has(question.question_type)) {
@@ -43,6 +49,22 @@
 		const questionOptions = $adminStore.options.filter((opt) => opt.question_id === question.id);
 		return questionOptions.some((opt) => opt.option_text.toLowerCase().includes(searchLower));
 	});
+
+	// In add question mode for the media combobox
+	let mediaSearchTerm = '';
+
+
+	$: filteredMediaOptions = $adminStore.media
+		.filter((media) => {
+			if (!mediaSearchTerm) return true;
+			const searchLower = mediaSearchTerm.toLowerCase();
+			return (
+				media.title?.toLowerCase().includes(searchLower) ||
+				media.artist?.toLowerCase().includes(searchLower) ||
+				media.id.toString().includes(searchLower)
+			);
+		})
+		.slice(0, 5); // Only show top 5 matches
 
 	$: totalPages = Math.ceil(filteredData.length / itemsPerPage);
 
@@ -118,9 +140,33 @@
 		}
 	}
 
+	let isAddingQuestion = false;
+	let newQuestionData = {
+		id: 0,
+		media_id: 0,
+		question_type: '',
+		question_text: '',
+		image_url: null,
+		is_active: true
+	};
+
 	function handleAddQuestion() {
-		// TODO: Implement add question functionality
-		console.log('Add question clicked');
+		// Set the new ID as max + 1
+		const maxId = Math.max(...$adminStore.questions.map((q) => q.id));
+		newQuestionData.id = maxId + 1;
+		isAddingQuestion = true;
+	}
+
+	function handleSaveQuestion() {
+		adminStore.update((state) => ({
+			...state,
+			questions: [newQuestionData, ...state.questions]
+		}));
+		isAddingQuestion = false;
+	}
+
+	function handleCancelAdd() {
+		isAddingQuestion = false;
 	}
 
 	function handleEditQuestion(question: Question) {
@@ -184,7 +230,194 @@
 				</Table.Row>
 			</Table.Header>
 			<Table.Body>
-				{#each paginatedData as question}
+				{#if isAddingQuestion}
+					<Table.Row class="bg-blue-50">
+						<Table.Cell>{newQuestionData.id}</Table.Cell>
+						<Table.Cell>
+							<Popover.Root let:ids>
+								<Popover.Trigger asChild let:builder>
+									<Button
+										builders={[builder]}
+										variant="outline"
+										role="combobox"
+										class="w-full justify-between"
+									>
+										{newQuestionData.media_id
+											? getMediaTitle(newQuestionData.media_id)
+											: 'Select media...'}
+										<ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
+									</Button>
+								</Popover.Trigger>
+								<Popover.Content class="w-[300px] p-2">
+									<Input
+										type="text"
+										placeholder="Search media..."
+										bind:value={mediaSearchTerm}
+										class="mb-2"
+										onInput={(e) => {
+											mediaSearchTerm = e.currentTarget.value;
+										}}
+									/>
+									<div class="max-h-[200px] overflow-y-auto">
+										{#each filteredMediaOptions as media}
+											<div
+												class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-gray-100"
+												on:click={() => {
+													newQuestionData.media_id = media.id;
+													mediaSearchTerm = '';
+												}}
+											>
+												<Check
+													class={cn(
+														'h-4 w-4',
+														newQuestionData.media_id === media.id
+															? 'text-blue-500'
+															: 'text-transparent'
+													)}
+												/>
+												<span>{media.title} - {media.artist}</span>
+											</div>
+										{/each}
+										{#if filteredMediaOptions.length === 0}
+											<div class="px-2 py-1.5 text-gray-500">No media found</div>
+										{/if}
+									</div>
+								</Popover.Content>
+							</Popover.Root>
+						</Table.Cell>
+						<Table.Cell>
+							<Popover.Root let:ids>
+								<Popover.Trigger asChild let:builder>
+									<Button
+										builders={[builder]}
+										variant="outline"
+										role="combobox"
+										class="w-full justify-between"
+									>
+										{newQuestionData.question_type || 'Select type...'}
+										<ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
+									</Button>
+								</Popover.Trigger>
+								<Popover.Content class="w-[200px] p-0">
+									<Command.Root>
+										<Command.Group>
+											{#each Object.values(QuestionType) as type}
+												<Command.Item
+													value={type}
+													onSelect={() => {
+														newQuestionData.question_type = type;
+													}}
+												>
+													<Check
+														class={cn(
+															'mr-2 h-4 w-4',
+															newQuestionData.question_type !== type && 'text-transparent'
+														)}
+													/>
+													{type}
+												</Command.Item>
+											{/each}
+										</Command.Group>
+									</Command.Root>
+								</Popover.Content>
+							</Popover.Root>
+						</Table.Cell>
+						<Table.Cell>
+							<Input
+								type="text"
+								placeholder="Question text..."
+								bind:value={newQuestionData.question_text}
+							/>
+						</Table.Cell>
+						<Table.Cell>
+							{#if newQuestionData.question_type === QuestionType.Color}
+								<Popover.Root let:ids>
+									<Popover.Trigger asChild let:builder>
+										<Button builders={[builder]} variant="outline" class="w-full justify-between">
+											Select colors...
+											<ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
+										</Button>
+									</Popover.Trigger>
+									<Popover.Content class="w-[200px] p-0">
+										<Command.Root>
+											<Command.Group>
+												{#each Object.values(Color) as color}
+													<Command.Item
+														value={color}
+														onSelect={() => {
+															const option = {
+																id: Math.max(0, ...$adminStore.options.map((o) => o.id)) + 1,
+																question_id: newQuestionData.id,
+																option_text: color,
+																is_correct: false
+															};
+															adminStore.update((state) => ({
+																...state,
+																options: [...state.options, option]
+															}));
+														}}
+													>
+														<Check class="mr-2 h-4 w-4" />
+														{color}
+													</Command.Item>
+												{/each}
+											</Command.Group>
+										</Command.Root>
+									</Popover.Content>
+								</Popover.Root>
+							{:else if newQuestionData.question_type === QuestionType.Character}
+								<div
+									class="flex min-h-[60px] flex-wrap gap-2 rounded-lg border-2 border-dashed border-gray-300 p-2"
+									on:dragover|preventDefault
+									on:drop={(e) => handleDrop(e, newQuestionData.id)}
+								>
+									{#each getQuestionOptions(newQuestionData.id) as option}
+										<div class="group relative">
+											<div
+												class="flex cursor-pointer flex-col items-center"
+												on:click={() => toggleCorrectOption(option)}
+											>
+												<img
+													src={`/img/${option.option_text}.avif`}
+													alt={option.option_text}
+													class="h-12 w-12 rounded transition-transform hover:scale-105"
+													class:ring-2={option.is_correct}
+													class:ring-green-500={option.is_correct}
+												/>
+												<span class="mt-1 w-12 truncate text-center text-xs">
+													{option.option_text}
+												</span>
+											</div>
+											<button
+												class="absolute -right-2 -top-2 hidden h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white group-hover:flex"
+												on:click={() => removeOption(newQuestionData.id, option.id)}
+											>
+												×
+											</button>
+										</div>
+									{/each}
+								</div>
+							{/if}
+						</Table.Cell>
+						<Table.Cell>
+							<Switch bind:checked={newQuestionData.is_active} />
+						</Table.Cell>
+						<Table.Cell class="text-right">
+							<div class="flex justify-end gap-2">
+								<Button variant="outline" size="sm" on:click={handleSaveQuestion}>Save</Button>
+								<Button
+									variant="outline"
+									size="sm"
+									class="text-red-600 hover:bg-red-50"
+									on:click={handleCancelAdd}
+								>
+									Cancel
+								</Button>
+							</div>
+						</Table.Cell>
+					</Table.Row>
+				{/if}
+				{#each paginatedData as question (question.id)}
 					<Table.Row>
 						<Table.Cell>{question.id}</Table.Cell>
 						<Table.Cell>{getMediaTitle(question.media_id)}</Table.Cell>
@@ -202,7 +435,7 @@
 							{question.question_text || 'N/A'}
 						</Table.Cell>
 						<Table.Cell>
-							{#if question.question_type.toLowerCase() === QuestionType.Character}
+							{#if question.question_type === QuestionType.Character}
 								<div
 									class="flex min-h-[60px] flex-wrap gap-2 rounded-lg border-2 border-dashed border-gray-300 p-2"
 									on:dragover|preventDefault
