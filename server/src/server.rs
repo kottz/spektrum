@@ -76,13 +76,15 @@ pub struct AppState {
     pub manager: Arc<Mutex<GameManager>>,
     //pub questions: Arc<Vec<GameQuestion>>,
     pub store: Arc<QuestionStore>,
+    admin_password: String,
 }
 
 impl AppState {
-    pub fn new(question_manager: QuestionStore) -> Self {
+    pub fn new(question_manager: QuestionStore, admin_password: String) -> Self {
         let state = Self {
             manager: Arc::new(Mutex::new(GameManager::new())),
             store: Arc::new(question_manager),
+            admin_password
         };
 
         let manager = state.manager.clone();
@@ -155,7 +157,7 @@ pub async fn get_stored_data_handler(
     State(state): State<AppState>,
     Json(req): Json<GetStoredDataRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
-    if req.password != "test123" {
+    if req.password != state.admin_password {
         return Err(ApiError::Unauthorized);
     }
 

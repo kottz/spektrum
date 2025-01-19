@@ -41,6 +41,7 @@ struct AppConfig {
     server: ServerConfig,
     logging: LoggingConfig,
     question_path: String,
+    admin_password: String,
 }
 
 fn init_tracing(json_logging: bool) {
@@ -118,7 +119,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let question_store = QuestionStore::new(&app_config.question_path).await?;
 
-    let state = AppState::new(question_store);
+    let state = AppState::new(question_store, app_config.admin_password);
     let app = Router::new()
         .route("/ws", any(ws_handler))
         .route("/api/lobbies", post(create_lobby_handler))
