@@ -11,12 +11,14 @@
 	let searchTerm = '';
 
 	// Filtered and paginated data
-	$: filteredData = $adminStore.media.filter(
-		(media) =>
+	$: filteredData = $adminStore.media.filter((media) => {
+		currentPage = 0; // Reset to first page when we change search term
+		return (
 			media.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
 			media.artist.toLowerCase().includes(searchTerm.toLowerCase()) ||
 			media.id.toString().includes(searchTerm)
-	);
+		);
+	});
 
 	$: totalPages = Math.ceil(filteredData.length / itemsPerPage);
 

@@ -18,6 +18,7 @@
 	// Filtered and paginated data
 	$: filteredData = $adminStore.questions.filter((question) => {
 		const searchLower = searchTerm.toLowerCase();
+		currentPage = 0; // Reset to first page when we change search term
 
 		// Check if question type is selected
 		if (!selectedTypes.has(question.question_type)) {
