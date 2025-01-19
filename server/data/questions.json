@@ -985,14 +985,6 @@
       "release_year": null
     },
     {
-      "id": 124,
-      "title": "A Whole New World",
-      "artist": "",
-      "spotify_uri": "ed2cba9d69b84288",
-      "youtube_id": "uAcSiVeVXpI",
-      "release_year": null
-    },
-    {
       "id": 125,
       "title": "Once Upon a December",
       "artist": "",
@@ -1585,14 +1577,6 @@
       "release_year": null
     },
     {
-      "id": 199,
-      "title": "A Whole New World",
-      "artist": "",
-      "spotify_uri": "3ea6d479dff24649",
-      "youtube_id": "uAcSiVeVXpI",
-      "release_year": null
-    },
-    {
       "id": 200,
       "title": "Extreme Ways (Bourne Theme)",
       "artist": "",
@@ -2110,14 +2094,6 @@
       "artist": "",
       "spotify_uri": "f4f3b915f4574419",
       "youtube_id": "7KgFdPipGK4",
-      "release_year": null
-    },
-    {
-      "id": 265,
-      "title": "All Star",
-      "artist": "",
-      "spotify_uri": "8008868df9d245e9",
-      "youtube_id": "8ay_BkRuv-o",
       "release_year": null
     },
     {
@@ -4100,7 +4076,7 @@
     },
     {
       "id": 124,
-      "media_id": 124,
+      "media_id": 122,
       "question_type": "character",
       "question_text": null,
       "image_url": null,
@@ -4700,7 +4676,7 @@
     },
     {
       "id": 199,
-      "media_id": 199,
+      "media_id": 122,
       "question_type": "character",
       "question_text": null,
       "image_url": null,
@@ -5228,7 +5204,7 @@
     },
     {
       "id": 265,
-      "media_id": 265,
+      "media_id": 159,
       "question_type": "character",
       "question_text": null,
       "image_url": null,
