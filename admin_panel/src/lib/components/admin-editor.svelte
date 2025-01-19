@@ -3,6 +3,7 @@
 	import MediaTable from '$lib/components/media-table.svelte';
 	import QuestionsTable from '$lib/components/questions-table.svelte';
 	import SetsTable from '$lib/components/sets-table.svelte';
+	import { PUBLIC_DEV_ADMIN_PASSWORD } from '$env/static/public';
 	import { activeTab, adminStore } from '$lib/stores/admin-data';
 	import { onMount } from 'svelte';
 
@@ -15,7 +16,7 @@
 					'Content-Type': 'application/json'
 				},
 				body: JSON.stringify({
-					password: 'test123'
+					password: PUBLIC_DEV_ADMIN_PASSWORD
 				})
 			});
 
