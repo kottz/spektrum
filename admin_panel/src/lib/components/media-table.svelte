@@ -118,14 +118,21 @@
 						</Table.Cell>
 						<Table.Cell>
 							{#if media.youtube_id}
-								<a
-									href={`https://youtube.com/watch?v=${media.youtube_id}`}
-									target="_blank"
-									rel="noopener noreferrer"
-									class="text-blue-600 hover:underline"
-								>
-									Link
-								</a>
+								<div class="flex items-center gap-2">
+									<a
+										href={`https://youtube.com/watch?v=${media.youtube_id}`}
+										target="_blank"
+										rel="noopener noreferrer"
+										class="text-blue-600 hover:underline"
+									>
+										Link
+									</a>
+									<img
+										src={`https://i.ytimg.com/vi_webp/${media.youtube_id}/default.webp`}
+										alt={`YouTube title for ${media.title}`}
+										class="mb-0 mt-0 h-12 w-12 object-contain"
+									/>
+								</div>
 							{:else}
 								-
 							{/if}
