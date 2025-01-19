@@ -28,7 +28,7 @@ function createAdminStore() {
 		subscribe,
 		update: (updater: (state: AdminStore) => AdminStore) => update(updater),
 		setData: (data: StoredData) => {
-			update(state => ({
+			update((state) => ({
 				...state,
 				media: data.media,
 				questions: data.questions,
@@ -37,10 +37,10 @@ function createAdminStore() {
 			}));
 		},
 		setLoading: (loading: boolean) => {
-			update(state => ({ ...state, isLoading: loading }));
+			update((state) => ({ ...state, isLoading: loading }));
 		},
 		setError: (error: string | null) => {
-			update(state => ({ ...state, error }));
+			update((state) => ({ ...state, error }));
 		},
 		reset: () => set(initialState)
 	};
