@@ -1217,14 +1217,6 @@
       "release_year": null
     },
     {
-      "id": 154,
-      "title": "Dexter Main Title",
-      "artist": "",
-      "spotify_uri": "ef7cbf8eb42c4c1f",
-      "youtube_id": "k4PTCE9g8AU",
-      "release_year": null
-    },
-    {
       "id": 155,
       "title": "Back to the Future Theme",
       "artist": "",
@@ -4316,7 +4308,7 @@
     },
     {
       "id": 154,
-      "media_id": 154,
+      "media_id": 153,
       "question_type": "character",
       "question_text": null,
       "image_url": null,
