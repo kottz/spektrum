@@ -277,6 +277,9 @@ impl QuestionStore {
         self.db.read_stored_data()
     }
 
+    pub fn set_stored_data(&self, stored_data: StoredData) -> Result<(), DbError> {
+        self.db.set_stored_data(stored_data)
+    }
     pub async fn get_questions(&self) -> Result<Arc<Vec<GameQuestion>>, QuestionError> {
         let questions = self.questions.read().await;
         if Arc::strong_count(&questions) == 0 {

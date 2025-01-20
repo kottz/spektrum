@@ -32,7 +32,10 @@
 				headers: {
 					'Content-Type': 'application/json'
 				},
-				body: JSON.stringify(adminStore.getFinalState())
+				body: JSON.stringify({
+					password: PUBLIC_DEV_ADMIN_PASSWORD,
+					stored_data: adminStore.getFinalState()
+				})
 			});
 
 			if (!response.ok) {

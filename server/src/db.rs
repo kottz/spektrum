@@ -86,6 +86,14 @@ impl QuestionDatabase {
         }
     }
 
+    pub fn set_stored_data(&self, data: StoredData) -> Result<(), DbError> {
+        let json = serde_json::to_string_pretty(&data)?;
+        let mut path = self.file_path.clone();
+        path.push_str("_from_web.json");
+        fs::write(path, json)?;
+        Ok(())
+    }
+
     pub fn load_questions(&self) -> Result<(Vec<GameQuestion>, Vec<QuestionSet>), DbError> {
         let stored_data = self.read_stored_data()?;
 

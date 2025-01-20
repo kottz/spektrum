@@ -1,3 +1,4 @@
+use crate::db::StoredData;
 use crate::game::{
     EventContext, GameAction, GameEvent, GamePhase, GameResponse, Recipients, ResponsePayload,
 };
@@ -169,6 +170,30 @@ pub async fn get_stored_data_handler(
     Ok(Json(stored_data))
 }
 
+#[derive(Debug, Deserialize)]
+pub struct SetStoredDataRequest {
+    password: String,
+    stored_data: StoredData,
+}
+
+pub async fn set_stored_data_handler(
+    State(state): State<AppState>,
+    Json(req): Json<SetStoredDataRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    info!("password: {:?}", req.password);
+    if req.password != state.admin_password {
+        return Err(ApiError::Unauthorized);
+    }
+    info!("data: {:?}", req.stored_data);
+    // here we want to take this data and store it in the database
+    if let Err(e) = state.store.set_stored_data(req.stored_data) {
+        return Err(ApiError::Database(e.to_string()));
+    }
+
+    Ok(Json(serde_json::json!({
+        "message": "Data stored successfully"
+    })))
+}
 #[derive(Debug, Deserialize)]
 pub struct CheckSessionsRequest {
     pub sessions: Vec<SessionInfo>,
