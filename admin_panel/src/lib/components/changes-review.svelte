@@ -11,6 +11,12 @@
 	let isSubmitting = false;
 	let isOpen = false;
 
+	function copyJson() {
+		console.log('final state', adminStore.getFinalState());
+		const jsonData = JSON.stringify(adminStore.getFinalState(), null, 2);
+		navigator.clipboard.writeText(jsonData);
+	}
+
 	async function handleApplyChanges() {
 		if (!password) {
 			error = 'Password is required';
@@ -26,15 +32,7 @@
 				headers: {
 					'Content-Type': 'application/json'
 				},
-				body: JSON.stringify({
-					password: password,
-					stored_data: {
-						media: $adminStore.media,
-						questions: $adminStore.questions,
-						options: $adminStore.options,
-						sets: $adminStore.sets
-					}
-				})
+				body: JSON.stringify(adminStore.getFinalState())
 			});
 
 			if (!response.ok) {
@@ -134,11 +132,14 @@
 					</div>
 				{/if}
 			</div>
-			<AlertDialog.Footer>
-				<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-				<Button disabled={isSubmitting || !password} on:click={handleApplyChanges}>
-					{isSubmitting ? 'Applying...' : 'Apply Changes'}
-				</Button>
+			<AlertDialog.Footer class="flex justify-between">
+				<Button variant="outline" size="sm" on:click={copyJson}>Copy JSON</Button>
+				<div class="flex gap-2">
+					<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+					<Button disabled={isSubmitting || !password} on:click={handleApplyChanges}>
+						{isSubmitting ? 'Applying...' : 'Apply Changes'}
+					</Button>
+				</div>
 			</AlertDialog.Footer>
 		</AlertDialog.Content>
 	</AlertDialog.Portal>

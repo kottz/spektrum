@@ -146,7 +146,38 @@ function createAdminStore() {
 			currentChanges = [];
 			set(initialState);
 		},
-		getPendingChanges: () => currentChanges
+		getPendingChanges: () => currentChanges,
+		getFinalState: () => {
+			const state = get(adminStore);
+			const currentState = {
+				media: [...state.media],
+				questions: [...state.questions],
+				options: [...state.options],
+				sets: [...state.sets]
+			};
+
+			console.log('Current state:', currentState);
+
+			// Apply pending changes to get final state
+			for (const change of state.pendingChanges) {
+				if (change.type === 'deleted') {
+					currentState[change.entityType] = currentState[change.entityType].filter(
+						item => item.id !== change.id
+					);
+				} else if (change.type === 'added') {
+					continue; // Already in current state
+				} else if (change.type === 'modified') {
+					const index = currentState[change.entityType].findIndex(item => item.id === change.id);
+					if (index !== -1) {
+						currentState[change.entityType][index] = change.newValue;
+					}
+				}
+			}
+
+			return {
+				...currentState
+			};
+		}
 	};
 }
 
