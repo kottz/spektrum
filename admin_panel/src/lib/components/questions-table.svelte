@@ -53,7 +53,6 @@
 	// In add question mode for the media combobox
 	let mediaSearchTerm = '';
 
-
 	$: filteredMediaOptions = $adminStore.media
 		.filter((media) => {
 			if (!mediaSearchTerm) return true;
@@ -151,22 +150,36 @@
 	};
 
 	function handleAddQuestion() {
-		// Set the new ID as max + 1
 		const maxId = Math.max(...$adminStore.questions.map((q) => q.id));
 		newQuestionData.id = maxId + 1;
 		isAddingQuestion = true;
 	}
 
 	function handleSaveQuestion() {
-		adminStore.update((state) => ({
-			...state,
-			questions: [newQuestionData, ...state.questions]
-		}));
+		adminStore.addEntity('questions', newQuestionData);
 		isAddingQuestion = false;
+		// Reset the form
+		newQuestionData = {
+			id: 0,
+			media_id: 0,
+			question_type: '',
+			question_text: '',
+			image_url: null,
+			is_active: true
+		};
 	}
 
 	function handleCancelAdd() {
 		isAddingQuestion = false;
+		// Reset the form
+		newQuestionData = {
+			id: 0,
+			media_id: 0,
+			question_type: '',
+			question_text: '',
+			image_url: null,
+			is_active: true
+		};
 	}
 
 	function handleEditQuestion(question: Question) {
@@ -174,9 +187,19 @@
 		console.log('Edit question:', question);
 	}
 
+	// Add this to your component's state
+	let questionsMarkedForDeletion = new Set<number>();
+
+	// In your questions-table.svelte:
 	function handleDeleteQuestion(questionId: number) {
-		// TODO: Implement delete question functionality
-		console.log('Delete question:', questionId);
+		if (questionsMarkedForDeletion.has(questionId)) {
+			adminStore.undoDelete('questions', questionId);
+			questionsMarkedForDeletion.delete(questionId);
+		} else {
+			adminStore.markForDeletion('questions', questionId);
+			questionsMarkedForDeletion.add(questionId);
+		}
+		questionsMarkedForDeletion = questionsMarkedForDeletion;
 	}
 </script>
 
@@ -418,7 +441,14 @@
 					</Table.Row>
 				{/if}
 				{#each paginatedData as question (question.id)}
-					<Table.Row>
+					<Table.Row
+						class={cn(
+							'transition-colors',
+							questionsMarkedForDeletion.has(question.id)
+								? '!hover:bg-red-100 bg-red-100 hover:bg-red-100'
+								: 'hover:bg-gray-50'
+						)}
+					>
 						<Table.Cell>{question.id}</Table.Cell>
 						<Table.Cell>{getMediaTitle(question.media_id)}</Table.Cell>
 						<Table.Cell>{question.question_type}</Table.Cell>
@@ -498,10 +528,12 @@
 								<Button
 									variant="outline"
 									size="sm"
-									class="text-red-600 hover:bg-red-50"
+									class={questionsMarkedForDeletion.has(question.id)
+										? 'text-green-600 hover:bg-green-50'
+										: 'text-red-600 hover:bg-red-50'}
 									on:click={() => handleDeleteQuestion(question.id)}
 								>
-									Delete
+									{questionsMarkedForDeletion.has(question.id) ? 'Undo' : 'Delete'}
 								</Button>
 							</div>
 						</Table.Cell>

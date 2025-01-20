@@ -9,7 +9,7 @@
 
 	// Get unique characters from question options, but only from character-type questions
 	$: characterQuestions = $adminStore.questions.filter(
-		(q) => q.question_type.toLowerCase() === QuestionType.Character
+		(q) => q.question_type === QuestionType.Character
 	);
 	$: characterQuestionIds = new Set(characterQuestions.map((q) => q.id));
 	$: distinctCharacters = [

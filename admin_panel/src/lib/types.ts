@@ -6,19 +6,19 @@ export enum QuestionType {
 }
 
 export enum Color {
-    Red = 'Red',
-    Green = 'Green',
-    Blue = 'Blue',
-    Yellow = 'Yellow',
-    Purple = 'Purple',
-    Gold = 'Gold',
-    Silver = 'Silver',
-    Pink = 'Pink',
-    Black = 'Black',
-    White = 'White',
-    Brown = 'Brown',
-    Orange = 'Orange',
-    Gray = 'Gray'
+	Red = 'Red',
+	Green = 'Green',
+	Blue = 'Blue',
+	Yellow = 'Yellow',
+	Purple = 'Purple',
+	Gold = 'Gold',
+	Silver = 'Silver',
+	Pink = 'Pink',
+	Black = 'Black',
+	White = 'White',
+	Brown = 'Brown',
+	Orange = 'Orange',
+	Gray = 'Gray'
 }
 
 export interface Media {
