@@ -4,6 +4,8 @@
 	import { Input } from '$lib/components/ui/input';
 	import { adminStore } from '$lib/stores/admin-data';
 	import type { Media } from '$lib/types';
+	import ChangesReview from '$lib/components/changes-review.svelte';
+	import { cn } from '$lib/utils';
 
 	// Pagination state
 	let currentPage = 0;
@@ -21,48 +23,93 @@
 	});
 
 	$: totalPages = Math.ceil(filteredData.length / itemsPerPage);
-
 	$: paginatedData = filteredData.slice(
 		currentPage * itemsPerPage,
 		(currentPage + 1) * itemsPerPage
 	);
 
-	// Get associated questions count
+	// Add media state
+	let isAddingMedia = false;
+	let newMediaData: Partial<Media> = {
+		title: '',
+		artist: '',
+		release_year: new Date().getFullYear(),
+		spotify_uri: '',
+		youtube_id: ''
+	};
+
+	// Delete tracking
+	let mediaMarkedForDeletion = new Set<number>();
+
+	// Media field handlers
+	function handleMediaFieldChange(id: number, field: keyof Media, value: string | number) {
+		adminStore.modifyEntity('media', id, { [field]: value });
+	}
+
+	function handleAddMedia() {
+		const maxId = Math.max(0, ...$adminStore.media.map((m) => m.id));
+		newMediaData = {
+			id: maxId + 1,
+			title: '',
+			artist: '',
+			release_year: new Date().getFullYear(),
+			spotify_uri: '',
+			youtube_id: ''
+		};
+		isAddingMedia = true;
+	}
+
+	function handleSaveMedia() {
+		if (newMediaData.title && newMediaData.artist) {
+			adminStore.addEntity('media', newMediaData as Media);
+			isAddingMedia = false;
+			newMediaData = {
+				title: '',
+				artist: '',
+				release_year: new Date().getFullYear(),
+				spotify_uri: '',
+				youtube_id: ''
+			};
+		}
+	}
+
+	function handleCancelAdd() {
+		isAddingMedia = false;
+		newMediaData = {
+			title: '',
+			artist: '',
+			release_year: new Date().getFullYear(),
+			spotify_uri: '',
+			youtube_id: ''
+		};
+	}
+
+	function handleDeleteMedia(mediaId: number) {
+		if (mediaMarkedForDeletion.has(mediaId)) {
+			adminStore.undoDelete('media', mediaId);
+			mediaMarkedForDeletion.delete(mediaId);
+		} else {
+			adminStore.markForDeletion('media', mediaId);
+			mediaMarkedForDeletion.add(mediaId);
+		}
+		mediaMarkedForDeletion = mediaMarkedForDeletion;
+	}
+
 	function getQuestionCount(mediaId: number): number {
 		return $adminStore.questions.filter((q) => q.media_id === mediaId).length;
 	}
 
+	function formatSpotifyUri(uri: string | null): string {
+		if (!uri) return '';
+		return uri.includes('spotify:') ? uri.split(':').pop() || '' : uri;
+	}
+
 	function nextPage() {
-		if (currentPage < totalPages - 1) {
-			currentPage++;
-		}
+		if (currentPage < totalPages - 1) currentPage++;
 	}
 
 	function previousPage() {
-		if (currentPage > 0) {
-			currentPage--;
-		}
-	}
-
-	function handleAddMedia() {
-		// TODO: Implement add media functionality
-		console.log('Add media clicked');
-	}
-
-	function handleEditMedia(media: Media) {
-		// TODO: Implement edit media functionality
-		console.log('Edit media:', media);
-	}
-
-	function handleDeleteMedia(mediaId: number) {
-		// TODO: Implement delete media functionality
-		console.log('Delete media:', mediaId);
-	}
-
-	function formatSpotifyUri(uri: string | null): string {
-		if (!uri) return '';
-		// Extract just the ID if it's a full URI
-		return uri.includes('spotify:') ? uri.split(':').pop() || '' : uri;
+		if (currentPage > 0) currentPage--;
 	}
 </script>
 
@@ -71,7 +118,12 @@
 		<div class="flex items-center gap-4">
 			<Input type="text" placeholder="Search media..." bind:value={searchTerm} class="max-w-sm" />
 		</div>
-		<Button on:click={handleAddMedia}>Add Media</Button>
+		<div class="flex gap-2">
+			<Button on:click={handleAddMedia}>Add Media</Button>
+			{#if $adminStore.pendingChanges.length > 0}
+				<ChangesReview />
+			{/if}
+		</div>
 	</div>
 
 	<div class="rounded-md border">
@@ -89,12 +141,91 @@
 				</Table.Row>
 			</Table.Header>
 			<Table.Body>
-				{#each paginatedData as media}
-					<Table.Row>
+				{#if isAddingMedia}
+					<Table.Row class="bg-blue-50">
+						<Table.Cell>{newMediaData.id}</Table.Cell>
+						<Table.Cell>
+							<Input
+								bind:value={newMediaData.title}
+								placeholder="Title"
+								on:input={(e) => (newMediaData.title = e.target.value)}
+							/>
+						</Table.Cell>
+						<Table.Cell>
+							<Input
+								bind:value={newMediaData.artist}
+								placeholder="Artist"
+								on:input={(e) => (newMediaData.artist = e.target.value)}
+							/>
+						</Table.Cell>
+						<Table.Cell>
+							<Input
+								type="number"
+								bind:value={newMediaData.release_year}
+								on:input={(e) => (newMediaData.release_year = parseInt(e.target.value))}
+							/>
+						</Table.Cell>
+						<Table.Cell>0</Table.Cell>
+						<Table.Cell>
+							<Input
+								bind:value={newMediaData.spotify_uri}
+								placeholder="Spotify URI"
+								on:input={(e) => (newMediaData.spotify_uri = e.target.value)}
+							/>
+						</Table.Cell>
+						<Table.Cell>
+							<Input
+								bind:value={newMediaData.youtube_id}
+								placeholder="YouTube ID"
+								on:input={(e) => (newMediaData.youtube_id = e.target.value)}
+							/>
+						</Table.Cell>
+						<Table.Cell class="text-right">
+							<div class="flex justify-end gap-2">
+								<Button variant="outline" size="sm" on:click={handleSaveMedia}>Save</Button>
+								<Button
+									variant="outline"
+									size="sm"
+									class="text-red-600 hover:bg-red-50"
+									on:click={handleCancelAdd}
+								>
+									Cancel
+								</Button>
+							</div>
+						</Table.Cell>
+					</Table.Row>
+				{/if}
+
+				{#each paginatedData as media (media.id)}
+					<Table.Row
+						class={cn(
+							'transition-colors',
+							mediaMarkedForDeletion.has(media.id)
+								? '!hover:bg-red-100 bg-red-100 hover:bg-red-100'
+								: 'hover:bg-gray-50'
+						)}
+					>
 						<Table.Cell>{media.id}</Table.Cell>
-						<Table.Cell class="font-medium">{media.title}</Table.Cell>
-						<Table.Cell>{media.artist}</Table.Cell>
-						<Table.Cell>{media.release_year || 'N/A'}</Table.Cell>
+						<Table.Cell>
+							<Input
+								value={media.title}
+								on:input={(e) => handleMediaFieldChange(media.id, 'title', e.target.value)}
+							/>
+						</Table.Cell>
+						<Table.Cell>
+							<Input
+								value={media.artist}
+								on:input={(e) => handleMediaFieldChange(media.id, 'artist', e.target.value)}
+							/>
+						</Table.Cell>
+						<Table.Cell>
+							<Input
+								type="number"
+								value={media.release_year || ''}
+								on:input={(e) =>
+									handleMediaFieldChange(media.id, 'release_year', parseInt(e.target.value))}
+							/>
+						</Table.Cell>
 						<Table.Cell>
 							<span
 								class="inline-flex rounded-full bg-blue-100 px-2 py-1 text-xs font-semibold text-blue-800"
@@ -103,52 +234,48 @@
 							</span>
 						</Table.Cell>
 						<Table.Cell>
+							<Input
+								value={media.spotify_uri || ''}
+								placeholder="Spotify URI"
+								on:input={(e) => handleMediaFieldChange(media.id, 'spotify_uri', e.target.value)}
+							/>
 							{#if media.spotify_uri}
 								<a
 									href={`https://open.spotify.com/track/${formatSpotifyUri(media.spotify_uri)}`}
 									target="_blank"
-									rel="noopener noreferrer"
-									class="text-blue-600 hover:underline"
+									class="mt-1 block text-xs text-blue-600 hover:underline"
 								>
-									Link
+									Open in Spotify
 								</a>
-							{:else}
-								-
 							{/if}
 						</Table.Cell>
 						<Table.Cell>
+							<Input
+								value={media.youtube_id || ''}
+								placeholder="YouTube ID"
+								on:input={(e) => handleMediaFieldChange(media.id, 'youtube_id', e.target.value)}
+							/>
 							{#if media.youtube_id}
-								<div class="flex items-center gap-2">
-									<a
-										href={`https://youtube.com/watch?v=${media.youtube_id}`}
-										target="_blank"
-										rel="noopener noreferrer"
-										class="text-blue-600 hover:underline"
-									>
-										Link
-									</a>
-									<img
-										src={`https://i.ytimg.com/vi_webp/${media.youtube_id}/default.webp`}
-										alt={`YouTube title for ${media.title}`}
-										class="mb-0 mt-0 h-12 w-12 object-contain"
-									/>
-								</div>
-							{:else}
-								-
+								<a
+									href={`https://youtube.com/watch?v=${media.youtube_id}`}
+									target="_blank"
+									class="mt-1 block text-xs text-blue-600 hover:underline"
+								>
+									Open in YouTube
+								</a>
 							{/if}
 						</Table.Cell>
 						<Table.Cell class="text-right">
 							<div class="flex justify-end gap-2">
-								<Button variant="outline" size="sm" on:click={() => handleEditMedia(media)}>
-									Edit
-								</Button>
 								<Button
 									variant="outline"
 									size="sm"
-									class="text-red-600 hover:bg-red-50"
+									class={mediaMarkedForDeletion.has(media.id)
+										? 'text-green-600 hover:bg-green-50'
+										: 'text-red-600 hover:bg-red-50'}
 									on:click={() => handleDeleteMedia(media.id)}
 								>
-									Delete
+									{mediaMarkedForDeletion.has(media.id) ? 'Undo' : 'Delete'}
 								</Button>
 							</div>
 						</Table.Cell>
