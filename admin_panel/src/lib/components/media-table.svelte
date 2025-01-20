@@ -41,6 +41,8 @@
 	// Delete tracking
 	let mediaMarkedForDeletion = new Set<number>();
 
+	let newlyAddedMedia = new Set<number>();
+
 	// Media field handlers
 	function handleMediaFieldChange(id: number, field: keyof Media, value: string | number) {
 		adminStore.modifyEntity('media', id, { [field]: value });
@@ -62,6 +64,7 @@
 	function handleSaveMedia() {
 		if (newMediaData.title && newMediaData.artist) {
 			adminStore.addEntity('media', newMediaData as Media);
+			newlyAddedMedia.add(newMediaData.id!);
 			isAddingMedia = false;
 			newMediaData = {
 				title: '',
@@ -73,7 +76,24 @@
 		}
 	}
 
+	function handleRemoveNewMedia(mediaId: number) {
+		// Remove from the store and from newlyAddedMedia set
+		adminStore.update((state) => ({
+			...state,
+			media: state.media.filter((m) => m.id !== mediaId),
+			pendingChanges: state.pendingChanges.filter(
+				(change) => !(change.entityType === 'media' && change.id === mediaId)
+			)
+		}));
+		newlyAddedMedia.delete(mediaId);
+		newlyAddedMedia = newlyAddedMedia;
+	}
+
 	function handleCancelAdd() {
+		if (newMediaData.id && newlyAddedMedia.has(newMediaData.id)) {
+			adminStore.undoDelete('media', newMediaData.id);
+			newlyAddedMedia.delete(newMediaData.id);
+		}
 		isAddingMedia = false;
 		newMediaData = {
 			title: '',
@@ -84,7 +104,18 @@
 		};
 	}
 
+	function isMediaUsed(mediaId: number): boolean {
+		return $adminStore.questions.some((q) => q.media_id === mediaId);
+	}
+
 	function handleDeleteMedia(mediaId: number) {
+		if (newlyAddedMedia.has(mediaId)) {
+			handleRemoveNewMedia(mediaId);
+			return;
+		}
+
+		if (isMediaUsed(mediaId)) return;
+
 		if (mediaMarkedForDeletion.has(mediaId)) {
 			adminStore.undoDelete('media', mediaId);
 			mediaMarkedForDeletion.delete(mediaId);
@@ -199,12 +230,23 @@
 				{#each paginatedData as media (media.id)}
 					<Table.Row
 						class={cn(
-							'transition-colors',
+							'cursor-pointer transition-colors',
 							mediaMarkedForDeletion.has(media.id)
 								? '!hover:bg-red-100 bg-red-100 hover:bg-red-100'
-								: 'hover:bg-gray-50'
+								: newlyAddedMedia.has(media.id)
+									? '!hover:bg-green-100 bg-green-100 hover:bg-green-100'
+									: isMediaUsed(media.id)
+										? 'cursor-not-allowed bg-gray-50 hover:bg-gray-50'
+										: 'hover:bg-gray-50'
 						)}
+						on:click={() => {
+							if (newlyAddedMedia.has(media.id)) {
+								handleRemoveNewMedia(media.id);
+							}
+						}}
+						title={newlyAddedMedia.has(media.id) ? 'Click to remove this new media' : ''}
 					>
+						<!-- Table cells remain the same -->
 						<Table.Cell>{media.id}</Table.Cell>
 						<Table.Cell>
 							<Input
@@ -274,6 +316,12 @@
 										? 'text-green-600 hover:bg-green-50'
 										: 'text-red-600 hover:bg-red-50'}
 									on:click={() => handleDeleteMedia(media.id)}
+									disabled={isMediaUsed(media.id)}
+									title={isMediaUsed(media.id)
+										? 'Cannot delete media used in questions'
+										: newlyAddedMedia.has(media.id)
+											? 'Click the row to remove'
+											: ''}
 								>
 									{mediaMarkedForDeletion.has(media.id) ? 'Undo' : 'Delete'}
 								</Button>
