@@ -3,12 +3,14 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Switch } from '$lib/components/ui/switch';
+	import * as AlertDialog from '$lib/components/ui/alert-dialog';
 	import * as Popover from '$lib/components/ui/popover/index.js';
 	import * as Command from '$lib/components/ui/command';
 	import { adminStore } from '$lib/stores/admin-data';
 	import type { Question, QuestionOption } from '$lib/types';
 	import { QuestionType } from '$lib/types';
 	import CharacterBank from '$lib/components/character-bank.svelte';
+	import ChangesReview from '$lib/components/changes-review.svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Check, ChevronsUpDown } from 'lucide-svelte';
 	import { Color } from '$lib/types';
@@ -88,34 +90,25 @@
 		const charName = event.dataTransfer?.getData('text/plain');
 		if (!charName) return;
 
-		// Create a new option for the question
 		const newOption: QuestionOption = {
-			id: Math.max(0, ...$adminStore.options.map((o) => o.id)) + 1, // Temporary ID
+			id: Math.max(0, ...$adminStore.options.map((o) => o.id)) + 1,
 			question_id: questionId,
 			option_text: charName,
 			is_correct: false
 		};
 
-		adminStore.update((state) => ({
-			...state,
-			options: [...state.options, newOption]
-		}));
+		adminStore.addEntity('options', newOption);
 	}
 
 	function removeOption(questionId: number, optionId: number) {
-		adminStore.update((state) => ({
-			...state,
-			options: state.options.filter((opt) => opt.id !== optionId)
-		}));
+		adminStore.markForDeletion('options', optionId);
 	}
 
 	function toggleCorrectOption(option: QuestionOption) {
-		adminStore.update((state) => ({
-			...state,
-			options: state.options.map((opt) =>
-				opt.id === option.id ? { ...opt, is_correct: !opt.is_correct } : opt
-			)
-		}));
+		adminStore.modifyEntity('options', option.id, {
+			...option,
+			is_correct: !option.is_correct
+		});
 	}
 
 	function toggleQuestionType(type: QuestionType) {
@@ -218,7 +211,16 @@
 				</Button>
 			{/if}
 		</div>
-		<Button on:click={handleAddQuestion}>Add Question</Button>
+		<div class="flex gap-2">
+			<Button on:click={handleAddQuestion}>Add Question</Button>
+			<pre class="text-xs">
+				Pending Changes Length: {$adminStore.pendingChanges.length}
+				Pending Changes: {JSON.stringify($adminStore.pendingChanges, null, 2)}
+			</pre>
+			{#if $adminStore.pendingChanges.length > 0}
+				<ChangesReview />
+			{/if}
+		</div>
 	</div>
 
 	<div class="rounded-md border">
