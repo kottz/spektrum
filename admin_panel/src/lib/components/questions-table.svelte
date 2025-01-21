@@ -34,31 +34,28 @@
 		}
 	});
 
-	// Derived values using runes
+	const mediaById = $derived(new Map(adminStore.getState().media.map((m) => [m.id, m])));
+	const optionsByQuestionId = $derived(
+		adminStore.getState().options.reduce((map, opt) => {
+			map.set(opt.question_id, [...(map.get(opt.question_id) || []), opt]);
+			return map;
+		}, new Map<number, QuestionOption[]>())
+	);
+
 	const filteredData = $derived(() => {
+		const searchLower = state.searchTerm.toLowerCase();
 		return adminStore.getState().questions.filter((question) => {
-			const searchLower = state.searchTerm.toLowerCase();
+			if (!state.selectedTypes.has(question.question_type)) return false;
 
-			if (!state.selectedTypes.has(question.question_type)) {
-				return false;
-			}
+			const media = mediaById.get(question.media_id);
+			const questionOptions = optionsByQuestionId.get(question.id) || [];
 
-			if (
-				question.id.toString().includes(searchLower) ||
-				question.question_text?.toLowerCase().includes(searchLower)
-			) {
-				return true;
-			}
-
-			const media = adminStore.getState().media.find((m) => m.id === question.media_id);
-			if (media?.title.toLowerCase().includes(searchLower)) {
-				return true;
-			}
-
-			const questionOptions = adminStore
-				.getState()
-				.options.filter((opt) => opt.question_id === question.id);
-			return questionOptions.some((opt) => opt.option_text.toLowerCase().includes(searchLower));
+			return (
+				question.id.toString().includes(state.searchTerm) ||
+				question.question_text?.toLowerCase().includes(searchLower) ||
+				media?.title.toLowerCase().includes(searchLower) ||
+				questionOptions.some((opt) => opt.option_text.toLowerCase().includes(searchLower))
+			);
 		});
 	});
 
