@@ -142,6 +142,12 @@ function createAdminStore() {
 				return state;
 			});
 		},
+		getOptionIdsForQuestion: (questionId: number) => {
+			const state = get(adminStore);
+			return state.options
+				.filter(option => option.question_id === questionId)
+				.map(option => option.id);
+		},
 		reset: () => {
 			currentChanges = [];
 			set(initialState);

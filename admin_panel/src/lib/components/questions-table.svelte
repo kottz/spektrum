@@ -180,17 +180,25 @@
 		console.log('Edit question:', question);
 	}
 
-	// Add this to your component's state
 	let questionsMarkedForDeletion = new Set<number>();
 
-	// In your questions-table.svelte:
 	function handleDeleteQuestion(questionId: number) {
 		if (questionsMarkedForDeletion.has(questionId)) {
 			adminStore.undoDelete('questions', questionId);
 			questionsMarkedForDeletion.delete(questionId);
+
+			// Undo deletion for all associated options
+			adminStore
+				.getOptionIdsForQuestion(questionId)
+				.forEach((optionId) => adminStore.undoDelete('options', optionId));
 		} else {
 			adminStore.markForDeletion('questions', questionId);
 			questionsMarkedForDeletion.add(questionId);
+
+			// Mark all associated options for deletion
+			adminStore
+				.getOptionIdsForQuestion(questionId)
+				.forEach((optionId) => adminStore.markForDeletion('options', optionId));
 		}
 		questionsMarkedForDeletion = questionsMarkedForDeletion;
 	}
@@ -370,19 +378,37 @@
 													<Command.Item
 														value={color}
 														onSelect={() => {
-															const option = {
-																id: Math.max(0, ...$adminStore.options.map((o) => o.id)) + 1,
-																question_id: newQuestionData.id,
-																option_text: color,
-																is_correct: false
-															};
-															adminStore.update((state) => ({
-																...state,
-																options: [...state.options, option]
-															}));
+															const existing = $adminStore.options.find(
+																(opt) =>
+																	opt.question_id === newQuestionData.id &&
+																	opt.option_text === color
+															);
+
+															if (existing) {
+																adminStore.markForDeletion('options', existing.id);
+															} else {
+																const newOption = {
+																	id: Math.max(0, ...$adminStore.options.map((o) => o.id)) + 1,
+																	question_id: newQuestionData.id,
+																	option_text: color,
+																	is_correct: false
+																};
+																adminStore.addEntity('options', newOption);
+															}
 														}}
 													>
-														<Check class="mr-2 h-4 w-4" />
+														<Check
+															class={cn(
+																'mr-2 h-4 w-4',
+																$adminStore.options.some(
+																	(opt) =>
+																		opt.question_id === newQuestionData.id &&
+																		opt.option_text === color
+																)
+																	? 'opacity-100'
+																	: 'opacity-0'
+															)}
+														/>
 														{color}
 													</Command.Item>
 												{/each}
