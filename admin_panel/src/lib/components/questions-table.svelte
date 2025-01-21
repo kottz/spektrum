@@ -30,7 +30,8 @@
 			question_text: '',
 			image_url: null,
 			is_active: true
-		}
+		},
+		tempOptions: [] as QuestionOption[]
 	});
 
 	const mediaById = $derived(new Map(adminStore.getState().media.map((m) => [m.id, m])));
@@ -129,6 +130,20 @@
 		state.selectedTypes = newSet; // Reassign to trigger reactivity
 	}
 
+	function toggleColorOption(color: Color) {
+		state.tempOptions = state.tempOptions.some((o) => o.option_text === color)
+			? state.tempOptions.filter((o) => o.option_text !== color)
+			: [
+					...state.tempOptions,
+					{
+						id: 0, // Temporary ID
+						question_id: state.newQuestionData.id,
+						option_text: color,
+						is_correct: true
+					}
+				];
+	}
+
 	function nextPage() {
 		if (state.currentPage < totalPages - 1) {
 			state.currentPage++;
@@ -143,12 +158,47 @@
 
 	function handleAddQuestion() {
 		const maxId = Math.max(0, ...adminStore.getState().questions.map((q: Question) => q.id));
-		state.newQuestionData.id = maxId + 1;
+		state.newQuestionData = {
+			id: maxId + 1,
+			media_id: 0,
+			question_type: '',
+			question_text: '',
+			image_url: null,
+			is_active: true
+		};
 		state.isAddingQuestion = true;
 	}
 
 	function handleSaveQuestion() {
-		adminStore.addEntity('questions', state.newQuestionData);
+		try {
+			adminStore.startBatch();
+
+			// Add the question without options
+			adminStore.addEntity('questions', {
+				...state.newQuestionData,
+				question_text: null
+			});
+
+			// Generate sequential IDs starting from current max
+			const currentMaxId = Math.max(0, ...adminStore.getState().options.map((o) => o.id));
+			let newOptionId = currentMaxId + 1;
+
+			// Add all temp options with proper IDs
+			state.tempOptions.forEach((option) => {
+				adminStore.addEntity('options', {
+					...option,
+					id: newOptionId++,
+					question_id: state.newQuestionData.id
+				});
+			});
+
+			adminStore.commitBatch();
+		} catch (error) {
+			adminStore.cancelBatch();
+			throw error;
+		}
+
+		// Reset state
 		state.isAddingQuestion = false;
 		state.newQuestionData = {
 			id: 0,
@@ -158,9 +208,14 @@
 			image_url: null,
 			is_active: true
 		};
+		state.tempOptions = [];
 	}
 
 	function handleCancelAdd() {
+		// Cancel any ongoing batch operation
+		adminStore.cancelBatch();
+
+		// Reset local state
 		state.isAddingQuestion = false;
 		state.newQuestionData = {
 			id: 0,
@@ -353,39 +408,11 @@
 										<Command.Root>
 											<Command.Group>
 												{#each Object.values(Color) as color}
-													<Command.Item
-														value={color}
-														onSelect={() => {
-															const storeState = adminStore.getState();
-															const existing = storeState.options.find(
-																(opt) =>
-																	opt.question_id === state.newQuestionData.id &&
-																	opt.option_text === color
-															);
-
-															if (existing) {
-																adminStore.deleteEntity('options', existing.id);
-															} else {
-																const newOption = {
-																	id: Math.max(0, ...storeState.options.map((o) => o.id)) + 1,
-																	question_id: state.newQuestionData.id,
-																	option_text: color,
-																	is_correct: false
-																};
-																adminStore.addEntity('options', newOption);
-															}
-														}}
-													>
+													<Command.Item value={color} onSelect={() => toggleColorOption(color)}>
 														<Check
 															class={cn(
 																'mr-2 h-4 w-4',
-																adminStore
-																	.getState()
-																	.options.some(
-																		(opt) =>
-																			opt.question_id === state.newQuestionData.id &&
-																			opt.option_text === color
-																	)
+																state.tempOptions.some((opt) => opt.option_text === color)
 																	? 'opacity-100'
 																	: 'opacity-0'
 															)}
