@@ -3,7 +3,6 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Switch } from '$lib/components/ui/switch';
-	import * as AlertDialog from '$lib/components/ui/alert-dialog';
 	import * as Popover from '$lib/components/ui/popover/index.js';
 	import * as Command from '$lib/components/ui/command';
 	import { adminStore } from '$lib/stores/data-manager.svelte';
@@ -74,7 +73,7 @@
 			.slice(0, 5);
 	});
 
-	const totalPages = $derived(Math.ceil(filteredData.length / state.itemsPerPage));
+	const totalPages = $derived(Math.ceil(filteredData().length / state.itemsPerPage));
 
 	const paginatedData = $derived(() => {
 		const currentFilteredData = filteredData(); // Call the filtered data function
@@ -120,12 +119,14 @@
 	}
 
 	function toggleQuestionType(type: QuestionType) {
-		if (state.selectedTypes.has(type)) {
-			state.selectedTypes.delete(type);
+		// Create a new Set instance to trigger reactivity
+		const newSet = new Set(state.selectedTypes);
+		if (newSet.has(type)) {
+			newSet.delete(type);
 		} else {
-			state.selectedTypes.add(type);
+			newSet.add(type);
 		}
-		// No need for manual reactivity trigger with runes
+		state.selectedTypes = newSet; // Reassign to trigger reactivity
 	}
 
 	function nextPage() {
@@ -548,8 +549,8 @@
 		<div class="text-sm text-muted-foreground">
 			Showing {state.currentPage * state.itemsPerPage + 1} to {Math.min(
 				(state.currentPage + 1) * state.itemsPerPage,
-				filteredData.length
-			)} of {filteredData.length} questions
+				filteredData().length
+			)} of {filteredData().length} questions
 		</div>
 		<div class="flex gap-2">
 			<Button
