@@ -189,6 +189,7 @@
 				type="text"
 				placeholder="Search questions..."
 				bind:value={state.searchTerm}
+				oninput={() => (state.currentPage = 0)}
 				class="max-w-sm"
 			/>
 			<Button
@@ -339,7 +340,7 @@
 								bind:value={state.newQuestionData.question_text}
 							/>
 						</Table.Cell>
-						<Table.Cell>
+						<Table.Cell class="w-[400px] min-w-[200px]">
 							{#if state.newQuestionData.question_type === QuestionType.Color}
 								<Popover.Root let:ids>
 									<Popover.Trigger asChild let:builder>
@@ -465,7 +466,7 @@
 							{/if}
 							{question.question_text || 'N/A'}
 						</Table.Cell>
-						<Table.Cell>
+						<Table.Cell class="w-[400px] min-w-[200px]">
 							{#if question.question_type === QuestionType.Character}
 								<div
 									class="flex min-h-[60px] flex-wrap gap-2 rounded-lg border-2 border-dashed border-gray-300 p-2"

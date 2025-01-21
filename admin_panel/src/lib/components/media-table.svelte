@@ -126,6 +126,7 @@
 				type="text"
 				placeholder="Search media..."
 				bind:value={state.searchTerm}
+				oninput={() => (state.currentPage = 0)}
 				class="max-w-sm"
 			/>
 		</div>
