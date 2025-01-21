@@ -3,7 +3,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { adminStore } from '$lib/stores/data-manager.svelte';
 	import { QuestionType } from '$lib/types';
-	
+
 	let { show = $bindable() } = $props();
 
 	const state = $state({
@@ -11,23 +11,26 @@
 		show: true // Changed from prop to state since it's managed internally
 	});
 
+	const store = $derived(adminStore.getState());
+
 	// Get unique characters from question options, but only from character-type questions
-	const characterQuestionIds = $derived(() => {
-		const characterQuestions = adminStore
-			.getState()
-			.questions.filter((q) => q.question_type === QuestionType.Character);
-		return new Set(characterQuestions.map((q) => q.id));
+	// Memoized lookups
+	const characterQuestionMap = $derived(() => {
+		const map = new Set<number>();
+		for (const q of store.questions) {
+			if (q.question_type === QuestionType.Character) map.add(q.id);
+		}
+		return map;
 	});
 
 	const distinctCharacters = $derived(() => {
-		const options = adminStore.getState().options;
-		return [
-			...new Set(
-				options
-					.filter((opt) => characterQuestionIds().has(opt.question_id) && opt.option_text)
-					.map((opt) => opt.option_text)
-			)
-		];
+		const chars = new Set<string>();
+		for (const opt of store.options) {
+			if (characterQuestionMap().has(opt.question_id) && opt.option_text) {
+				chars.add(opt.option_text);
+			}
+		}
+		return Array.from(chars);
 	});
 
 	// Filter characters based on search term
