@@ -4,8 +4,14 @@
 	import QuestionsTable from '$lib/components/questions-table.svelte';
 	import SetsTable from '$lib/components/sets-table.svelte';
 	import { PUBLIC_DEV_ADMIN_PASSWORD } from '$env/static/public';
-	import { activeTab, adminStore } from '$lib/stores/admin-data';
+	import { adminStore } from '$lib/stores/data-manager.svelte';
 	import { onMount } from 'svelte';
+	import ChangesReview from './changes-review.svelte';
+
+	type TabType = 'media' | 'questions' | 'sets';
+	const state = $state({
+		activeTab: 'media' as TabType
+	});
 
 	onMount(async () => {
 		try {
@@ -19,11 +25,9 @@
 					password: PUBLIC_DEV_ADMIN_PASSWORD
 				})
 			});
-
 			if (!response.ok) {
 				throw new Error(`HTTP error! status: ${response.status}`);
 			}
-
 			const data = await response.json();
 			adminStore.setData(data);
 		} catch (error) {
@@ -32,26 +36,41 @@
 			adminStore.setLoading(false);
 		}
 	});
+
+	function setActiveTab(tab: TabType) {
+		state.activeTab = tab;
+	}
 </script>
 
 <div class="flex h-screen w-full">
-	<Sidebar />
+	<!-- Left Sidebar -->
+	<Sidebar onTabChange={setActiveTab} activeTab={state.activeTab} />
 
-	<main class="flex-1 overflow-auto p-6">
-		{#if $adminStore.isLoading}
+	<!-- Main Content -->
+	<div class="min-w-0 flex-1 border-x">
+		{#if adminStore.isLoading()}
 			<div class="flex h-full items-center justify-center">
 				<div class="text-lg">Loading...</div>
 			</div>
-		{:else if $adminStore.error}
-			<div class="rounded-md bg-red-50 p-4 text-red-700">
-				{$adminStore.error}
+		{:else if adminStore.getError()}
+			<div class="m-6 rounded-md bg-red-50 p-4 text-red-700">
+				{adminStore.getError()}
 			</div>
-		{:else if $activeTab === 'media'}
-			<MediaTable />
-		{:else if $activeTab === 'questions'}
-			<QuestionsTable />
-		{:else if $activeTab === 'sets'}
-			<SetsTable />
+		{:else}
+			<div class="h-full overflow-auto p-6">
+				{#if state.activeTab === 'media'}
+					<MediaTable />
+				{:else if state.activeTab === 'questions'}
+					<QuestionsTable />
+				{:else if state.activeTab === 'sets'}
+					<SetsTable />
+				{/if}
+			</div>
 		{/if}
-	</main>
+	</div>
+
+	<!-- Right Changes Panel -->
+	<div class="w-96 border-l p-4">
+		<ChangesReview />
+	</div>
 </div>

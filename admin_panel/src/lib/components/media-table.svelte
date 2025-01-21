@@ -2,55 +2,70 @@
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
-	import { adminStore } from '$lib/stores/admin-data';
+	import { adminStore } from '$lib/stores/data-manager.svelte';
 	import type { Media } from '$lib/types';
-	import ChangesReview from '$lib/components/changes-review.svelte';
 	import { cn } from '$lib/utils';
 
-	// Pagination state
-	let currentPage = 0;
-	let itemsPerPage = 10;
-	let searchTerm = '';
+	// State with runes
+	const state = $state({
+		currentPage: 0,
+		itemsPerPage: 10,
+		searchTerm: '',
+		isAddingMedia: false,
+		newMediaData: {
+			title: '',
+			artist: '',
+			release_year: new Date().getFullYear(),
+			spotify_uri: '',
+			youtube_id: ''
+		} as Partial<Media>
+	});
 
-	// Filtered and paginated data
-	$: filteredData = $adminStore.media.filter((media) => {
-		currentPage = 0; // Reset to first page when we change search term
-		return (
-			media.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-			media.artist.toLowerCase().includes(searchTerm.toLowerCase()) ||
-			media.id.toString().includes(searchTerm)
+	// Derived values
+	const filteredData = $derived(() => {
+		const data = adminStore.getState().media;
+		return data.filter((media) => {
+			const searchLower = state.searchTerm.toLowerCase();
+			return (
+				media.title.toLowerCase().includes(searchLower) ||
+				media.artist.toLowerCase().includes(searchLower) ||
+				media.id.toString().includes(state.searchTerm)
+			);
+		});
+	});
+
+	const totalPages = $derived(Math.ceil(filteredData().length / state.itemsPerPage));
+
+	const paginatedData = $derived(() => {
+		const filtered = filteredData();
+		return filtered.slice(
+			state.currentPage * state.itemsPerPage,
+			(state.currentPage + 1) * state.itemsPerPage
 		);
 	});
 
-	$: totalPages = Math.ceil(filteredData.length / itemsPerPage);
-	$: paginatedData = filteredData.slice(
-		currentPage * itemsPerPage,
-		(currentPage + 1) * itemsPerPage
-	);
+	// Utility functions
+	function isMediaUsed(mediaId: number): boolean {
+		return adminStore.getState().questions.some((q) => q.media_id === mediaId);
+	}
 
-	// Add media state
-	let isAddingMedia = false;
-	let newMediaData: Partial<Media> = {
-		title: '',
-		artist: '',
-		release_year: new Date().getFullYear(),
-		spotify_uri: '',
-		youtube_id: ''
-	};
+	function getQuestionCount(mediaId: number): number {
+		return adminStore.getState().questions.filter((q) => q.media_id === mediaId).length;
+	}
 
-	// Delete tracking
-	let mediaMarkedForDeletion = new Set<number>();
+	function formatSpotifyUri(uri: string | null): string {
+		if (!uri) return '';
+		return uri.includes('spotify:') ? uri.split(':').pop() || '' : uri;
+	}
 
-	let newlyAddedMedia = new Set<number>();
-
-	// Media field handlers
+	// Event handlers
 	function handleMediaFieldChange(id: number, field: keyof Media, value: string | number) {
 		adminStore.modifyEntity('media', id, { [field]: value });
 	}
 
 	function handleAddMedia() {
-		const maxId = Math.max(0, ...$adminStore.media.map((m) => m.id));
-		newMediaData = {
+		const maxId = Math.max(0, ...adminStore.getState().media.map((m) => m.id));
+		state.newMediaData = {
 			id: maxId + 1,
 			title: '',
 			artist: '',
@@ -58,15 +73,14 @@
 			spotify_uri: '',
 			youtube_id: ''
 		};
-		isAddingMedia = true;
+		state.isAddingMedia = true;
 	}
 
 	function handleSaveMedia() {
-		if (newMediaData.title && newMediaData.artist) {
-			adminStore.addEntity('media', newMediaData as Media);
-			newlyAddedMedia.add(newMediaData.id!);
-			isAddingMedia = false;
-			newMediaData = {
+		if (state.newMediaData.title && state.newMediaData.artist) {
+			adminStore.addEntity('media', state.newMediaData as Media);
+			state.isAddingMedia = false;
+			state.newMediaData = {
 				title: '',
 				artist: '',
 				release_year: new Date().getFullYear(),
@@ -76,26 +90,9 @@
 		}
 	}
 
-	function handleRemoveNewMedia(mediaId: number) {
-		// Remove from the store and from newlyAddedMedia set
-		adminStore.update((state) => ({
-			...state,
-			media: state.media.filter((m) => m.id !== mediaId),
-			pendingChanges: state.pendingChanges.filter(
-				(change) => !(change.entityType === 'media' && change.id === mediaId)
-			)
-		}));
-		newlyAddedMedia.delete(mediaId);
-		newlyAddedMedia = newlyAddedMedia;
-	}
-
 	function handleCancelAdd() {
-		if (newMediaData.id && newlyAddedMedia.has(newMediaData.id)) {
-			adminStore.undoDelete('media', newMediaData.id);
-			newlyAddedMedia.delete(newMediaData.id);
-		}
-		isAddingMedia = false;
-		newMediaData = {
+		state.isAddingMedia = false;
+		state.newMediaData = {
 			title: '',
 			artist: '',
 			release_year: new Date().getFullYear(),
@@ -104,56 +101,52 @@
 		};
 	}
 
-	function isMediaUsed(mediaId: number): boolean {
-		return $adminStore.questions.some((q) => q.media_id === mediaId);
-	}
-
 	function handleDeleteMedia(mediaId: number) {
-		if (newlyAddedMedia.has(mediaId)) {
-			handleRemoveNewMedia(mediaId);
-			return;
-		}
-
 		if (isMediaUsed(mediaId)) return;
-
-		if (mediaMarkedForDeletion.has(mediaId)) {
-			adminStore.undoDelete('media', mediaId);
-			mediaMarkedForDeletion.delete(mediaId);
-		} else {
-			adminStore.markForDeletion('media', mediaId);
-			mediaMarkedForDeletion.add(mediaId);
-		}
-		mediaMarkedForDeletion = mediaMarkedForDeletion;
-	}
-
-	function getQuestionCount(mediaId: number): number {
-		return $adminStore.questions.filter((q) => q.media_id === mediaId).length;
-	}
-
-	function formatSpotifyUri(uri: string | null): string {
-		if (!uri) return '';
-		return uri.includes('spotify:') ? uri.split(':').pop() || '' : uri;
+		adminStore.deleteEntity('media', mediaId);
 	}
 
 	function nextPage() {
-		if (currentPage < totalPages - 1) currentPage++;
+		if (state.currentPage < totalPages - 1) {
+			state.currentPage++;
+		}
 	}
 
 	function previousPage() {
-		if (currentPage > 0) currentPage--;
+		if (state.currentPage > 0) {
+			state.currentPage--;
+		}
 	}
 </script>
 
 <div class="w-full">
 	<div class="mb-4 flex items-center justify-between">
 		<div class="flex items-center gap-4">
-			<Input type="text" placeholder="Search media..." bind:value={searchTerm} class="max-w-sm" />
+			<Input
+				type="text"
+				placeholder="Search media..."
+				bind:value={state.searchTerm}
+				class="max-w-sm"
+			/>
 		</div>
 		<div class="flex gap-2">
 			<Button on:click={handleAddMedia}>Add Media</Button>
-			{#if $adminStore.pendingChanges.length > 0}
-				<ChangesReview />
-			{/if}
+			<div class="flex gap-2">
+				<Button
+					variant="outline"
+					disabled={!adminStore.canUndo()}
+					on:click={() => adminStore.undo()}
+				>
+					Undo
+				</Button>
+				<Button
+					variant="outline"
+					disabled={!adminStore.canRedo()}
+					on:click={() => adminStore.redo()}
+				>
+					Redo
+				</Button>
+			</div>
 		</div>
 	</div>
 
@@ -172,44 +165,24 @@
 				</Table.Row>
 			</Table.Header>
 			<Table.Body>
-				{#if isAddingMedia}
+				{#if state.isAddingMedia}
 					<Table.Row class="bg-blue-50">
-						<Table.Cell>{newMediaData.id}</Table.Cell>
+						<Table.Cell>{state.newMediaData.id}</Table.Cell>
 						<Table.Cell>
-							<Input
-								bind:value={newMediaData.title}
-								placeholder="Title"
-								on:input={(e) => (newMediaData.title = e.target.value)}
-							/>
+							<Input bind:value={state.newMediaData.title} placeholder="Title" />
 						</Table.Cell>
 						<Table.Cell>
-							<Input
-								bind:value={newMediaData.artist}
-								placeholder="Artist"
-								on:input={(e) => (newMediaData.artist = e.target.value)}
-							/>
+							<Input bind:value={state.newMediaData.artist} placeholder="Artist" />
 						</Table.Cell>
 						<Table.Cell>
-							<Input
-								type="number"
-								bind:value={newMediaData.release_year}
-								on:input={(e) => (newMediaData.release_year = parseInt(e.target.value))}
-							/>
+							<Input type="number" bind:value={state.newMediaData.release_year} />
 						</Table.Cell>
 						<Table.Cell>0</Table.Cell>
 						<Table.Cell>
-							<Input
-								bind:value={newMediaData.spotify_uri}
-								placeholder="Spotify URI"
-								on:input={(e) => (newMediaData.spotify_uri = e.target.value)}
-							/>
+							<Input bind:value={state.newMediaData.spotify_uri} placeholder="Spotify URI" />
 						</Table.Cell>
 						<Table.Cell>
-							<Input
-								bind:value={newMediaData.youtube_id}
-								placeholder="YouTube ID"
-								on:input={(e) => (newMediaData.youtube_id = e.target.value)}
-							/>
+							<Input bind:value={state.newMediaData.youtube_id} placeholder="YouTube ID" />
 						</Table.Cell>
 						<Table.Cell class="text-right">
 							<div class="flex justify-end gap-2">
@@ -227,37 +200,26 @@
 					</Table.Row>
 				{/if}
 
-				{#each paginatedData as media (media.id)}
+				{#each paginatedData() as media (media.id)}
 					<Table.Row
 						class={cn(
-							'cursor-pointer transition-colors',
-							mediaMarkedForDeletion.has(media.id)
-								? '!hover:bg-red-100 bg-red-100 hover:bg-red-100'
-								: newlyAddedMedia.has(media.id)
-									? '!hover:bg-green-100 bg-green-100 hover:bg-green-100'
-									: isMediaUsed(media.id)
-										? 'cursor-not-allowed bg-gray-50 hover:bg-gray-50'
-										: 'hover:bg-gray-50'
+							'transition-colors',
+							isMediaUsed(media.id)
+								? 'cursor-not-allowed bg-gray-50 hover:bg-gray-50'
+								: 'hover:bg-gray-50'
 						)}
-						on:click={() => {
-							if (newlyAddedMedia.has(media.id)) {
-								handleRemoveNewMedia(media.id);
-							}
-						}}
-						title={newlyAddedMedia.has(media.id) ? 'Click to remove this new media' : ''}
 					>
-						<!-- Table cells remain the same -->
 						<Table.Cell>{media.id}</Table.Cell>
 						<Table.Cell>
 							<Input
 								value={media.title}
-								on:input={(e) => handleMediaFieldChange(media.id, 'title', e.target.value)}
+								on:input={(e) => handleMediaFieldChange(media.id, 'title', e.currentTarget.value)}
 							/>
 						</Table.Cell>
 						<Table.Cell>
 							<Input
 								value={media.artist}
-								on:input={(e) => handleMediaFieldChange(media.id, 'artist', e.target.value)}
+								on:input={(e) => handleMediaFieldChange(media.id, 'artist', e.currentTarget.value)}
 							/>
 						</Table.Cell>
 						<Table.Cell>
@@ -265,7 +227,7 @@
 								type="number"
 								value={media.release_year || ''}
 								on:input={(e) =>
-									handleMediaFieldChange(media.id, 'release_year', parseInt(e.target.value))}
+									handleMediaFieldChange(media.id, 'release_year', parseInt(e.currentTarget.value))}
 							/>
 						</Table.Cell>
 						<Table.Cell>
@@ -279,7 +241,8 @@
 							<Input
 								value={media.spotify_uri || ''}
 								placeholder="Spotify URI"
-								on:input={(e) => handleMediaFieldChange(media.id, 'spotify_uri', e.target.value)}
+								on:input={(e) =>
+									handleMediaFieldChange(media.id, 'spotify_uri', e.currentTarget.value)}
 							/>
 							{#if media.spotify_uri}
 								<a
@@ -295,7 +258,8 @@
 							<Input
 								value={media.youtube_id || ''}
 								placeholder="YouTube ID"
-								on:input={(e) => handleMediaFieldChange(media.id, 'youtube_id', e.target.value)}
+								on:input={(e) =>
+									handleMediaFieldChange(media.id, 'youtube_id', e.currentTarget.value)}
 							/>
 							{#if media.youtube_id}
 								<a
@@ -312,18 +276,12 @@
 								<Button
 									variant="outline"
 									size="sm"
-									class={mediaMarkedForDeletion.has(media.id)
-										? 'text-green-600 hover:bg-green-50'
-										: 'text-red-600 hover:bg-red-50'}
+									class="text-red-600 hover:bg-red-50"
 									on:click={() => handleDeleteMedia(media.id)}
 									disabled={isMediaUsed(media.id)}
-									title={isMediaUsed(media.id)
-										? 'Cannot delete media used in questions'
-										: newlyAddedMedia.has(media.id)
-											? 'Click the row to remove'
-											: ''}
+									title={isMediaUsed(media.id) ? 'Cannot delete media used in questions' : ''}
 								>
-									{mediaMarkedForDeletion.has(media.id) ? 'Undo' : 'Delete'}
+									Delete
 								</Button>
 							</div>
 						</Table.Cell>
@@ -335,20 +293,25 @@
 
 	<div class="mt-4 flex items-center justify-between">
 		<div class="text-sm text-muted-foreground">
-			Showing {currentPage * itemsPerPage + 1} to {Math.min(
-				(currentPage + 1) * itemsPerPage,
-				filteredData.length
-			)} of {filteredData.length} media entries
+			Showing {state.currentPage * state.itemsPerPage + 1} to {Math.min(
+				(state.currentPage + 1) * state.itemsPerPage,
+				filteredData().length
+			)} of {filteredData().length} media entries
 		</div>
 		<div class="flex gap-2">
-			<Button variant="outline" size="sm" on:click={previousPage} disabled={currentPage === 0}>
+			<Button
+				variant="outline"
+				size="sm"
+				on:click={previousPage}
+				disabled={state.currentPage === 0}
+			>
 				Previous
 			</Button>
 			<Button
 				variant="outline"
 				size="sm"
 				on:click={nextPage}
-				disabled={currentPage >= totalPages - 1}
+				disabled={state.currentPage >= totalPages - 1}
 			>
 				Next
 			</Button>

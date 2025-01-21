@@ -2,36 +2,44 @@
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
-	import { adminStore } from '$lib/stores/admin-data';
+	import { adminStore } from '$lib/stores/data-manager.svelte';
 	import type { QuestionSet } from '$lib/types';
 
-	// Pagination state
-	let currentPage = 0;
-	let itemsPerPage = 10;
-	let searchTerm = '';
+	// State with runes
+	const state = $state({
+		currentPage: 0,
+		itemsPerPage: 10,
+		searchTerm: ''
+	});
 
-	// Filtered and paginated data
-	$: filteredData = $adminStore.sets.filter(
-		(set) =>
-			set.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-			set.id.toString().includes(searchTerm)
-	);
+	// Derived values
+	const filteredData = $derived(() => {
+		const sets = adminStore.getState().sets;
+		return sets.filter(
+			(set) =>
+				set.name.toLowerCase().includes(state.searchTerm.toLowerCase()) ||
+				set.id.toString().includes(state.searchTerm)
+		);
+	});
 
-	$: totalPages = Math.ceil(filteredData.length / itemsPerPage);
+	const totalPages = $derived(Math.ceil(filteredData().length / state.itemsPerPage));
 
-	$: paginatedData = filteredData.slice(
-		currentPage * itemsPerPage,
-		(currentPage + 1) * itemsPerPage
-	);
+	const paginatedData = $derived(() => {
+		return filteredData().slice(
+			state.currentPage * state.itemsPerPage,
+			(state.currentPage + 1) * state.itemsPerPage
+		);
+	});
 
 	// Get question details for a set
 	function getQuestionDetails(questionIds: number[]) {
+		const storeState = adminStore.getState();
 		return questionIds
 			.map((id) => {
-				const question = $adminStore.questions.find((q) => q.id === id);
+				const question = storeState.questions.find((q) => q.id === id);
 				if (!question) return null;
 
-				const media = $adminStore.media.find((m) => m.id === question.media_id);
+				const media = storeState.media.find((m) => m.id === question.media_id);
 				return {
 					question,
 					media
@@ -41,20 +49,25 @@
 	}
 
 	function nextPage() {
-		if (currentPage < totalPages - 1) {
-			currentPage++;
+		if (state.currentPage < totalPages - 1) {
+			state.currentPage++;
 		}
 	}
 
 	function previousPage() {
-		if (currentPage > 0) {
-			currentPage--;
+		if (state.currentPage > 0) {
+			state.currentPage--;
 		}
 	}
 
 	function handleAddSet() {
-		// TODO: Implement add set functionality
-		console.log('Add set clicked');
+		const maxId = Math.max(0, ...adminStore.getState().sets.map((s) => s.id));
+		const newSet: QuestionSet = {
+			id: maxId + 1,
+			name: 'New Set',
+			question_ids: []
+		};
+		adminStore.addEntity('sets', newSet);
 	}
 
 	function handleEditSet(set: QuestionSet) {
@@ -63,8 +76,7 @@
 	}
 
 	function handleDeleteSet(setId: number) {
-		// TODO: Implement delete set functionality
-		console.log('Delete set:', setId);
+		adminStore.deleteEntity('sets', setId);
 	}
 
 	function handleManageQuestions(set: QuestionSet) {
@@ -76,9 +88,22 @@
 <div class="w-full">
 	<div class="mb-4 flex items-center justify-between">
 		<div class="flex items-center gap-4">
-			<Input type="text" placeholder="Search sets..." bind:value={searchTerm} class="max-w-sm" />
+			<Input
+				type="text"
+				placeholder="Search sets..."
+				bind:value={state.searchTerm}
+				class="max-w-sm"
+			/>
 		</div>
-		<Button on:click={handleAddSet}>Add Set</Button>
+		<div class="flex gap-2">
+			<Button on:click={handleAddSet}>Add Set</Button>
+			<Button variant="outline" disabled={!adminStore.canUndo()} on:click={() => adminStore.undo()}>
+				Undo
+			</Button>
+			<Button variant="outline" disabled={!adminStore.canRedo()} on:click={() => adminStore.redo()}>
+				Redo
+			</Button>
+		</div>
 	</div>
 
 	<div class="rounded-md border">
@@ -92,7 +117,7 @@
 				</Table.Row>
 			</Table.Header>
 			<Table.Body>
-				{#each paginatedData as set}
+				{#each paginatedData() as set}
 					{@const questionDetails = getQuestionDetails(set.question_ids)}
 					<Table.Row>
 						<Table.Cell>{set.id}</Table.Cell>
@@ -153,20 +178,25 @@
 
 	<div class="mt-4 flex items-center justify-between">
 		<div class="text-sm text-muted-foreground">
-			Showing {currentPage * itemsPerPage + 1} to {Math.min(
-				(currentPage + 1) * itemsPerPage,
-				filteredData.length
-			)} of {filteredData.length} sets
+			Showing {state.currentPage * state.itemsPerPage + 1} to {Math.min(
+				(state.currentPage + 1) * state.itemsPerPage,
+				filteredData().length
+			)} of {filteredData().length} sets
 		</div>
 		<div class="flex gap-2">
-			<Button variant="outline" size="sm" on:click={previousPage} disabled={currentPage === 0}>
+			<Button
+				variant="outline"
+				size="sm"
+				on:click={previousPage}
+				disabled={state.currentPage === 0}
+			>
 				Previous
 			</Button>
 			<Button
 				variant="outline"
 				size="sm"
 				on:click={nextPage}
-				disabled={currentPage >= totalPages - 1}
+				disabled={state.currentPage >= totalPages - 1}
 			>
 				Next
 			</Button>

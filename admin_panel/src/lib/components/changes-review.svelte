@@ -1,31 +1,34 @@
 <script lang="ts">
-	import * as AlertDialog from '$lib/components/ui/alert-dialog';
+	import {
+		Card,
+		CardContent,
+		CardFooter,
+		CardHeader,
+		CardTitle,
+		CardDescription
+	} from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
-	import { adminStore } from '$lib/stores/admin-data';
-	import { AlertCircle } from 'lucide-svelte';
+	import { adminStore } from '$lib/stores/data-manager.svelte';
+	import { AlertCircle, Undo2, Redo2 } from 'lucide-svelte';
 	import { PUBLIC_DEV_ADMIN_PASSWORD } from '$env/static/public';
+	import { cn } from '$lib/utils';
 
-	let password = '';
-	let error: string | null = null;
-	let isSubmitting = false;
-	let isOpen = false;
-
-	function copyJson() {
-		console.log('final state', adminStore.getFinalState());
-		const jsonData = JSON.stringify(adminStore.getFinalState(), null, 2);
-		navigator.clipboard.writeText(jsonData);
-	}
+	const state = $state({
+		password: '',
+		error: null as string | null,
+		isSubmitting: false
+	});
 
 	async function handleApplyChanges() {
-		if (!password) {
-			error = 'Password is required';
+		if (!state.password) {
+			state.error = 'Password is required';
 			return;
 		}
 
 		try {
-			isSubmitting = true;
-			error = null;
+			state.isSubmitting = true;
+			state.error = null;
 
 			const response = await fetch('http://localhost:8765/api/update-questions', {
 				method: 'POST',
@@ -34,7 +37,7 @@
 				},
 				body: JSON.stringify({
 					password: PUBLIC_DEV_ADMIN_PASSWORD,
-					stored_data: adminStore.getFinalState()
+					stored_data: adminStore.getState()
 				})
 			});
 
@@ -42,108 +45,121 @@
 				throw new Error(`HTTP error! status: ${response.status}`);
 			}
 
-			// Reset changes after successful update
+			// Reset state after successful update
 			adminStore.setData(await response.json());
-			// Only close on success
-			isOpen = false;
-			// Reset password
-			password = '';
+			state.password = '';
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to apply changes';
+			state.error = e instanceof Error ? e.message : 'Failed to apply changes';
 		} finally {
-			isSubmitting = false;
+			state.isSubmitting = false;
 		}
 	}
 
-	function getEntityTitle(entityType: string, id: number): string {
-		switch (entityType) {
-			case 'questions':
-				return $adminStore.questions.find((q) => q.id === id)?.question_text || `Question ${id}`;
-			case 'media':
-				return $adminStore.media.find((m) => m.id === id)?.title || `Media ${id}`;
-			case 'options':
-				return $adminStore.options.find((o) => o.id === id)?.option_text || `Option ${id}`;
-			case 'sets':
-				return $adminStore.sets.find((s) => s.id === id)?.name || `Set ${id}`;
-			default:
-				return `Unknown ${id}`;
-		}
+	function copyJson() {
+		const jsonData = JSON.stringify(adminStore.getState(), null, 2);
+		navigator.clipboard.writeText(jsonData);
 	}
 </script>
 
-<AlertDialog.Root bind:open={isOpen}>
-	<AlertDialog.Trigger asChild let:builder>
-		<Button builders={[builder]} variant="outline" class="gap-2">
-			Review Changes
-			<span class="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-600">
-				{$adminStore.pendingChanges.length}
-			</span>
-		</Button>
-	</AlertDialog.Trigger>
-	<AlertDialog.Portal>
-		<AlertDialog.Overlay />
-		<AlertDialog.Content>
-			<AlertDialog.Header>
-				<AlertDialog.Title>Review Changes</AlertDialog.Title>
-				<AlertDialog.Description>
-					Review and apply your changes to the database
-				</AlertDialog.Description>
-			</AlertDialog.Header>
-			<div class="space-y-6 py-4">
-				{#if $adminStore.pendingChanges.length === 0}
-					<div class="text-gray-500">No pending changes</div>
-				{:else}
-					<!-- Added Items -->
-					{#if $adminStore.pendingChanges.some((change) => change.type === 'added')}
-						<div class="space-y-2">
-							<h3 class="font-medium text-green-600">Added</h3>
-							{#each $adminStore.pendingChanges.filter((c) => c.type === 'added') as change}
-								<div class="flex items-center gap-2 rounded bg-green-50 px-3 py-2">
-									<span class="font-medium">{change.entityType}:</span>
-									<span>{getEntityTitle(change.entityType, change.id)}</span>
-								</div>
-							{/each}
-						</div>
-					{/if}
-
-					<!-- Deleted Items -->
-					{#if $adminStore.pendingChanges.some((change) => change.type === 'deleted')}
-						<div class="space-y-2">
-							<h3 class="font-medium text-red-600">Deleted</h3>
-							{#each $adminStore.pendingChanges.filter((c) => c.type === 'deleted') as change}
-								<div class="flex items-center gap-2 rounded bg-red-50 px-3 py-2">
-									<span class="font-medium">{change.entityType}:</span>
-									<span>{getEntityTitle(change.entityType, change.id)}</span>
-								</div>
-							{/each}
-						</div>
-					{/if}
-
-					{#if error}
-						<div class="flex items-center gap-2 rounded-md bg-red-50 p-3 text-red-600">
-							<AlertCircle class="h-5 w-5" />
-							<span>{error}</span>
-						</div>
-					{/if}
-
-					<div>
-						<Input
-							type="password"
-							placeholder="Enter password to apply changes"
-							bind:value={password}
-						/>
-					</div>
-				{/if}
+<Card class="w-full">
+	<CardHeader>
+		<div class="flex items-center justify-between">
+			<div>
+				<CardTitle>Changes History</CardTitle>
+				<CardDescription>Review and manage your changes</CardDescription>
 			</div>
-			<AlertDialog.Footer class="flex justify-between">
-				<Button variant="outline" size="sm" on:click={copyJson}>Copy JSON</Button>
-				<div class="flex gap-2">
-					<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-					<Button disabled={isSubmitting || !password} on:click={handleApplyChanges}>
-						{isSubmitting ? 'Applying...' : 'Apply Changes'}
-					</Button>
+			<div class="flex gap-2">
+				<Button
+					variant="outline"
+					size="icon"
+					disabled={!adminStore.canUndo()}
+					on:click={() => adminStore.undo()}
+				>
+					<Undo2 class="h-4 w-4" />
+				</Button>
+				<Button
+					variant="outline"
+					size="icon"
+					disabled={!adminStore.canRedo()}
+					on:click={() => adminStore.redo()}
+				>
+					<Redo2 class="h-4 w-4" />
+				</Button>
+			</div>
+		</div>
+	</CardHeader>
+
+	<CardContent class="space-y-6">
+		{#if !adminStore.canUndo()}
+			<div class="text-gray-500">No changes made yet</div>
+		{:else}
+			<!-- History Timeline -->
+			<div class="relative space-y-4">
+				<div class="absolute left-2.5 top-3 h-[calc(100%-24px)] w-px bg-gray-200" />
+
+				{#each adminStore.getSnapshots() as snapshot, index}
+					{@const isCurrentStep = index === adminStore.getSnapshotIndex()}
+					{@const isFutureStep = index > adminStore.getSnapshotIndex()}
+
+					<div class={cn('relative flex gap-3 pl-6', isFutureStep && 'opacity-50')}>
+						<!-- Timeline marker -->
+						<div
+							class={cn(
+								'absolute left-0 top-1 h-4 w-4 rounded-full border-2 border-white',
+								isCurrentStep ? 'bg-blue-500' : 'bg-gray-200',
+								isFutureStep && 'bg-gray-100'
+							)}
+						/>
+
+						<!-- Step content -->
+						<div class="flex-1">
+							<div
+								class={cn('rounded-lg border p-3', isCurrentStep && 'border-blue-200 bg-blue-50')}
+							>
+								<div class="mb-2 font-medium">
+									Step {index + 1}
+									{#if isCurrentStep}
+										<span class="ml-2 text-sm text-blue-600">Current</span>
+									{/if}
+								</div>
+								<div class="space-y-1 text-sm">
+									<div>Media: {snapshot.media.length} items</div>
+									<div>Questions: {snapshot.questions.length} items</div>
+									<div>Options: {snapshot.options.length} items</div>
+									<div>Sets: {snapshot.sets.length} items</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				{/each}
+			</div>
+
+			{#if state.error}
+				<div class="flex items-center gap-2 rounded-md bg-red-50 p-3 text-red-600">
+					<AlertCircle class="h-5 w-5" />
+					<span>{state.error}</span>
 				</div>
-			</AlertDialog.Footer>
-		</AlertDialog.Content>
-	</AlertDialog.Portal>
-</AlertDialog.Root>
+			{/if}
+
+			<div>
+				<Input
+					type="password"
+					placeholder="Enter password to apply changes"
+					bind:value={state.password}
+				/>
+			</div>
+		{/if}
+	</CardContent>
+
+	<CardFooter class="flex justify-between">
+		<Button variant="outline" size="sm" on:click={copyJson}>Copy JSON</Button>
+		<div class="flex gap-2">
+			<Button
+				disabled={state.isSubmitting || !state.password || !adminStore.canUndo()}
+				on:click={handleApplyChanges}
+			>
+				{state.isSubmitting ? 'Applying...' : 'Apply Changes'}
+			</Button>
+		</div>
+	</CardFooter>
+</Card>
