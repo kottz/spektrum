@@ -9,6 +9,14 @@ interface AdminState {
 	error: string | null;
 }
 
+interface AdminStoreState extends AdminState {
+	snapshots: AdminState[];
+	currentIndex: number;
+	maxSnapshots: number;
+	isBatching: boolean;
+	preBatchState: AdminState | null;
+}
+
 const initialState: AdminState = {
 	media: [],
 	questions: [],
@@ -19,14 +27,18 @@ const initialState: AdminState = {
 };
 
 function createAdminStore() {
-	const state = $state({
+	const state = $state<AdminStoreState>({
 		...initialState,
-		snapshots: [] as AdminState[],
+		snapshots: [],
 		currentIndex: -1,
-		maxSnapshots: 50
+		maxSnapshots: 50,
+		isBatching: false,
+		preBatchState: null
 	});
 
 	function takeSnapshot() {
+		if (state.isBatching) return;
+
 		// Truncate forward history if we're not at the end
 		if (state.currentIndex < state.snapshots.length - 1) {
 			state.snapshots = state.snapshots.slice(0, state.currentIndex + 1);
@@ -34,7 +46,7 @@ function createAdminStore() {
 
 		// Create new snapshot with raw values
 		const snapshot: AdminState = {
-			media: [...state.media],      // Spread creates a new array with raw values
+			media: [...state.media],
 			questions: [...state.questions],
 			options: [...state.options],
 			sets: [...state.sets],
@@ -67,6 +79,48 @@ function createAdminStore() {
 
 		setError: (error: string | null) => {
 			state.error = error;
+		},
+
+		startBatch: () => {
+			if (state.isBatching) {
+				console.error('Batch already in progress');
+				return;
+			}
+			state.isBatching = true;
+			state.preBatchState = {
+				media: [...state.media],
+				questions: [...state.questions],
+				options: [...state.options],
+				sets: [...state.sets],
+				isLoading: state.isLoading,
+				error: state.error
+			};
+		},
+
+		commitBatch: () => {
+			if (!state.isBatching) {
+				console.error('No batch to commit');
+				return;
+			}
+			state.isBatching = false;
+			takeSnapshot();
+			state.preBatchState = null;
+		},
+
+		cancelBatch: () => {
+			if (!state.isBatching) {
+				console.error('No batch to cancel');
+				return;
+			}
+			const pb = state.preBatchState!;
+			state.media = [...pb.media];
+			state.questions = [...pb.questions];
+			state.options = [...pb.options];
+			state.sets = [...pb.sets];
+			state.isLoading = pb.isLoading;
+			state.error = pb.error;
+			state.isBatching = false;
+			state.preBatchState = null;
 		},
 
 		addEntity: (entityType: keyof StoredData, entity: any) => {
