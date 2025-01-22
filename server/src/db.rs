@@ -29,6 +29,13 @@ struct Media {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+struct Character {
+    id: i64,
+    name: String,
+    image_url: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct Question {
     id: i64,
     media_id: i64,
@@ -56,6 +63,7 @@ pub struct QuestionSet {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StoredData {
     media: Vec<Media>,
+    characters: Vec<Character>,
     questions: Vec<Question>,
     options: Vec<QuestionOption>,
     sets: Vec<QuestionSet>,
@@ -79,6 +87,7 @@ impl QuestionDatabase {
         } else {
             Ok(StoredData {
                 media: Vec::new(),
+                characters: Vec::new(),
                 questions: Vec::new(),
                 options: Vec::new(),
                 sets: Vec::new(),
