@@ -1,7 +1,15 @@
-import type { StoredData, Media, Question, QuestionOption, QuestionSet } from '$lib/types';
+import type {
+	StoredData,
+	Media,
+	Character,
+	Question,
+	QuestionOption,
+	QuestionSet
+} from '$lib/types';
 
 interface AdminState {
 	media: Media[];
+	characters: Character[];
 	questions: Question[];
 	options: QuestionOption[];
 	sets: QuestionSet[];
@@ -19,6 +27,7 @@ interface AdminStoreState extends AdminState {
 
 const initialState: AdminState = {
 	media: [],
+	characters: [],
 	questions: [],
 	options: [],
 	sets: [],
@@ -47,6 +56,7 @@ function createAdminStore() {
 		// Create new snapshot with raw values
 		const snapshot: AdminState = {
 			media: [...state.media],
+			characters: [...state.characters],
 			questions: [...state.questions],
 			options: [...state.options],
 			sets: [...state.sets],
@@ -89,6 +99,7 @@ function createAdminStore() {
 			state.isBatching = true;
 			state.preBatchState = {
 				media: [...state.media],
+				characters: [...state.characters],
 				questions: [...state.questions],
 				options: [...state.options],
 				sets: [...state.sets],
@@ -131,12 +142,22 @@ function createAdminStore() {
 		modifyEntity: (
 			entityType: keyof StoredData,
 			id: number,
-			changes: Partial<Media> | Partial<Question> | Partial<QuestionOption> | Partial<QuestionSet>
+			changes:
+				| Partial<Media>
+				| Partial<Character>
+				| Partial<Question>
+				| Partial<QuestionOption>
+				| Partial<QuestionSet>
 		) => {
 			switch (entityType) {
 				case 'media':
 					state.media = state.media.map((item) =>
 						item.id === id ? { ...item, ...(changes as Partial<Media>) } : item
+					);
+					break;
+				case 'characters':
+					state.characters = state.characters.map((item) =>
+						item.id === id ? { ...item, ...(changes as Partial<Character>) } : item
 					);
 					break;
 				case 'questions':
@@ -160,6 +181,7 @@ function createAdminStore() {
 
 		// Delete cascade rules:
 		// - Delete Media → Delete all its Questions → Delete their Options
+		// - Delete Character → Delete all Options using its name
 		// - Delete Question → Delete all its Options
 		// - Delete Set → Remove from Set-Question relationships
 		deleteEntity: (entityType: keyof StoredData, id: number) => {
@@ -168,52 +190,53 @@ function createAdminStore() {
 					// Get all questions for this media
 					const mediaQuestions = state.questions.filter((q) => q.media_id === id);
 					const questionIds = mediaQuestions.map((q) => q.id);
-
 					// Delete all options for those questions
 					state.options = state.options.filter((o) => !questionIds.includes(o.question_id));
-
 					// Delete the questions
 					state.questions = state.questions.filter((q) => q.media_id !== id);
-
 					// Remove question references from sets
 					state.sets = state.sets.map((s) => ({
 						...s,
 						question_ids: s.question_ids.filter((qid) => !questionIds.includes(qid))
 					}));
-
 					// Delete the media
 					state.media = state.media.filter((m) => m.id !== id);
 					break;
 				}
-
+				case 'characters': {
+					// Get the character name before deleting
+					const character = state.characters.find((c) => c.id === id);
+					if (character) {
+						// Delete all options that use this character's name
+						state.options = state.options.filter((o) => o.option_text !== character.name);
+					}
+					// Delete the character
+					state.characters = state.characters.filter((c) => c.id !== id);
+					break;
+				}
 				case 'questions': {
 					// Delete all options for this question
 					state.options = state.options.filter((o) => o.question_id !== id);
-
 					// Remove from any sets
 					state.sets = state.sets.map((s) => ({
 						...s,
 						question_ids: s.question_ids.filter((qid) => qid !== id)
 					}));
-
 					// Delete the question
 					state.questions = state.questions.filter((q) => q.id !== id);
 					break;
 				}
-
 				case 'sets': {
 					// Just delete the set (no cascading needed)
 					state.sets = state.sets.filter((s) => s.id !== id);
 					break;
 				}
-
 				case 'options': {
 					// Simple delete
 					state.options = state.options.filter((o) => o.id !== id);
 					break;
 				}
 			}
-
 			takeSnapshot();
 		},
 
@@ -250,6 +273,7 @@ function createAdminStore() {
 
 		getState: () => ({
 			media: state.media,
+			characters: state.characters,
 			questions: state.questions,
 			options: state.options,
 			sets: state.sets

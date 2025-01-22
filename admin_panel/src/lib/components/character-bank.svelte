@@ -1,42 +1,21 @@
 <script lang="ts">
+	import type { Character } from '$lib/types';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { adminStore } from '$lib/stores/data-manager.svelte';
-	import { QuestionType } from '$lib/types';
 
 	let { show = $bindable() } = $props();
 
 	const state = $state({
 		searchTerm: '',
-		show: true // Changed from prop to state since it's managed internally
+		show: true
 	});
 
 	const store = $derived(adminStore.getState());
 
-	// Get unique characters from question options, but only from character-type questions
-	// Memoized lookups
-	const characterQuestionMap = $derived(() => {
-		const map = new Set<number>();
-		for (const q of store.questions) {
-			if (q.question_type === QuestionType.Character) map.add(q.id);
-		}
-		return map;
-	});
-
-	const distinctCharacters = $derived(() => {
-		const chars = new Set<string>();
-		for (const opt of store.options) {
-			if (characterQuestionMap().has(opt.question_id) && opt.option_text) {
-				chars.add(opt.option_text);
-			}
-		}
-		return Array.from(chars);
-	});
-
-	// Filter characters based on search term
 	const filteredCharacters = $derived(() => {
-		return distinctCharacters().filter((char) =>
-			char.toLowerCase().includes(state.searchTerm.toLowerCase())
+		return store.characters.filter((char: Character) =>
+			char.name.toLowerCase().includes(state.searchTerm.toLowerCase())
 		);
 	});
 
@@ -74,13 +53,13 @@
 						role="option"
 						tabindex="0"
 						aria-selected="false"
-						aria-label={`Drag ${char} character`}
-						ondragstart={(e) => handleDragStart(e, char)}
+						aria-label={`Drag ${char.name} character`}
+						ondragstart={(e) => handleDragStart(e, char.name)}
 						ondragend={handleDragEnd}
 					>
-						<img src={`/img/${char}.avif`} alt={char} class="w-full rounded-lg" />
-						<div class="mt-1 truncate text-center text-sm" title={char}>
-							{char}
+						<img src={char.image_url} alt={char.name} class="w-full rounded-lg" />
+						<div class="mt-1 truncate text-center text-sm" title={char.name}>
+							{char.name}
 						</div>
 					</div>
 				{/each}
@@ -91,9 +70,3 @@
 		</div>
 	</div>
 {/if}
-
-<style>
-	.dragging {
-		opacity: 0.5;
-	}
-</style>

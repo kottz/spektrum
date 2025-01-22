@@ -30,6 +30,12 @@ export interface Media {
 	youtube_id: string;
 }
 
+export interface Character {
+	id: number;
+	name: string;
+	image_url: string;
+}
+
 export interface Question {
 	id: number;
 	media_id: number;
@@ -54,6 +60,7 @@ export interface QuestionSet {
 
 export interface StoredData {
 	media: Media[];
+	characters: Character[];
 	questions: Question[];
 	options: QuestionOption[];
 	sets: QuestionSet[];

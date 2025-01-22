@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Character } from '$lib/types';
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -328,7 +329,7 @@
 										{#each filteredMediaOptions() as media}
 											<div
 												class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-gray-100"
-												on:click={() => {
+												onclick={() => {
 													state.newQuestionData.media_id = media.id;
 													state.mediaSearchTerm = '';
 												}}
@@ -427,17 +428,20 @@
 							{:else if state.newQuestionData.question_type === QuestionType.Character}
 								<div
 									class="flex min-h-[60px] flex-wrap gap-2 rounded-lg border-2 border-dashed border-gray-300 p-2"
-									on:dragover|preventDefault
-									on:drop={(e) => handleDrop(e, state.newQuestionData.id)}
+									ondragover={(e) => e.preventDefault()}
+									ondrop={(e) => handleDrop(e, state.newQuestionData.id)}
 								>
 									{#each getQuestionOptions(state.newQuestionData.id) as option}
+										{@const character = adminStore
+											.getState()
+											.characters.find((c: Character) => c.name === option.option_text)}
 										<div class="group relative">
 											<div
 												class="flex cursor-pointer flex-col items-center"
-												on:click={() => toggleCorrectOption(option)}
+												onclick={() => toggleCorrectOption(option)}
 											>
 												<img
-													src={`/img/${option.option_text}.avif`}
+													src={character ? character.image_url : `/img/${option.option_text}.avif`}
 													alt={option.option_text}
 													class="h-12 w-12 rounded transition-transform hover:scale-105"
 													class:ring-2={option.is_correct}
@@ -449,7 +453,7 @@
 											</div>
 											<button
 												class="absolute -right-2 -top-2 hidden h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white group-hover:flex"
-												on:click={() => removeOption(state.newQuestionData.id, option.id)}
+												onclick={() => removeOption(state.newQuestionData.id, option.id)}
 											>
 												×
 											</button>
@@ -497,14 +501,14 @@
 							{#if question.question_type === QuestionType.Character}
 								<div
 									class="flex min-h-[60px] flex-wrap gap-2 rounded-lg border-2 border-dashed border-gray-300 p-2"
-									on:dragover|preventDefault
-									on:drop={(e) => handleDrop(e, question.id)}
+									ondragover={(e) => e.preventDefault()}
+									ondrop={(e) => handleDrop(e, question.id)}
 								>
 									{#each getQuestionOptions(question.id) as option}
 										<div class="group relative">
 											<div
 												class="flex cursor-pointer flex-col items-center"
-												on:click={() => toggleCorrectOption(option)}
+												onclick={() => toggleCorrectOption(option)}
 											>
 												<img
 													src={`/img/${option.option_text}.avif`}
@@ -523,7 +527,7 @@
 											</div>
 											<button
 												class="absolute -right-2 -top-2 hidden h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white group-hover:flex"
-												on:click={(e) => {
+												onclick={(e) => {
 													e.stopPropagation();
 													removeOption(question.id, option.id);
 												}}
