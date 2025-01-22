@@ -413,7 +413,14 @@
 								<Popover.Root let:ids>
 									<Popover.Trigger asChild let:builder>
 										<Button builders={[builder]} variant="outline" class="w-full justify-between">
-											Select colors...
+											{#if state.tempOptions.length > 0}
+												{state.tempOptions.length}
+												{#each state.tempOptions as opt}
+													{' - ' + opt.option_text}
+												{/each}
+											{:else}
+												Select colors...
+											{/if}
 											<ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
 										</Button>
 									</Popover.Trigger>
