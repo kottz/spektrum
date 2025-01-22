@@ -6,12 +6,12 @@
 	import type { Media } from '$lib/types';
 	import { cn } from '$lib/utils';
 
-	// State with runes
 	const state = $state({
 		currentPage: 0,
 		itemsPerPage: 10,
 		searchTerm: '',
 		isAddingMedia: false,
+		editingValues: new Map<string, string | number>(), // Store temporary edits
 		newMediaData: {
 			title: '',
 			artist: '',
@@ -21,7 +21,6 @@
 		} as Partial<Media>
 	});
 
-	// Derived values
 	const filteredData = $derived(() => {
 		const data = adminStore.getState().media;
 		return data.filter((media) => {
@@ -44,7 +43,6 @@
 		);
 	});
 
-	// Utility functions
 	function isMediaUsed(mediaId: number): boolean {
 		return adminStore.getState().questions.some((q) => q.media_id === mediaId);
 	}
@@ -58,9 +56,43 @@
 		return uri.includes('spotify:') ? uri.split(':').pop() || '' : uri;
 	}
 
-	// Event handlers
+	function getEditKey(id: number, field: string): string {
+		return `${id}-${field}`;
+	}
+
+	function getEditingValue(
+		id: number,
+		field: keyof Media,
+		currentValue: string | number
+	): string | number {
+		const editKey = getEditKey(id, field);
+		return state.editingValues.has(editKey) ? state.editingValues.get(editKey)! : currentValue;
+	}
+
 	function handleMediaFieldChange(id: number, field: keyof Media, value: string | number) {
-		adminStore.modifyEntity('media', id, { [field]: value });
+		const editKey = getEditKey(id, field);
+		state.editingValues.set(editKey, value);
+	}
+
+	function commitChanges(id: number, field: keyof Media) {
+		const editKey = getEditKey(id, field);
+		const newValue = state.editingValues.get(editKey);
+
+		if (newValue !== undefined) {
+			adminStore.modifyEntity('media', id, { [field]: newValue });
+			state.editingValues.delete(editKey);
+		}
+	}
+
+	function handleKeyDown(
+		event: KeyboardEvent & { currentTarget: HTMLInputElement },
+		id: number,
+		field: keyof Media
+	) {
+		if (event.key === 'Enter') {
+			commitChanges(id, field);
+			event.currentTarget.blur();
+		}
 	}
 
 	function handleAddMedia() {
@@ -130,25 +162,7 @@
 				class="max-w-sm"
 			/>
 		</div>
-		<div class="flex gap-2">
-			<Button on:click={handleAddMedia}>Add Media</Button>
-			<div class="flex gap-2">
-				<Button
-					variant="outline"
-					disabled={!adminStore.canUndo()}
-					on:click={() => adminStore.undo()}
-				>
-					Undo
-				</Button>
-				<Button
-					variant="outline"
-					disabled={!adminStore.canRedo()}
-					on:click={() => adminStore.redo()}
-				>
-					Redo
-				</Button>
-			</div>
-		</div>
+		<Button on:click={handleAddMedia}>Add Media</Button>
 	</div>
 
 	<div class="rounded-md border">
@@ -205,30 +219,34 @@
 					<Table.Row
 						class={cn(
 							'transition-colors',
-							isMediaUsed(media.id)
-								? 'cursor-not-allowed bg-gray-50 hover:bg-gray-50'
-								: 'hover:bg-gray-50'
+							isMediaUsed(media.id) ? 'bg-gray-50 hover:bg-gray-50' : 'hover:bg-gray-50'
 						)}
 					>
 						<Table.Cell>{media.id}</Table.Cell>
 						<Table.Cell>
 							<Input
-								value={media.title}
+								value={getEditingValue(media.id, 'title', media.title)}
 								on:input={(e) => handleMediaFieldChange(media.id, 'title', e.currentTarget.value)}
+								on:blur={() => commitChanges(media.id, 'title')}
+								on:keydown={(e) => handleKeyDown(e, media.id, 'title')}
 							/>
 						</Table.Cell>
 						<Table.Cell>
 							<Input
-								value={media.artist}
+								value={getEditingValue(media.id, 'artist', media.artist)}
 								on:input={(e) => handleMediaFieldChange(media.id, 'artist', e.currentTarget.value)}
+								on:blur={() => commitChanges(media.id, 'artist')}
+								on:keydown={(e) => handleKeyDown(e, media.id, 'artist')}
 							/>
 						</Table.Cell>
 						<Table.Cell>
 							<Input
 								type="number"
-								value={media.release_year || ''}
+								value={getEditingValue(media.id, 'release_year', media.release_year || '')}
 								on:input={(e) =>
 									handleMediaFieldChange(media.id, 'release_year', parseInt(e.currentTarget.value))}
+								on:blur={() => commitChanges(media.id, 'release_year')}
+								on:keydown={(e) => handleKeyDown(e, media.id, 'release_year')}
 							/>
 						</Table.Cell>
 						<Table.Cell>
@@ -240,10 +258,12 @@
 						</Table.Cell>
 						<Table.Cell>
 							<Input
-								value={media.spotify_uri || ''}
+								value={getEditingValue(media.id, 'spotify_uri', media.spotify_uri || '')}
 								placeholder="Spotify URI"
 								on:input={(e) =>
 									handleMediaFieldChange(media.id, 'spotify_uri', e.currentTarget.value)}
+								on:blur={() => commitChanges(media.id, 'spotify_uri')}
+								on:keydown={(e) => handleKeyDown(e, media.id, 'spotify_uri')}
 							/>
 							{#if media.spotify_uri}
 								<a
@@ -256,21 +276,34 @@
 							{/if}
 						</Table.Cell>
 						<Table.Cell>
-							<Input
-								value={media.youtube_id || ''}
-								placeholder="YouTube ID"
-								on:input={(e) =>
-									handleMediaFieldChange(media.id, 'youtube_id', e.currentTarget.value)}
-							/>
-							{#if media.youtube_id}
-								<a
-									href={`https://youtube.com/watch?v=${media.youtube_id}`}
-									target="_blank"
-									class="mt-1 block text-xs text-blue-600 hover:underline"
-								>
-									Open in YouTube
-								</a>
-							{/if}
+							<div class="flex items-center gap-2">
+								<div>
+									<Input
+										value={getEditingValue(media.id, 'youtube_id', media.youtube_id || '')}
+										placeholder="YouTube ID"
+										on:input={(e) =>
+											handleMediaFieldChange(media.id, 'youtube_id', e.currentTarget.value)}
+										on:blur={() => commitChanges(media.id, 'youtube_id')}
+										on:keydown={(e) => handleKeyDown(e, media.id, 'youtube_id')}
+									/>
+									{#if media.youtube_id}
+										<a
+											href={`https://youtube.com/watch?v=${media.youtube_id}`}
+											target="_blank"
+											class="mt-1 block text-xs text-blue-600 hover:underline"
+										>
+											Open in YouTube
+										</a>
+									{/if}
+								</div>
+								{#if media.youtube_id}
+									<img
+										class="mb-5 h-9 w-16"
+										src={`https://i.ytimg.com/vi_webp/${media.youtube_id}/default.webp`}
+										alt={`YouTube thumbnail for ${media.title}`}
+									/>
+								{/if}
+							</div>
 						</Table.Cell>
 						<Table.Cell class="text-right">
 							<div class="flex justify-end gap-2">
