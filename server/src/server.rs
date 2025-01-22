@@ -85,7 +85,7 @@ impl AppState {
         let state = Self {
             manager: Arc::new(Mutex::new(GameManager::new())),
             store: Arc::new(question_manager),
-            admin_password
+            admin_password,
         };
 
         let manager = state.manager.clone();

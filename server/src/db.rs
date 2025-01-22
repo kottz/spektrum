@@ -1,6 +1,6 @@
 use crate::question::{Color, GameQuestion, GameQuestionOption, QuestionType, COLOR_WEIGHTS};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
 use thiserror::Error;
@@ -10,12 +10,12 @@ use tracing::info;
 pub(crate) enum DbError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
-
     #[error("No questions found")]
     NoQuestions,
+    #[error("Validation error: {0}")]
+    Validation(String),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -69,6 +69,145 @@ pub struct StoredData {
     sets: Vec<QuestionSet>,
 }
 
+/// Validates the integrity of the stored data by checking:
+/// - Duplicate IDs of any type (media, characters, questions, options, sets)
+/// - Duplicate character names or image URLs
+/// - Questions referencing non-existent media IDs
+/// - Options referencing non-existent questions
+/// - Options referencing non-existent character names (via option_text)
+/// - Sets referencing non-existent questions
+///
+/// Returns Ok(()) if all validations pass, or a DbError::Validation with detailed error message.
+pub fn validate_stored_data(data: &StoredData) -> Result<(), DbError> {
+    let mut seen_media_ids = HashSet::new();
+    for media in &data.media {
+        if !seen_media_ids.insert(media.id) {
+            return Err(DbError::Validation(format!(
+                "Duplicate media ID: {}",
+                media.id
+            )));
+        }
+    }
+
+    let mut seen_character_ids = HashSet::new();
+    let mut seen_names = HashSet::new();
+    let mut seen_urls = HashSet::new();
+    for character in &data.characters {
+        if !seen_character_ids.insert(character.id) {
+            return Err(DbError::Validation(format!(
+                "Duplicate character ID: {}",
+                character.id
+            )));
+        }
+        if !seen_names.insert(&character.name) {
+            return Err(DbError::Validation(format!(
+                "Duplicate character name: {}",
+                character.name
+            )));
+        }
+        if !seen_urls.insert(&character.image_url) {
+            return Err(DbError::Validation(format!(
+                "Duplicate character image URL: {}",
+                character.image_url
+            )));
+        }
+    }
+
+    let mut seen_question_ids = HashSet::new();
+    for question in &data.questions {
+        if !seen_question_ids.insert(question.id) {
+            return Err(DbError::Validation(format!(
+                "Duplicate question ID: {}",
+                question.id
+            )));
+        }
+    }
+
+    let mut seen_option_ids = HashSet::new();
+    for option in &data.options {
+        if !seen_option_ids.insert(option.id) {
+            return Err(DbError::Validation(format!(
+                "Duplicate option ID: {}",
+                option.id
+            )));
+        }
+    }
+
+    let mut seen_set_ids = HashSet::new();
+    for set in &data.sets {
+        if !seen_set_ids.insert(set.id) {
+            return Err(DbError::Validation(format!("Duplicate set ID: {}", set.id)));
+        }
+    }
+
+    let character_names = seen_names;
+    let media_ids = seen_media_ids;
+    let question_ids = seen_question_ids;
+
+    // Create a HashSet of valid color names
+    let valid_colors: HashSet<String> = Color::all().iter().map(|c| c.to_string()).collect();
+
+    for question in &data.questions {
+        if !media_ids.contains(&question.media_id) {
+            return Err(DbError::Validation(format!(
+                "Question {} references non-existent media ID {}",
+                question.id, question.media_id
+            )));
+        }
+    }
+
+    for option in &data.options {
+        if !question_ids.contains(&option.question_id) {
+            return Err(DbError::Validation(format!(
+                "Option {} references non-existent question ID {}",
+                option.id, option.question_id
+            )));
+        }
+
+        // Get the question type for this option
+        let question_type = data
+            .questions
+            .iter()
+            .find(|q| q.id == option.question_id)
+            .map(|q| &q.question_type)
+            .ok_or_else(|| {
+                DbError::Validation(format!("Question not found for option {}", option.id))
+            })?;
+
+        match question_type {
+            QuestionType::Color => {
+                if !valid_colors.contains(&option.option_text) {
+                    return Err(DbError::Validation(format!(
+                        "Option {} references invalid color name '{}'",
+                        option.id, option.option_text
+                    )));
+                }
+            }
+            _ => {
+                if !character_names.contains(&option.option_text) {
+                    return Err(DbError::Validation(format!(
+                        "Option {} references non-existent character name '{}'",
+                        option.id, option.option_text
+                    )));
+                }
+            }
+        }
+    }
+
+    for set in &data.sets {
+        for &qid in &set.question_ids {
+            if !question_ids.contains(&qid) {
+                return Err(DbError::Validation(format!(
+                    "Set {} references non-existent question ID {}",
+                    set.id, qid
+                )));
+            }
+        }
+    }
+
+    Ok(())
+}
+
 pub struct QuestionDatabase {
     file_path: String,
 }
@@ -83,7 +222,9 @@ impl QuestionDatabase {
     pub fn read_stored_data(&self) -> Result<StoredData, DbError> {
         if Path::new(&self.file_path).exists() {
             let content = fs::read_to_string(&self.file_path)?;
-            Ok(serde_json::from_str(&content)?)
+            let json_content = serde_json::from_str(&content)?;
+            validate_stored_data(&json_content)?;
+            Ok(json_content)
         } else {
             Ok(StoredData {
                 media: Vec::new(),
@@ -97,6 +238,7 @@ impl QuestionDatabase {
 
     pub fn set_stored_data(&self, data: StoredData) -> Result<(), DbError> {
         let json = serde_json::to_string_pretty(&data)?;
+        validate_stored_data(&data)?;
         let mut path = self.file_path.clone();
         path.push_str("_from_web.json");
         fs::write(path, json)?;
@@ -105,6 +247,7 @@ impl QuestionDatabase {
 
     pub fn load_questions(&self) -> Result<(Vec<GameQuestion>, Vec<QuestionSet>), DbError> {
         let stored_data = self.read_stored_data()?;
+        validate_stored_data(&stored_data)?;
 
         let game_questions: Vec<GameQuestion> = stored_data
             .questions
@@ -180,136 +323,4 @@ impl QuestionDatabase {
 
         weights
     }
-
-    pub fn add_question(&self, new_question: QuestionInput) -> Result<(), DbError> {
-        let mut stored_data = self.read_stored_data()?;
-
-        let media_id = stored_data.media.iter().map(|m| m.id).max().unwrap_or(0) + 1;
-
-        let question_id = stored_data
-            .questions
-            .iter()
-            .map(|q| q.id)
-            .max()
-            .unwrap_or(0)
-            + 1;
-
-        let option_id = stored_data.options.iter().map(|o| o.id).max().unwrap_or(0) + 1;
-
-        let media = Media {
-            id: media_id,
-            title: new_question.title,
-            artist: new_question.artist,
-            release_year: new_question.release_year,
-            spotify_uri: new_question.spotify_uri,
-            youtube_id: new_question.youtube_id,
-        };
-
-        let question = Question {
-            id: question_id,
-            media_id,
-            question_type: new_question.question_type,
-            question_text: new_question.question_text,
-            image_url: new_question.image_url,
-            is_active: true,
-        };
-
-        // Generate IDs for options
-        let options: Vec<QuestionOption> = new_question
-            .options
-            .into_iter()
-            .enumerate()
-            .map(|(i, opt)| QuestionOption {
-                id: option_id + i as i64,
-                question_id,
-                option_text: opt.option_text,
-                is_correct: opt.is_correct,
-            })
-            .collect();
-
-        stored_data.media.push(media);
-        stored_data.questions.push(question);
-        stored_data.options.extend(options);
-
-        let json = serde_json::to_string_pretty(&stored_data)?;
-        fs::write(&self.file_path, json)?;
-
-        Ok(())
-    }
-
-    pub fn update_question(
-        &self,
-        question_id: i64,
-        update_data: QuestionInput,
-    ) -> Result<(), DbError> {
-        let mut stored_data = self.read_stored_data()?;
-
-        // Update question
-        if let Some(question) = stored_data
-            .questions
-            .iter_mut()
-            .find(|q| q.id == question_id)
-        {
-            question.question_type = update_data.question_type;
-            question.question_text = update_data.question_text;
-            question.image_url = update_data.image_url;
-        }
-
-        // Update media
-        if let Some(media) = stored_data
-            .media
-            .iter_mut()
-            .find(|m| m.id == update_data.media_id)
-        {
-            media.title = update_data.title;
-            media.artist = update_data.artist;
-            media.release_year = update_data.release_year;
-            media.spotify_uri = update_data.spotify_uri;
-            media.youtube_id = update_data.youtube_id;
-        }
-
-        // Update options
-        stored_data.options.retain(|o| o.question_id != question_id);
-        stored_data.options.extend(update_data.options);
-
-        let json = serde_json::to_string_pretty(&stored_data)?;
-        fs::write(&self.file_path, json)?;
-
-        Ok(())
-    }
-
-    pub fn remove_question(&self, question_id: i64) -> Result<(), DbError> {
-        let mut stored_data = self.read_stored_data()?;
-
-        if let Some(question) = stored_data
-            .questions
-            .iter_mut()
-            .find(|q| q.id == question_id)
-        {
-            question.is_active = false;
-
-            let json = serde_json::to_string_pretty(&stored_data)?;
-            fs::write(&self.file_path, json)?;
-
-            Ok(())
-        } else {
-            Err(DbError::NoQuestions)
-        }
-    }
-}
-
-// Helper struct for adding/updating questions
-#[derive(Debug)]
-pub struct QuestionInput {
-    pub question_id: i64,
-    pub media_id: i64,
-    pub question_type: QuestionType,
-    pub question_text: Option<String>,
-    pub image_url: Option<String>,
-    pub title: String,
-    pub artist: String,
-    pub release_year: Option<i32>,
-    pub spotify_uri: Option<String>,
-    pub youtube_id: String,
-    pub options: Vec<QuestionOption>,
 }
