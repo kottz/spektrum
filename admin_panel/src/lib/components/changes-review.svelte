@@ -92,8 +92,8 @@
 		{#if !adminStore.canUndo()}
 			<div class="text-gray-500">No changes made yet</div>
 		{:else}
-			<div class="relative space-y-2">
-				<div class="absolute left-2.5 top-3 h-[calc(100%-24px)] w-px bg-gray-200" />
+			<div class="relative space-y-2 pl-6">
+				<div class="absolute left-2.5 top-3 h-[calc(100%-24px)] w-px bg-gray-200"></div>
 
 				{#each adminStore.getSnapshots() as snapshot, index}
 					{@const isCurrentStep = index === adminStore.getSnapshotIndex()}
@@ -106,7 +106,7 @@
 								isCurrentStep ? 'bg-blue-500' : 'bg-gray-200',
 								isFutureStep && 'bg-gray-100'
 							)}
-						/>
+						></div>
 
 						<div class="flex-1">
 							<div
