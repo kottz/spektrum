@@ -245,9 +245,11 @@
 		adminStore.deleteEntity('questions', questionId);
 	}
 
-	function handleEditQuestion(question: Question) {
-		// TODO: Implement edit question functionality
-		console.log('Edit question:', question);
+	function toggleActiveQuestion(question: Question) {
+		adminStore.modifyEntity('questions', question.id, {
+			...question,
+			is_active: !question.is_active
+		});
 	}
 </script>
 
@@ -575,28 +577,28 @@
 								{/if}
 							</Table.Cell>
 							<Table.Cell>
-								<span
-									class={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
-										question.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+								<button
+									class={`inline-flex w-16 justify-center rounded-full border px-2 py-1 text-xs font-semibold ${
+										question.is_active
+											? 'border-green-300 bg-green-100 text-green-800'
+											: 'border-red-300 bg-red-100 text-red-800'
+									} hover:opacity-90 focus:ring-2 focus:ring-offset-1 ${
+										question.is_active ? 'focus:ring-green-400' : 'focus:ring-red-400'
 									}`}
+									onclick={() => toggleActiveQuestion(question)}
 								>
 									{question.is_active ? 'Active' : 'Inactive'}
-								</span>
+								</button>
 							</Table.Cell>
 							<Table.Cell class="text-right">
-								<div class="flex justify-end gap-2">
-									<Button variant="outline" size="sm" on:click={() => handleEditQuestion(question)}>
-										Edit
-									</Button>
-									<Button
-										variant="outline"
-										size="sm"
-										class="text-red-600 hover:bg-red-50"
-										on:click={() => handleDeleteQuestion(question.id)}
-									>
-										Delete
-									</Button>
-								</div>
+								<Button
+									variant="outline"
+									size="sm"
+									class="text-red-600 hover:bg-red-50"
+									on:click={() => handleDeleteQuestion(question.id)}
+								>
+									Delete
+								</Button>
 							</Table.Cell>
 						</Table.Row>
 					{/each}
