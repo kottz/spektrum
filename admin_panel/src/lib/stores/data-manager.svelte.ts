@@ -131,30 +131,26 @@ function createAdminStore() {
 		modifyEntity: (
 			entityType: keyof StoredData,
 			id: number,
-			changes:
-				| Partial<Media>
-				| Partial<Question>
-				| Partial<QuestionOption>
-				| Partial<QuestionSet>
+			changes: Partial<Media> | Partial<Question> | Partial<QuestionOption> | Partial<QuestionSet>
 		) => {
 			switch (entityType) {
 				case 'media':
-					state.media = state.media.map(item =>
+					state.media = state.media.map((item) =>
 						item.id === id ? { ...item, ...(changes as Partial<Media>) } : item
 					);
 					break;
 				case 'questions':
-					state.questions = state.questions.map(item =>
+					state.questions = state.questions.map((item) =>
 						item.id === id ? { ...item, ...(changes as Partial<Question>) } : item
 					);
 					break;
 				case 'options':
-					state.options = state.options.map(item =>
+					state.options = state.options.map((item) =>
 						item.id === id ? { ...item, ...(changes as Partial<QuestionOption>) } : item
 					);
 					break;
 				case 'sets':
-					state.sets = state.sets.map(item =>
+					state.sets = state.sets.map((item) =>
 						item.id === id ? { ...item, ...(changes as Partial<QuestionSet>) } : item
 					);
 					break;
@@ -170,56 +166,50 @@ function createAdminStore() {
 			switch (entityType) {
 				case 'media': {
 					// Get all questions for this media
-					const mediaQuestions = state.questions.filter(q => q.media_id === id);
-					const questionIds = mediaQuestions.map(q => q.id);
+					const mediaQuestions = state.questions.filter((q) => q.media_id === id);
+					const questionIds = mediaQuestions.map((q) => q.id);
 
 					// Delete all options for those questions
-					state.options = state.options.filter(o =>
-						!questionIds.includes(o.question_id)
-					);
+					state.options = state.options.filter((o) => !questionIds.includes(o.question_id));
 
 					// Delete the questions
-					state.questions = state.questions.filter(q => q.media_id !== id);
+					state.questions = state.questions.filter((q) => q.media_id !== id);
 
 					// Remove question references from sets
-					state.sets = state.sets.map(s => ({
+					state.sets = state.sets.map((s) => ({
 						...s,
-						question_ids: s.question_ids.filter(qid =>
-							!questionIds.includes(qid)
-						)
+						question_ids: s.question_ids.filter((qid) => !questionIds.includes(qid))
 					}));
 
 					// Delete the media
-					state.media = state.media.filter(m => m.id !== id);
+					state.media = state.media.filter((m) => m.id !== id);
 					break;
 				}
 
 				case 'questions': {
 					// Delete all options for this question
-					state.options = state.options.filter(o =>
-						o.question_id !== id
-					);
+					state.options = state.options.filter((o) => o.question_id !== id);
 
 					// Remove from any sets
-					state.sets = state.sets.map(s => ({
+					state.sets = state.sets.map((s) => ({
 						...s,
-						question_ids: s.question_ids.filter(qid => qid !== id)
+						question_ids: s.question_ids.filter((qid) => qid !== id)
 					}));
 
 					// Delete the question
-					state.questions = state.questions.filter(q => q.id !== id);
+					state.questions = state.questions.filter((q) => q.id !== id);
 					break;
 				}
 
 				case 'sets': {
 					// Just delete the set (no cascading needed)
-					state.sets = state.sets.filter(s => s.id !== id);
+					state.sets = state.sets.filter((s) => s.id !== id);
 					break;
 				}
 
 				case 'options': {
 					// Simple delete
-					state.options = state.options.filter(o => o.id !== id);
+					state.options = state.options.filter((o) => o.id !== id);
 					break;
 				}
 			}

@@ -3,7 +3,7 @@
 </script>
 
 <div class="h-screen">
-	<main> 
+	<main>
 		<AdminEditor />
 	</main>
 </div>
