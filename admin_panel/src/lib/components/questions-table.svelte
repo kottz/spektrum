@@ -267,17 +267,7 @@
 				Toggle Character Bank
 			</Button>
 		</div>
-		<div class="flex gap-2">
-			<Button on:click={handleAddQuestion}>Add Question</Button>
-			<div class="flex gap-2">
-				<Button variant="outline" disabled={!adminStore.canUndo} on:click={() => adminStore.undo()}>
-					Undo
-				</Button>
-				<Button variant="outline" disabled={!adminStore.canRedo} on:click={() => adminStore.redo()}>
-					Redo
-				</Button>
-			</div>
-		</div>
+		<Button on:click={handleAddQuestion}>Add Question</Button>
 	</div>
 
 	<div class="rounded-md border">
