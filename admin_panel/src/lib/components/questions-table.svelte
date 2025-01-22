@@ -505,13 +505,16 @@
 									ondrop={(e) => handleDrop(e, question.id)}
 								>
 									{#each getQuestionOptions(question.id) as option}
+										{@const character = adminStore
+											.getState()
+											.characters.find((c: Character) => c.name === option.option_text)}
 										<div class="group relative">
 											<div
 												class="flex cursor-pointer flex-col items-center"
 												onclick={() => toggleCorrectOption(option)}
 											>
 												<img
-													src={`/img/${option.option_text}.avif`}
+													src={character ? character.image_url : `/img/${option.option_text}.avif`}
 													alt={option.option_text}
 													class="h-12 w-12 rounded transition-transform hover:scale-105"
 													class:ring-2={option.is_correct}

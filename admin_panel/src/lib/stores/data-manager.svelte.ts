@@ -77,6 +77,7 @@ function createAdminStore() {
 	return {
 		setData: (data: StoredData) => {
 			state.media = data.media;
+			state.characters = data.characters;
 			state.questions = data.questions;
 			state.options = data.options;
 			state.sets = data.sets;
