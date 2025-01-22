@@ -32,7 +32,8 @@
 			image_url: null,
 			is_active: true
 		},
-		tempOptions: [] as QuestionOption[]
+		tempOptions: [] as QuestionOption[],
+		tempOptionCounter: -1
 	});
 
 	const mediaById = $derived(new Map(adminStore.getState().media.map((m) => [m.id, m])));
@@ -99,14 +100,23 @@
 		const charName = event.dataTransfer?.getData('text/plain');
 		if (!charName) return;
 
-		const newOption: QuestionOption = {
-			id: Math.max(0, ...adminStore.getState().options.map((o: QuestionOption) => o.id)) + 1,
-			question_id: questionId,
-			option_text: charName,
-			is_correct: false
-		};
-
-		adminStore.addEntity('options', newOption);
+		if (state.isAddingQuestion && questionId === state.newQuestionData.id) {
+			const newOption: QuestionOption = {
+				id: state.tempOptionCounter--,
+				question_id: questionId,
+				option_text: charName,
+				is_correct: false
+			};
+			state.tempOptions = [...state.tempOptions, newOption];
+		} else {
+			const newOption: QuestionOption = {
+				id: Math.max(0, ...adminStore.getState().options.map((o) => o.id)) + 1,
+				question_id: questionId,
+				option_text: charName,
+				is_correct: false
+			};
+			adminStore.addEntity('options', newOption);
+		}
 	}
 
 	function removeOption(_questionId: number, optionId: number) {
@@ -226,6 +236,8 @@
 			image_url: null,
 			is_active: true
 		};
+		state.tempOptions = [];
+		state.tempOptionCounter = -1;
 	}
 
 	function handleDeleteQuestion(questionId: number) {
@@ -431,14 +443,19 @@
 									ondragover={(e) => e.preventDefault()}
 									ondrop={(e) => handleDrop(e, state.newQuestionData.id)}
 								>
-									{#each getQuestionOptions(state.newQuestionData.id) as option}
+									{#each state.tempOptions as option (option.id)}
+										<!-- Key by unique ID -->
 										{@const character = adminStore
 											.getState()
 											.characters.find((c: Character) => c.name === option.option_text)}
 										<div class="group relative">
 											<div
 												class="flex cursor-pointer flex-col items-center"
-												onclick={() => toggleCorrectOption(option)}
+												onclick={() => {
+													state.tempOptions = state.tempOptions.map((opt) =>
+														opt.id === option.id ? { ...opt, is_correct: !opt.is_correct } : opt
+													);
+												}}
 											>
 												<img
 													src={character ? character.image_url : `/img/${option.option_text}.avif`}
@@ -453,7 +470,11 @@
 											</div>
 											<button
 												class="absolute -right-2 -top-2 hidden h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white group-hover:flex"
-												onclick={() => removeOption(state.newQuestionData.id, option.id)}
+												onclick={() => {
+													state.tempOptions = state.tempOptions.filter(
+														(opt) => opt.id !== option.id
+													);
+												}}
 											>
 												×
 											</button>
