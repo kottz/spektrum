@@ -66,13 +66,17 @@
 		</div>
 		<!-- Scrollable content -->
 		<div class="h-[calc(100%-7rem)] overflow-y-auto p-4">
-			<div class="grid grid-cols-4 gap-4">
+			<div class="grid grid-cols-4 gap-4" role="listbox" aria-label="Available characters">
 				{#each filteredCharacters() as char}
 					<div
 						class="cursor-grab transition-transform hover:scale-105"
 						draggable="true"
-						on:dragstart={(e) => handleDragStart(e, char)}
-						on:dragend={handleDragEnd}
+						role="option"
+						tabindex="0"
+						aria-selected="false"
+						aria-label={`Drag ${char} character`}
+						ondragstart={(e) => handleDragStart(e, char)}
+						ondragend={handleDragEnd}
 					>
 						<img src={`/img/${char}.avif`} alt={char} class="w-full rounded-lg" />
 						<div class="mt-1 truncate text-center text-sm" title={char}>
