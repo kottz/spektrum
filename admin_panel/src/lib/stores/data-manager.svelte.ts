@@ -17,8 +17,13 @@ interface AdminState {
 	error: string | null;
 }
 
+interface HistoryItem {
+	state: AdminState;
+	message: string;
+}
+
 interface AdminStoreState extends AdminState {
-	snapshots: AdminState[];
+	snapshots: HistoryItem[];
 	currentIndex: number;
 	maxSnapshots: number;
 	isBatching: boolean;
@@ -40,12 +45,12 @@ function createAdminStore() {
 		...initialState,
 		snapshots: [],
 		currentIndex: -1,
-		maxSnapshots: 50,
+		maxSnapshots: 100,
 		isBatching: false,
 		preBatchState: null
 	});
 
-	function takeSnapshot() {
+	function takeSnapshot(message: string) {
 		if (state.isBatching) return;
 
 		// Truncate forward history if we're not at the end
@@ -54,14 +59,17 @@ function createAdminStore() {
 		}
 
 		// Create new snapshot with raw values
-		const snapshot: AdminState = {
-			media: [...state.media],
-			characters: [...state.characters],
-			questions: [...state.questions],
-			options: [...state.options],
-			sets: [...state.sets],
-			isLoading: state.isLoading,
-			error: state.error
+		const snapshot: HistoryItem = {
+			state: {
+				media: [...state.media],
+				characters: [...state.characters],
+				questions: [...state.questions],
+				options: [...state.options],
+				sets: [...state.sets],
+				isLoading: state.isLoading,
+				error: state.error
+			},
+			message
 		};
 
 		state.snapshots = [...state.snapshots, snapshot];
@@ -81,7 +89,7 @@ function createAdminStore() {
 			state.questions = data.questions;
 			state.options = data.options;
 			state.sets = data.sets;
-			takeSnapshot();
+			takeSnapshot('Initial state');
 		},
 
 		setLoading: (loading: boolean) => {
@@ -115,7 +123,7 @@ function createAdminStore() {
 				return;
 			}
 			state.isBatching = false;
-			takeSnapshot();
+			takeSnapshot('Committed batch operation');
 			state.preBatchState = null;
 		},
 
@@ -126,6 +134,7 @@ function createAdminStore() {
 			}
 			const pb = state.preBatchState!;
 			state.media = [...pb.media];
+			state.characters = [...pb.characters];
 			state.questions = [...pb.questions];
 			state.options = [...pb.options];
 			state.sets = [...pb.sets];
@@ -137,19 +146,24 @@ function createAdminStore() {
 
 		addEntity: (entityType: keyof StoredData, entity: any) => {
 			state[entityType] = [...state[entityType], entity];
-			takeSnapshot();
+			takeSnapshot(`Added ${entityType} ${entity.id}`);
 		},
 
 		modifyEntity: (
 			entityType: keyof StoredData,
 			id: number,
-			changes:
-				| Partial<Media>
-				| Partial<Character>
-				| Partial<Question>
-				| Partial<QuestionOption>
-				| Partial<QuestionSet>
+			changes: Partial<Media | Character | Question | QuestionOption | QuestionSet>
 		) => {
+			// Create a descriptive message based on the changes
+			let message = `Modified ${entityType} ${id}`;
+			if ('title' in changes) {
+				message = `Changed ${entityType} title to "${changes.title}" (ID: ${id})`;
+			} else if ('name' in changes) {
+				message = `Changed ${entityType} name to "${changes.name}" (ID: ${id})`;
+			} else if ('question_text' in changes) {
+				message = `Modified question text (ID: ${id})`;
+			}
+
 			switch (entityType) {
 				case 'media':
 					state.media = state.media.map((item) =>
@@ -177,75 +191,82 @@ function createAdminStore() {
 					);
 					break;
 			}
-			takeSnapshot();
+			takeSnapshot(message);
 		},
 
-		// Delete cascade rules:
-		// - Delete Media → Delete all its Questions → Delete their Options
-		// - Delete Character → Delete all Options using its name
-		// - Delete Question → Delete all its Options
-		// - Delete Set → Remove from Set-Question relationships
 		deleteEntity: (entityType: keyof StoredData, id: number) => {
+			let message = `Deleted ${entityType} ${id}`;
+			let additionalInfo = '';
+
 			switch (entityType) {
 				case 'media': {
-					// Get all questions for this media
+					const mediaTitle = state.media.find((m) => m.id === id)?.title;
 					const mediaQuestions = state.questions.filter((q) => q.media_id === id);
 					const questionIds = mediaQuestions.map((q) => q.id);
-					// Delete all options for those questions
+					const optionCount = state.options.filter((o) =>
+						questionIds.includes(o.question_id)
+					).length;
+
+					additionalInfo = ` (${mediaTitle}) with ${mediaQuestions.length} questions and ${optionCount} options`;
+
 					state.options = state.options.filter((o) => !questionIds.includes(o.question_id));
-					// Delete the questions
 					state.questions = state.questions.filter((q) => q.media_id !== id);
-					// Remove question references from sets
 					state.sets = state.sets.map((s) => ({
 						...s,
 						question_ids: s.question_ids.filter((qid) => !questionIds.includes(qid))
 					}));
-					// Delete the media
 					state.media = state.media.filter((m) => m.id !== id);
 					break;
 				}
 				case 'characters': {
-					// Get the character name before deleting
 					const character = state.characters.find((c) => c.id === id);
 					if (character) {
-						// Delete all options that use this character's name
+						const optionCount = state.options.filter(
+							(o) => o.option_text === character.name
+						).length;
+						additionalInfo = ` (${character.name}) affecting ${optionCount} options`;
 						state.options = state.options.filter((o) => o.option_text !== character.name);
 					}
-					// Delete the character
 					state.characters = state.characters.filter((c) => c.id !== id);
 					break;
 				}
 				case 'questions': {
-					// Delete all options for this question
+					const questionText = state.questions.find((q) => q.id === id)?.question_text;
+					const optionCount = state.options.filter((o) => o.question_id === id).length;
+					additionalInfo = questionText
+						? ` ("${questionText}") with ${optionCount} options`
+						: ` with ${optionCount} options`;
+
 					state.options = state.options.filter((o) => o.question_id !== id);
-					// Remove from any sets
 					state.sets = state.sets.map((s) => ({
 						...s,
 						question_ids: s.question_ids.filter((qid) => qid !== id)
 					}));
-					// Delete the question
 					state.questions = state.questions.filter((q) => q.id !== id);
 					break;
 				}
 				case 'sets': {
-					// Just delete the set (no cascading needed)
+					const setName = state.sets.find((s) => s.id === id)?.name;
+					additionalInfo = setName ? ` (${setName})` : '';
 					state.sets = state.sets.filter((s) => s.id !== id);
 					break;
 				}
 				case 'options': {
-					// Simple delete
+					const option = state.options.find((o) => o.id === id);
+					additionalInfo = option ? ` ("${option.option_text}")` : '';
 					state.options = state.options.filter((o) => o.id !== id);
 					break;
 				}
 			}
-			takeSnapshot();
+			takeSnapshot(message + additionalInfo);
 		},
 
 		undo: () => {
 			if (state.currentIndex > 0) {
 				state.currentIndex--;
-				const snapshot = state.snapshots[state.currentIndex];
+				const snapshot = state.snapshots[state.currentIndex].state;
 				state.media = snapshot.media;
+				state.characters = snapshot.characters;
 				state.questions = snapshot.questions;
 				state.options = snapshot.options;
 				state.sets = snapshot.sets;
@@ -255,8 +276,9 @@ function createAdminStore() {
 		redo: () => {
 			if (state.currentIndex < state.snapshots.length - 1) {
 				state.currentIndex++;
-				const snapshot = state.snapshots[state.currentIndex];
+				const snapshot = state.snapshots[state.currentIndex].state;
 				state.media = snapshot.media;
+				state.characters = snapshot.characters;
 				state.questions = snapshot.questions;
 				state.options = snapshot.options;
 				state.sets = snapshot.sets;
@@ -267,9 +289,13 @@ function createAdminStore() {
 		canRedo: () => state.currentIndex < state.snapshots.length - 1,
 
 		reset: () => {
-			Object.assign(state, initialState);
-			state.snapshots = [];
-			state.currentIndex = -1;
+			Object.assign(state, {
+				...initialState,
+				snapshots: [],
+				currentIndex: -1,
+				isBatching: false,
+				preBatchState: null
+			});
 		},
 
 		getState: () => ({
