@@ -50,6 +50,14 @@ function createAdminStore() {
 		preBatchState: null
 	});
 
+	const imageStore = new Map<
+		/* characterName */ string,
+		{
+			file: File;
+			previewUrl: string;
+		}
+	>();
+
 	function takeSnapshot(message: string) {
 		if (state.isBatching) return;
 
@@ -260,6 +268,25 @@ function createAdminStore() {
 			}
 			takeSnapshot(message + additionalInfo);
 		},
+
+		addPendingCharacter: (name: string, file: File) => {
+			if (state.characters.some((c) => c.name === name)) {
+				throw new Error(`Character ${name} already exists`);
+			}
+
+			imageStore.set(name, {
+				file,
+				previewUrl: URL.createObjectURL(file)
+			});
+		},
+
+		getCharacterImage: (name: string) => {
+			return (
+				imageStore.get(name)?.previewUrl || state.characters.find((c) => c.name === name)?.image_url
+			);
+		},
+
+		getImageStore: () => imageStore,
 
 		undo: () => {
 			if (state.currentIndex > 0) {
