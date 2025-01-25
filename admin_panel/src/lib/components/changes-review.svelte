@@ -11,7 +11,6 @@
 	import { Input } from '$lib/components/ui/input';
 	import { adminStore } from '$lib/stores/data-manager.svelte';
 	import { AlertCircle, Undo2, Redo2 } from 'lucide-svelte';
-	import { PUBLIC_DEV_ADMIN_PASSWORD } from '$env/static/public';
 	import { cn } from '$lib/utils';
 
 	const state = $state({
@@ -36,7 +35,7 @@
 					'Content-Type': 'application/json'
 				},
 				body: JSON.stringify({
-					password: PUBLIC_DEV_ADMIN_PASSWORD,
+					password: state.password,
 					stored_data: adminStore.getState()
 				})
 			});
@@ -45,6 +44,7 @@
 				throw new Error(`HTTP error! status: ${response.status}`);
 			}
 
+			adminStore.reset();
 			adminStore.setData(await response.json());
 			state.password = '';
 		} catch (e) {
