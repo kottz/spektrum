@@ -1,8 +1,13 @@
 use crate::question::{Color, GameQuestion, GameQuestionOption, QuestionType, COLOR_WEIGHTS};
+use chrono::Utc;
+use flate2::write::GzEncoder;
+use flate2::Compression;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::path::Path;
+use std::fs::File;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use thiserror::Error;
 use tracing::info;
 
@@ -239,11 +244,47 @@ impl QuestionDatabase {
     }
 
     pub fn set_stored_data(&self, data: StoredData) -> Result<(), DbError> {
-        let json = serde_json::to_string_pretty(&data)?;
+        let json = serde_json::to_string(&data)?;
         data.validate_stored_data()?;
-        let mut path = self.file_path.clone();
-        path.push_str("_from_web.json");
-        fs::write(path, json)?;
+        fs::write(self.file_path.clone(), json)?;
+        Ok(())
+    }
+
+    pub fn backup_stored_data(&self) -> Result<(), DbError> {
+        let stored_data = self.read_stored_data()?;
+        let json = serde_json::to_string_pretty(&stored_data)?;
+
+        let original_path = Path::new(&self.file_path);
+
+        let backup_dir = original_path
+            .parent()
+            .map(|p| p.join("question_backup"))
+            .unwrap_or_else(|| PathBuf::from("question_backup"));
+
+        // Create backup directory if it doesn't exist
+        fs::create_dir_all(&backup_dir)?;
+
+        let file_stem = original_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .ok_or_else(|| {
+                DbError::Io(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "Could not extract filename stem",
+                ))
+            })?;
+
+        let now = Utc::now();
+        let timestamp = now.format("%y%m%d_%H%M%S").to_string();
+
+        let filename = format!("{}.{}.json.gz", file_stem, timestamp);
+        let full_path = backup_dir.join(filename);
+
+        let file = File::create(&full_path)?;
+        let mut encoder = GzEncoder::new(file, Compression::default());
+        encoder.write_all(json.as_bytes())?;
+        encoder.finish()?;
+
         Ok(())
     }
 

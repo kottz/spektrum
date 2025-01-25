@@ -699,7 +699,6 @@ impl GameEngine {
         self.state.correct_answers = Some(next_question.get_correct_answer());
 
         if let Some(alts) = specified_alternatives {
-            println!("Using specified alternatives: {:?}", alts);
             self.state.current_alternatives = alts;
         } else {
             self.state.current_alternatives = next_question.generate_round_alternatives();
