@@ -7,8 +7,9 @@
 	import { adminStore } from '$lib/stores/data-manager.svelte';
 	import { onMount } from 'svelte';
 	import ChangesReview from './changes-review.svelte';
+	import CharacterBank from './character-bank.svelte';
 
-	type TabType = 'media' | 'questions' | 'sets';
+	type TabType = 'media' | 'characters' | 'questions' | 'sets';
 	const state = $state({
 		activeTab: 'media' as TabType
 	});
@@ -60,6 +61,8 @@
 			<div class="h-full overflow-auto p-6">
 				{#if state.activeTab === 'media'}
 					<MediaTable />
+				{:else if state.activeTab === 'characters'}
+					<CharacterBank />
 				{:else if state.activeTab === 'questions'}
 					<QuestionsTable />
 				{:else if state.activeTab === 'sets'}

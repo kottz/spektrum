@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
 
-	type TabType = 'media' | 'questions' | 'sets';
+	type TabType = 'media' | 'characters' | 'questions' | 'sets';
 
 	interface Props {
 		activeTab: TabType;
@@ -10,6 +10,7 @@
 
 	const tabs = [
 		{ id: 'media' as const, label: 'Media', symbol: '📊' },
+		{ id: 'characters' as const, label: 'Characters', symbol: '🧙' },
 		{ id: 'questions' as const, label: 'Questions', symbol: '❓' },
 		{ id: 'sets' as const, label: 'Sets', symbol: '📁' }
 	];
