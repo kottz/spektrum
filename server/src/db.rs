@@ -277,7 +277,7 @@ impl QuestionDatabase {
         let now = Utc::now();
         let timestamp = now.format("%y%m%d_%H%M%S").to_string();
 
-        let filename = format!("{}.{}.json.gz", file_stem, timestamp);
+        let filename = format!("{}_{}.json.gz", file_stem, timestamp);
         let full_path = backup_dir.join(filename);
 
         let file = File::create(&full_path)?;
