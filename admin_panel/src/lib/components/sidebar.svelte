@@ -18,7 +18,7 @@
 	let { activeTab, onTabChange } = $props<Props>();
 </script>
 
-<aside class="w-64 border-r bg-gray-50">
+<aside class="w-48 border-r bg-gray-50">
 	<nav class="flex h-full flex-col p-4">
 		<div class="mb-6 text-xl font-bold">Admin Panel</div>
 		<div class="space-y-2">

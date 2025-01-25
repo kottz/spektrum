@@ -54,7 +54,12 @@
 	<div class="flex-none border-b p-4">
 		<div class="mb-4 flex items-center justify-between">
 			<h2 class="w-48 text-lg font-semibold">Character Bank</h2>
-			<Input type="text" placeholder="Search characters..." bind:value={state.searchTerm} />
+			<Input
+				class="mr-4"
+				type="text"
+				placeholder="Search characters..."
+				bind:value={state.searchTerm}
+			/>
 			<UploadDialog />
 		</div>
 	</div>
