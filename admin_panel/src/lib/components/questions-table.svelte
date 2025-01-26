@@ -575,11 +575,13 @@
 											{/each}
 										</div>
 									{:else}
-										<div class="flex flex-col gap-1">
-											{#each getQuestionOptions(question.id) as option}
-												<div class:text-green-600={option.is_correct}>
-													{option.option_text}
-												</div>
+										<div>
+											{#each getQuestionOptions(question.id) as option, i}
+												<span class:text-green-600={option.is_correct}>
+													{option.option_text}{i < getQuestionOptions(question.id).length - 1
+														? ', '
+														: ''}
+												</span>
 											{/each}
 										</div>
 									{/if}
