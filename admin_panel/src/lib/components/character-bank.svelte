@@ -11,28 +11,18 @@
 	});
 
 	const store = $derived(adminStore.getState());
+
 	const filteredCharacters = $derived(() => {
 		const searchLower = state.searchTerm.toLowerCase();
 
-		// Get pending uploads from imageStore
-		const imageStoreMap = adminStore.getImageStore();
-		const pendingChars = Array.from(imageStoreMap.entries()).map(([name, data]) => ({
-			id: `pending-${name}`,
-			name,
-			image_url: data.previewUrl,
-			isPending: true
-		}));
-
-		// Get existing characters
-		const existingChars = store.characters.map((char) => ({
-			...char,
-			isPending: false
-		}));
-
-		// Combine and filter
-		return [...pendingChars, ...existingChars].filter((char) =>
-			char.name.toLowerCase().includes(searchLower)
-		);
+		return store.characters
+			.map((char) => ({
+				...char,
+				// Use pending image if available
+				image_url: char._pendingImage?.dataUrl || char.image_url,
+				isPending: !!char._pendingImage
+			}))
+			.filter((char) => char.name.toLowerCase().includes(searchLower));
 	});
 
 	function handleDragStart(e: DragEvent, char: string) {
@@ -79,12 +69,15 @@
 					ondragend={handleDragEnd}
 				>
 					{#if char.image_url?.endsWith('.webm')}
-						<video src={char.image_url} class="w-full rounded-lg" autoplay loop muted> </video>
+						<video src={char.image_url} class="w-full rounded-lg" autoplay loop muted />
 					{:else}
-						<img src={char.image_url} alt={char.name} class="w-full rounded-lg" />
+						<img src={char.image_url} alt={char.name} class="w-full rounded-lg" loading="lazy" />
 					{/if}
 					<div class="mt-1 truncate text-center text-sm" title={char.name}>
 						{char.name}
+						{#if char.isPending}
+							<span class="ml-1 text-xs text-gray-500">(pending)</span>
+						{/if}
 					</div>
 				</div>
 			{/each}

@@ -34,6 +34,11 @@ export interface Character {
 	id: number;
 	name: string;
 	image_url: string;
+	/** Client-only field for pending uploads */
+	_pendingImage?: {
+		dataUrl: string;
+		file: File;
+	};
 }
 
 export interface Question {

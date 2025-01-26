@@ -467,9 +467,9 @@
 														}}
 													>
 														<img
-															src={character
-																? character.image_url
-																: `/img/${option.option_text}.avif`}
+															src={character?._pendingImage?.dataUrl || // First check for pending image
+																character?.image_url || // Then check regular image URL
+																`/img/${option.option_text}.avif`}
 															alt={option.option_text}
 															class="h-12 w-12 rounded transition-transform hover:scale-105"
 															class:ring-2={option.is_correct}
@@ -546,9 +546,9 @@
 														onclick={() => toggleCorrectOption(option)}
 													>
 														<img
-															src={character
-																? character.image_url
-																: `/img/${option.option_text}.avif`}
+															src={character?._pendingImage?.dataUrl || // First check for pending image
+																character?.image_url || // Then check regular image URL
+																`/img/${option.option_text}.avif`}
 															alt={option.option_text}
 															class="h-12 w-12 rounded transition-transform hover:scale-105"
 															class:ring-2={option.is_correct}

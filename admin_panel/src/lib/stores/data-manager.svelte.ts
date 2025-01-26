@@ -59,6 +59,21 @@ function createAdminStore() {
 	>();
 
 	function takeSnapshot(message: string) {
+		// handle pending images
+		function cloneCharacter(c: Character): Character {
+			return {
+				...c,
+				_pendingImage: c._pendingImage
+					? {
+							dataUrl: c._pendingImage.dataUrl,
+							file: new File([c._pendingImage.file], c._pendingImage.file.name, {
+								type: c._pendingImage.file.type,
+								lastModified: c._pendingImage.file.lastModified
+							})
+						}
+					: undefined
+			};
+		}
 		if (state.isBatching) return;
 
 		// Truncate forward history if we're not at the end
@@ -70,7 +85,7 @@ function createAdminStore() {
 		const snapshot: HistoryItem = {
 			state: {
 				media: [...state.media],
-				characters: [...state.characters],
+				characters: state.characters.map(cloneCharacter),
 				questions: [...state.questions],
 				options: [...state.options],
 				sets: [...state.sets],
@@ -269,24 +284,54 @@ function createAdminStore() {
 			takeSnapshot(message + additionalInfo);
 		},
 
-		addPendingCharacter: (name: string, file: File) => {
-			if (state.characters.some((c) => c.name === name)) {
-				throw new Error(`Character ${name} already exists`);
+		addPendingCharacter: async (name: string, file: File) => {
+			const dataUrl = await new Promise<string>((resolve) => {
+				const reader = new FileReader();
+				reader.onload = () => resolve(reader.result as string);
+				reader.readAsDataURL(file);
+			});
+
+			const existingIndex = state.characters.findIndex((c) => c.name === name);
+
+			if (existingIndex > -1) {
+				// Update existing character with pending image
+				state.characters = state.characters.map((c, i) =>
+					i === existingIndex
+						? {
+								...c,
+								_pendingImage: { dataUrl, file }
+							}
+						: c
+				);
+			} else {
+				// Add new pending character
+				const newChar: Character = {
+					id: -Date.now(), // Temporary negative ID
+					name,
+					image_url: '', // Will be populated after server upload
+					_pendingImage: { dataUrl, file }
+				};
+				state.characters = [...state.characters, newChar];
 			}
 
-			imageStore.set(name, {
-				file,
-				previewUrl: URL.createObjectURL(file)
-			});
+			takeSnapshot(`Added pending character: ${name}`);
 		},
 
 		getCharacterImage: (name: string) => {
-			return (
-				imageStore.get(name)?.previewUrl || state.characters.find((c) => c.name === name)?.image_url
-			);
+			const char = state.characters.find((c) => c.name === name);
+			return char?._pendingImage?.dataUrl || char?.image_url;
 		},
 
-		getImageStore: () => imageStore,
+		finalizeCharacterUpload: (name: string, imageUrl: string) => {
+			state.characters = state.characters.map((c) => {
+				if (c.name === name) {
+					const { _pendingImage, ...rest } = c;
+					return { ...rest, image_url: imageUrl };
+				}
+				return c;
+			});
+			takeSnapshot(`Finalized character upload: ${name}`);
+		},
 
 		undo: () => {
 			if (state.currentIndex > 0) {
