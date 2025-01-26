@@ -52,6 +52,8 @@ enum StorageConfig {
         region: String,
         prefix: String,
         file_path: String,
+        access_key_id: String,
+        secret_access_key: String,
     },
 }
 

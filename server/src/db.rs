@@ -1,6 +1,8 @@
 use crate::question::{Color, GameQuestion, GameQuestionOption, QuestionType, COLOR_WEIGHTS};
 use crate::StorageConfig;
-use aws_sdk_s3::config::Region;
+use aws_sdk_s3::config::{
+    Credentials, Region, RequestChecksumCalculation, ResponseChecksumValidation,
+};
 use aws_sdk_s3::error::SdkError;
 use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::Client;
@@ -12,7 +14,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
-use tracing::info;
+use tracing::{info, warn};
 
 #[derive(Error, Debug)]
 pub(crate) enum DbError {
@@ -324,8 +326,8 @@ pub struct S3Backend {
 
 impl S3Backend {
     async fn read_file(&self, path: &str) -> Result<String, DbError> {
+        info!("Reading from S3: {}/{}", self.prefix, path);
         let key = format!("{}/{}", self.prefix, path);
-
         match self
             .client
             .get_object()
@@ -345,6 +347,7 @@ impl S3Backend {
             }
             Err(err) => {
                 if let SdkError::ServiceError(service_err) = &err {
+                    warn!("S3 error details: {:?}", err);
                     if service_err.err().is_no_such_key() {
                         return Ok(String::new());
                     }
@@ -355,9 +358,11 @@ impl S3Backend {
     }
 
     async fn write_file(&self, path: &str, data: &[u8]) -> Result<(), DbError> {
+        info!("Writing to S3: {}/{}", self.prefix, path);
         let key = format!("{}/{}", self.prefix, path);
 
-        self.client
+        match self
+            .client
             .put_object()
             .bucket(&self.bucket)
             .key(&key)
@@ -365,17 +370,21 @@ impl S3Backend {
             .content_type("image/avif")
             .send()
             .await
-            .map_err(|e| DbError::S3(e.to_string()))?;
-
-        Ok(())
+        {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                warn!("S3 error details: {:?}", err);
+                Err(DbError::S3(err.to_string()))
+            }
+        }
     }
 
     async fn create_backup(&self, content: &str, file_stem: &str) -> Result<(), DbError> {
         let now = Utc::now();
         let timestamp = now.format("%y%m%d_%H%M%S").to_string();
         let key = format!("{}/backup/{}_{}.json.gz", self.prefix, file_stem, timestamp);
+        info!("Create backup S3: {}", key);
 
-        // Compress the content
         let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
         encoder.write_all(content.as_bytes())?;
         let compressed = encoder.finish()?;
@@ -389,7 +398,6 @@ impl S3Backend {
             .send()
             .await
             .unwrap();
-        //.map_err(DbError::S3)?;
 
         Ok(())
     }
@@ -421,12 +429,26 @@ impl QuestionDatabase {
                 region,
                 prefix,
                 file_path,
+                access_key_id,
+                secret_access_key,
             } => {
                 let config = aws_sdk_s3::Config::builder()
                     .region(Region::new(region.clone()))
                     .endpoint_url(format!("https://s3.{}.backblazeb2.com", region))
+                    .force_path_style(true)
+                    .behavior_version(aws_sdk_s3::config::BehaviorVersion::latest())
+                    .use_fips(false)
+                    .use_dual_stack(false)
+                    .request_checksum_calculation(RequestChecksumCalculation::WhenRequired)
+                    .response_checksum_validation(ResponseChecksumValidation::WhenRequired)
+                    .credentials_provider(Credentials::new(
+                        access_key_id,
+                        secret_access_key,
+                        None,
+                        None,
+                        "backblaze-credentials",
+                    ))
                     .build();
-
                 let client = Client::from_conf(config);
 
                 (
