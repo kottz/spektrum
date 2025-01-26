@@ -200,7 +200,6 @@ pub async fn set_stored_data_handler(
     State(state): State<AppState>,
     Json(req): Json<SetStoredDataRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
-    info!("password: {:?}", req.password);
     if req.password != state.admin_password {
         return Err(ApiError::Unauthorized);
     }

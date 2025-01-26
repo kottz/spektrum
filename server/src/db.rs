@@ -7,10 +7,11 @@ use aws_sdk_s3::error::SdkError;
 use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::Client;
 use chrono::Utc;
-use flate2::write::GzEncoder;
 use flate2::Compression;
+use flate2::{read::GzDecoder, write::GzEncoder};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::io::Read;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -322,12 +323,22 @@ pub struct S3Backend {
     client: Client,
     bucket: String,
     prefix: String,
+    question_folder: String,
 }
 
 impl S3Backend {
     async fn read_file(&self, path: &str) -> Result<String, DbError> {
-        info!("Reading from S3: {}/{}", self.prefix, path);
-        let key = format!("{}/{}", self.prefix, path);
+        let mut key = format!("{}/{}", self.prefix, path);
+
+        let is_json = path.ends_with(".json");
+
+        // Read json question data from hidden folder
+        if is_json {
+            key = format!("{}/{}/{}.gz", self.prefix, self.question_folder, path);
+        }
+
+        info!("Reading from S3: {}", key);
+
         match self
             .client
             .get_object()
@@ -342,8 +353,20 @@ impl S3Backend {
                     .collect()
                     .await
                     .map_err(|e| DbError::S3(format!("Failed to collect bytes: {}", e)))?;
-                String::from_utf8(bytes.to_vec())
-                    .map_err(|e| DbError::S3(format!("Invalid UTF-8: {}", e)))
+
+                // If it's a JSON file, decompress it
+                if is_json {
+                    let bytes = bytes.into_bytes();
+                    let mut decoder = GzDecoder::new(&bytes[..]);
+                    let mut decompressed = String::new();
+                    decoder
+                        .read_to_string(&mut decompressed)
+                        .map_err(|e| DbError::S3(format!("Failed to decompress: {}", e)))?;
+                    Ok(decompressed)
+                } else {
+                    String::from_utf8(bytes.to_vec())
+                        .map_err(|e| DbError::S3(format!("Invalid UTF-8: {}", e)))
+                }
             }
             Err(err) => {
                 if let SdkError::ServiceError(service_err) = &err {
@@ -358,16 +381,47 @@ impl S3Backend {
     }
 
     async fn write_file(&self, path: &str, data: &[u8]) -> Result<(), DbError> {
-        info!("Writing to S3: {}/{}", self.prefix, path);
-        let key = format!("{}/{}", self.prefix, path);
+        let mut key = format!("{}/{}", self.prefix, path);
+
+        // Determine if we're writing a JSON file
+        let is_json = path.ends_with(".json");
+
+        // Store question data in hidden folder and append .gz for JSON files
+        if is_json {
+            key = format!("{}/{}/{}.gz", self.prefix, self.question_folder, path);
+        }
+
+        // Determine content type based on file extension
+        let content_type = if path.ends_with(".avif") {
+            "image/avif"
+        } else if is_json {
+            "application/gzip" // Store JSON data as compressed
+        } else {
+            "application/octet-stream" // Default binary type
+        };
+
+        info!("Writing {} to S3: {}", content_type, key);
+
+        let body = if is_json {
+            // Compress JSON data
+            let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+            encoder
+                .write_all(data)
+                .map_err(|e| DbError::S3(format!("Failed to compress: {}", e)))?;
+            encoder
+                .finish()
+                .map_err(|e| DbError::S3(format!("Failed to finish compression: {}", e)))?
+        } else {
+            data.to_vec()
+        };
 
         match self
             .client
             .put_object()
             .bucket(&self.bucket)
             .key(&key)
-            .body(ByteStream::from(data.to_vec()))
-            .content_type("image/avif")
+            .body(ByteStream::from(body))
+            .content_type(content_type)
             .send()
             .await
         {
@@ -382,7 +436,10 @@ impl S3Backend {
     async fn create_backup(&self, content: &str, file_stem: &str) -> Result<(), DbError> {
         let now = Utc::now();
         let timestamp = now.format("%y%m%d_%H%M%S").to_string();
-        let key = format!("{}/backup/{}_{}.json.gz", self.prefix, file_stem, timestamp);
+        let key = format!(
+            "{}/{}/backup/{}_{}.json.gz",
+            self.prefix, self.question_folder, file_stem, timestamp
+        );
         info!("Create backup S3: {}", key);
 
         let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
@@ -404,7 +461,7 @@ impl S3Backend {
 }
 
 pub struct QuestionDatabase {
-    file_path: String,
+    question_file: String,
     storage: Storage,
 }
 
@@ -428,7 +485,8 @@ impl QuestionDatabase {
                 bucket,
                 region,
                 prefix,
-                file_path,
+                question_folder,
+                question_file: file_path,
                 access_key_id,
                 secret_access_key,
             } => {
@@ -456,17 +514,21 @@ impl QuestionDatabase {
                         client,
                         bucket: bucket.clone(),
                         prefix: prefix.clone(),
+                        question_folder: question_folder.clone(),
                     }),
                     file_path.clone(),
                 )
             }
         };
 
-        Ok(Self { file_path, storage })
+        Ok(Self {
+            question_file: file_path,
+            storage,
+        })
     }
 
     pub async fn read_stored_data(&self) -> Result<StoredData, DbError> {
-        let content = self.storage.read_file(&self.file_path).await?;
+        let content = self.storage.read_file(&self.question_file).await?;
         if content.is_empty() {
             return Ok(StoredData {
                 media: Vec::new(),
@@ -486,7 +548,7 @@ impl QuestionDatabase {
         data.validate_stored_data()?;
         let json = serde_json::to_string(&data)?;
         self.storage
-            .write_file(&self.file_path, json.as_bytes())
+            .write_file(&self.question_file, json.as_bytes())
             .await
     }
 
@@ -504,7 +566,7 @@ impl QuestionDatabase {
         let stored_data = self.read_stored_data().await?;
         let json = serde_json::to_string(&stored_data)?;
 
-        let file_stem = Path::new(&self.file_path)
+        let file_stem = Path::new(&self.question_file)
             .file_stem()
             .and_then(|s| s.to_str())
             .ok_or_else(|| {
