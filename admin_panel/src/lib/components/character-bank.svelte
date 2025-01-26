@@ -16,13 +16,20 @@
 		const searchLower = state.searchTerm.toLowerCase();
 
 		return store.characters
-			.map((char) => ({
-				...char,
-				// Use pending image if available
-				image_url: char._pendingImage?.dataUrl || char.image_url,
-				isPending: !!char._pendingImage
-			}))
-			.filter((char) => char.name.toLowerCase().includes(searchLower));
+			.filter((c) => c.name.toLowerCase().includes(searchLower))
+			.map((c) => ({
+				...c,
+				// Use spread operator to maintain object reference when no changes
+				...(c._pendingImage
+					? {
+							image_url: c._pendingImage.dataUrl,
+							isPending: true
+						}
+					: {
+							image_url: c.image_url,
+							isPending: false
+						})
+			}));
 	});
 
 	function handleDragStart(e: DragEvent, char: string) {
@@ -57,7 +64,7 @@
 	<!-- Content -->
 	<ScrollArea class="flex-1">
 		<div class="grid grid-cols-12 gap-4 p-4" role="listbox" aria-label="Available characters">
-			{#each filteredCharacters() as char}
+			{#each filteredCharacters() as char (char.id)}
 				<div
 					class={`cursor-grab transition-transform hover:scale-105 ${char.isPending ? 'ring-2 ring-green-500' : ''}`}
 					draggable="true"
