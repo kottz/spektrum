@@ -157,6 +157,7 @@
 
 	function handleDragOver(event: DragEvent) {
 		event.preventDefault();
+		event.stopPropagation();
 		state.isDragging = true;
 	}
 

@@ -50,14 +50,6 @@ function createAdminStore() {
 		preBatchState: null
 	});
 
-	const imageStore = new Map<
-		/* characterName */ string,
-		{
-			file: File;
-			previewUrl: string;
-		}
-	>();
-
 	function takeSnapshot(message: string) {
 		// handle pending images
 		function cloneCharacter(c: Character): Character {
