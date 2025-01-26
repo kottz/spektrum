@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { PUBLIC_SPEKTRUM_CDN_URL } from '$env/static/public';
 	import type { Character, Media } from '$lib/types';
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
@@ -477,8 +478,10 @@
 														}}
 													>
 														<img
-															src={character?._pendingImage?.dataUrl || // First check for pending image
-																character?.image_url || // Then check regular image URL
+															src={character?._pendingImage?.dataUrl ||
+																(character?.image_url && PUBLIC_SPEKTRUM_CDN_URL
+																	? `${PUBLIC_SPEKTRUM_CDN_URL}/${character.image_url}`
+																	: character?.image_url) ||
 																`/img/${option.option_text}.avif`}
 															alt={option.option_text}
 															class="h-12 w-12 rounded transition-transform hover:scale-105"
@@ -544,7 +547,9 @@
 									{#if question.image_url}
 										<div class="mb-2">
 											<img
-												src={question.image_url}
+												src={PUBLIC_SPEKTRUM_CDN_URL
+													? `${PUBLIC_SPEKTRUM_CDN_URL}/${char.image_url}`
+													: char.image_url}
 												alt="Question"
 												class="h-12 w-12 rounded object-cover"
 											/>
@@ -569,8 +574,10 @@
 														onclick={() => toggleCorrectOption(option)}
 													>
 														<img
-															src={character?._pendingImage?.dataUrl || // First check for pending image
-																character?.image_url || // Then check regular image URL
+															src={character?._pendingImage?.dataUrl ||
+																(character?.image_url && PUBLIC_SPEKTRUM_CDN_URL
+																	? `${PUBLIC_SPEKTRUM_CDN_URL}/${character.image_url}`
+																	: character?.image_url) ||
 																`/img/${option.option_text}.avif`}
 															alt={option.option_text}
 															class="h-12 w-12 rounded transition-transform hover:scale-105"

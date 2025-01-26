@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Input } from '$lib/components/ui/input';
+	import { PUBLIC_SPEKTRUM_CDN_URL } from '$env/static/public';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import { adminStore } from '$lib/stores/data-manager.svelte';
 	import UploadDialog from '$lib/components/character-upload-dialog.svelte';
@@ -93,9 +94,24 @@
 					onmouseleave={() => (state.hoveredCharacter = null)}
 				>
 					{#if char.image_url?.endsWith('.webm')}
-						<video src={char.image_url} class="w-full rounded-lg" autoplay loop muted></video>
+						<video
+							src={PUBLIC_SPEKTRUM_CDN_URL
+								? `${PUBLIC_SPEKTRUM_CDN_URL}/${char.image_url}`
+								: char.image_url}
+							class="w-full rounded-lg"
+							autoplay
+							loop
+							muted
+						></video>
 					{:else}
-						<img src={char.image_url} alt={char.name} class="w-full rounded-lg" loading="lazy" />
+						<img
+							src={PUBLIC_SPEKTRUM_CDN_URL
+								? `${PUBLIC_SPEKTRUM_CDN_URL}/${char.image_url}`
+								: char.image_url}
+							alt={char.name}
+							class="w-full rounded-lg"
+							loading="lazy"
+						/>
 					{/if}
 
 					<div class="mt-1 truncate text-center text-sm" title={char.name}>
