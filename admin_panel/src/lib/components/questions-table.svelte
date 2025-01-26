@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Character } from '$lib/types';
+	import type { Character, Media } from '$lib/types';
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
@@ -21,7 +21,7 @@
 		currentPage: 0,
 		itemsPerPage: 10,
 		searchTerm: '',
-		showCharacterBank: false,
+		forceShowCharacterBank: false,
 		selectedTypes: new Set(Object.values(QuestionType)),
 		mediaSearchTerm: '',
 		isAddingQuestion: false,
@@ -36,6 +36,12 @@
 		tempOptions: [] as QuestionOption[],
 		tempOptionCounter: -1
 	});
+
+	const showCharacterBank = $derived(
+		() =>
+			(state.isAddingQuestion && state.newQuestionData.question_type === QuestionType.Character) ||
+			state.forceShowCharacterBank
+	);
 
 	const mediaById = $derived(new Map(adminStore.getState().media.map((m) => [m.id, m])));
 	const optionsByQuestionId = $derived(
@@ -90,6 +96,10 @@
 	function getMediaTitle(mediaId: number): string {
 		const media = adminStore.getState().media.find((m) => m.id === mediaId);
 		return media?.title || 'Unknown Media';
+	}
+
+	function getMediaInfo(mediaId: number): Media | null {
+		return adminStore.getState().media.find((m) => m.id === mediaId) || null;
 	}
 
 	function getQuestionOptions(questionId: number) {
@@ -255,7 +265,7 @@
 
 <div class="flex h-full flex-col">
 	<!-- Table section with header, table, and pagination as one unit -->
-	<div class={state.showCharacterBank ? 'h-1/2' : 'h-full'}>
+	<div class={showCharacterBank() ? 'h-1/2' : 'h-full'}>
 		<!-- Header -->
 		<div class="flex items-center justify-between p-4">
 			<div class="flex items-center gap-4">
@@ -268,7 +278,7 @@
 				/>
 				<Button
 					variant="outline"
-					on:click={() => (state.showCharacterBank = !state.showCharacterBank)}
+					on:click={() => (state.forceShowCharacterBank = !state.forceShowCharacterBank)}
 				>
 					Toggle Character Bank
 				</Button>
@@ -323,7 +333,7 @@
 												class="w-full justify-between"
 											>
 												{state.newQuestionData.media_id
-													? getMediaTitle(state.newQuestionData.media_id)
+													? getMediaInfo(state.newQuestionData.media_id)?.title
 													: 'Select media...'}
 												<ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
 											</Button>
@@ -515,7 +525,20 @@
 						{#each paginatedData() as question (question.id)}
 							<Table.Row class="hover:bg-gray-50">
 								<Table.Cell>{question.id}</Table.Cell>
-								<Table.Cell>{getMediaTitle(question.media_id)}</Table.Cell>
+								<Table.Cell>
+									{#if getMediaInfo(question.media_id)?.youtube_id}
+										<a
+											href={`https://youtube.com/watch?v=${getMediaInfo(question.media_id)?.youtube_id}`}
+											target="_blank"
+											rel="noopener noreferrer"
+											class="text-blue-600 hover:underline"
+										>
+											{getMediaInfo(question.media_id)?.title || 'Unknown Media'}
+										</a>
+									{:else}
+										{getMediaInfo(question.media_id)?.title || 'Unknown Media'}
+									{/if}
+								</Table.Cell>
 								<Table.Cell>{question.question_type}</Table.Cell>
 								<Table.Cell>
 									{#if question.image_url}
@@ -654,7 +677,7 @@
 		</div>
 	</div>
 	<!-- Character bank -->
-	{#if state.showCharacterBank}
+	{#if showCharacterBank()}
 		<div class="h-1/2">
 			<CharacterBank />
 		</div>
