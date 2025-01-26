@@ -1,5 +1,6 @@
 use crate::db::{DbError, StoredData};
 use crate::db::{QuestionDatabase, QuestionSet};
+use crate::StorageConfig;
 use lazy_static::lazy_static;
 use rand::seq::SliceRandom;
 use rand::Rng;
@@ -208,7 +209,7 @@ impl GameQuestion {
     }
 
     fn generate_year_alternatives(&self, correct_year: i32) -> Vec<String> {
-        let mut alternatives = vec![
+        let mut alternatives = [
             correct_year - 2,
             correct_year - 1,
             correct_year,
@@ -248,41 +249,53 @@ pub struct QuestionStore {
 }
 
 impl QuestionStore {
-    pub async fn new(file_path: &str) -> Result<Self, QuestionError> {
-        let db = QuestionDatabase::new(file_path);
-        let manager = Self {
+    pub async fn new(config: &StorageConfig) -> Result<Self, QuestionError> {
+        let db = QuestionDatabase::new(config)
+            .await
+            .map_err(QuestionError::DbError)?;
+
+        let store = Self {
             questions: RwLock::new(Arc::new(Vec::new())),
             sets: RwLock::new(Arc::new(Vec::new())),
             db,
         };
-
-        manager.load_questions().await?;
-        Ok(manager)
+        store.load_questions().await?;
+        Ok(store)
     }
 
     pub async fn load_questions(&self) -> Result<(), QuestionError> {
-        let (game_questions, sets) = self.db.load_questions()?;
+        let (game_questions, sets) = self
+            .db
+            .load_questions()
+            .await
+            .map_err(QuestionError::DbError)?;
 
         if game_questions.is_empty() {
             return Err(QuestionError::NoQuestions);
         }
-
         *self.questions.write().await = Arc::new(game_questions);
         *self.sets.write().await = Arc::new(sets);
-
         Ok(())
     }
 
-    pub fn get_stored_data(&self) -> Result<StoredData, DbError> {
-        self.db.read_stored_data()
+    pub async fn get_stored_data(&self) -> Result<StoredData, DbError> {
+        self.db.read_stored_data().await
     }
 
-    pub fn set_stored_data(&self, stored_data: StoredData) -> Result<(), DbError> {
-        self.db.set_stored_data(stored_data)
+    pub async fn set_stored_data(&self, stored_data: StoredData) -> Result<(), DbError> {
+        self.db.set_stored_data(stored_data).await
     }
 
-    pub fn backup_stored_data(&self) -> Result<(), DbError> {
-        self.db.backup_stored_data()
+    pub async fn backup_stored_data(&self) -> Result<(), DbError> {
+        self.db.backup_stored_data().await
+    }
+
+    pub async fn store_character_image(
+        &self,
+        character_name: &str,
+        data: &[u8],
+    ) -> Result<String, DbError> {
+        self.db.store_character_image(character_name, data).await
     }
 
     pub async fn get_questions(&self) -> Result<Arc<Vec<GameQuestion>>, QuestionError> {
@@ -299,22 +312,18 @@ impl QuestionStore {
     ) -> Result<Arc<Vec<GameQuestion>>, QuestionError> {
         let sets = self.sets.read().await;
         let questions = self.questions.read().await;
-
         let set = sets
             .iter()
             .find(|s| s.id == set_id)
             .ok_or(QuestionError::QuestionSetNotFound(set_id))?;
-
         let set_questions: Vec<GameQuestion> = questions
             .iter()
             .filter(|q| set.question_ids.contains(&i64::from(q.id)))
             .cloned()
             .collect();
-
         if set_questions.is_empty() {
             return Err(QuestionError::NoQuestions);
         }
-
         Ok(Arc::new(set_questions))
     }
 }

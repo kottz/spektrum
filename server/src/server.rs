@@ -1,4 +1,4 @@
-use crate::db::StoredData;
+use crate::db::{DbError, StoredData};
 use crate::game::{
     EventContext, GameAction, GameEvent, GamePhase, GameResponse, Recipients, ResponsePayload,
 };
@@ -6,8 +6,11 @@ use crate::game_manager::{GameLobby, GameManager};
 use crate::messages::GameState;
 use crate::messages::{convert_to_server_message, AdminAction, ClientMessage, ServerMessage};
 use crate::question::QuestionStore;
+use axum::extract::Path;
+use axum::http::StatusCode;
 use axum::{
     extract::ws::{Message, WebSocket},
+    extract::Multipart,
     extract::State,
     extract::WebSocketUpgrade,
     response::IntoResponse,
@@ -46,22 +49,32 @@ pub enum ApiError {
 
     #[error("Lock acquisition failed: {0}")]
     Lock(String),
+
+    #[error("Unsupported media type")]
+    UnsupportedMediaType,
+
+    #[error("Bad request: {0}")]
+    BadRequest(String),
+
+    #[error("Internal server error: {0}")]
+    InternalServerError(String),
 }
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> axum::response::Response {
         let (status, error_message) = match &self {
-            ApiError::Validation(_) => (axum::http::StatusCode::BAD_REQUEST, self.to_string()),
-            ApiError::Unauthorized => (axum::http::StatusCode::UNAUTHORIZED, self.to_string()),
-            ApiError::Database(_) => (
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                self.to_string(),
-            ),
-            ApiError::Lobby(_) => (axum::http::StatusCode::BAD_REQUEST, self.to_string()),
-            ApiError::Lock(_) => (
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                self.to_string(),
-            ),
+            ApiError::Validation(_) => (StatusCode::BAD_REQUEST, self.to_string()),
+            ApiError::Unauthorized => (StatusCode::UNAUTHORIZED, self.to_string()),
+            ApiError::Database(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
+            ApiError::Lobby(_) => (StatusCode::BAD_REQUEST, self.to_string()),
+            ApiError::Lock(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
+            ApiError::UnsupportedMediaType => {
+                (StatusCode::UNSUPPORTED_MEDIA_TYPE, self.to_string())
+            }
+            ApiError::BadRequest(_) => (StatusCode::BAD_REQUEST, self.to_string()),
+            ApiError::InternalServerError(_) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
+            }
         };
 
         let body = Json(serde_json::json!({
@@ -69,6 +82,12 @@ impl IntoResponse for ApiError {
         }));
 
         (status, body).into_response()
+    }
+}
+
+impl From<DbError> for ApiError {
+    fn from(err: DbError) -> Self {
+        ApiError::Database(err.to_string())
     }
 }
 
@@ -165,6 +184,7 @@ pub async fn get_stored_data_handler(
     let stored_data = state
         .store
         .get_stored_data()
+        .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
 
     Ok(Json(stored_data))
@@ -185,11 +205,11 @@ pub async fn set_stored_data_handler(
         return Err(ApiError::Unauthorized);
     }
 
-    if let Err(e) = state.store.backup_stored_data() {
+    if let Err(e) = state.store.backup_stored_data().await {
         return Err(ApiError::Database(e.to_string()));
     }
 
-    if let Err(e) = state.store.set_stored_data(req.stored_data) {
+    if let Err(e) = state.store.set_stored_data(req.stored_data).await {
         return Err(ApiError::Database(e.to_string()));
     }
 
@@ -198,10 +218,64 @@ pub async fn set_stored_data_handler(
         .load_questions()
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
-    match state.store.get_stored_data() {
+    match state.store.get_stored_data().await {
         Ok(data) => Ok(Json(data)),
         Err(e) => Err(ApiError::Database(e.to_string())),
     }
+}
+
+#[derive(Debug, Serialize)]
+pub struct UploadCharacterImageResponse {
+    image_url: String,
+}
+
+pub async fn upload_character_image_handler(
+    State(state): State<AppState>,
+    Path(character_name): Path<String>,
+    mut multipart: Multipart,
+) -> Result<impl IntoResponse, ApiError> {
+    let mut password = None;
+    let mut image_data = None;
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| ApiError::BadRequest(format!("Failed to read multipart field: {}", e)))?
+    {
+        match field.name().unwrap_or_default() {
+            "password" => {
+                password =
+                    Some(field.text().await.map_err(|e| {
+                        ApiError::BadRequest(format!("Failed to read password: {}", e))
+                    })?)
+            }
+            "image" => {
+                if !field
+                    .content_type()
+                    .unwrap_or("")
+                    .eq_ignore_ascii_case("image/avif")
+                {
+                    return Err(ApiError::UnsupportedMediaType);
+                }
+                image_data = Some(field.bytes().await.map_err(|e| {
+                    ApiError::BadRequest(format!("Failed to read image data: {}", e))
+                })?);
+            }
+            _ => continue,
+        }
+    }
+    let password = password.ok_or(ApiError::Unauthorized)?;
+    if password != state.admin_password {
+        return Err(ApiError::Unauthorized);
+    }
+    let image_data = image_data.ok_or(ApiError::BadRequest("Missing image file".to_string()))?;
+
+    // Get the store from state and use it to store the image
+    let url = state
+        .store
+        .store_character_image(&character_name, &image_data)
+        .await?;
+
+    Ok(Json(UploadCharacterImageResponse { image_url: url }))
 }
 
 #[derive(Debug, Deserialize)]

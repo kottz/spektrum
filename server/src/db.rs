@@ -1,11 +1,14 @@
 use crate::question::{Color, GameQuestion, GameQuestionOption, QuestionType, COLOR_WEIGHTS};
+use crate::StorageConfig;
+use aws_sdk_s3::config::Region;
+use aws_sdk_s3::error::SdkError;
+use aws_sdk_s3::primitives::ByteStream;
+use aws_sdk_s3::Client;
 use chrono::Utc;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::fs;
-use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -21,6 +24,8 @@ pub(crate) enum DbError {
     NoQuestions,
     #[error("Validation error: {0}")]
     Validation(String),
+    #[error("S3 error: {0}")]
+    S3(String),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -215,56 +220,269 @@ impl StoredData {
     }
 }
 
-pub struct QuestionDatabase {
-    file_path: String,
+pub enum Storage {
+    Filesystem(FilesystemBackend),
+    S3(S3Backend),
 }
 
-impl QuestionDatabase {
-    pub fn new(file_path: &str) -> Self {
-        Self {
-            file_path: file_path.to_string(),
+impl Storage {
+    async fn read_file(&self, path: &str) -> Result<String, DbError> {
+        match self {
+            Storage::Filesystem(fs) => fs.read_file(path).await,
+            Storage::S3(s3) => s3.read_file(path).await,
         }
     }
 
-    pub fn read_stored_data(&self) -> Result<StoredData, DbError> {
-        if Path::new(&self.file_path).exists() {
-            let content = fs::read_to_string(&self.file_path)?;
-            let json_content: StoredData = serde_json::from_str(&content)?;
-            json_content.validate_stored_data()?;
-            Ok(json_content)
+    async fn write_file(&self, path: &str, data: &[u8]) -> Result<(), DbError> {
+        match self {
+            Storage::Filesystem(fs) => fs.write_file(path, data).await,
+            Storage::S3(s3) => s3.write_file(path, data).await,
+        }
+    }
+
+    async fn create_backup(&self, content: &str, file_stem: &str) -> Result<(), DbError> {
+        match self {
+            Storage::Filesystem(fs) => fs.create_backup(content, file_stem).await,
+            Storage::S3(s3) => s3.create_backup(content, file_stem).await,
+        }
+    }
+
+    pub async fn store_character_image(
+        &self,
+        character_name: &str,
+        data: &[u8],
+    ) -> Result<String, DbError> {
+        let filename = format!("{}.avif", character_name);
+        let path = format!("img/{}", filename);
+        self.write_file(&path, data).await?;
+        Ok(format!("/img/{}", filename))
+    }
+}
+
+// Filesystem implementation
+pub struct FilesystemBackend {
+    base_path: PathBuf,
+    backup_dir: PathBuf,
+}
+
+impl FilesystemBackend {
+    async fn read_file(&self, path: &str) -> Result<String, DbError> {
+        let full_path = self.base_path.join(path);
+        if full_path.exists() {
+            tokio::fs::read_to_string(&full_path)
+                .await
+                .map_err(DbError::from)
         } else {
-            Ok(StoredData {
+            Ok(String::new())
+        }
+    }
+
+    async fn write_file(&self, path: &str, data: &[u8]) -> Result<(), DbError> {
+        let full_path = self.base_path.join(path);
+
+        // Ensure parent directory exists
+        if let Some(parent) = full_path.parent() {
+            tokio::fs::create_dir_all(parent)
+                .await
+                .map_err(DbError::from)?;
+        }
+
+        tokio::fs::write(full_path, data)
+            .await
+            .map_err(DbError::from)
+    }
+
+    async fn create_backup(&self, content: &str, file_stem: &str) -> Result<(), DbError> {
+        // Create backup directory if it doesn't exist
+        tokio::fs::create_dir_all(&self.backup_dir)
+            .await
+            .map_err(DbError::from)?;
+
+        let now = Utc::now();
+        let timestamp = now.format("%y%m%d_%H%M%S").to_string();
+        let filename = format!("{}_{}.json.gz", file_stem, timestamp);
+        let full_path = self.backup_dir.join(filename);
+
+        // We use std::fs::File for the GzEncoder since it's not async
+        // We could make this more async with tokio::spawn but for backup operations
+        // it's probably not critical
+        let file = std::fs::File::create(&full_path)?;
+        let mut encoder = GzEncoder::new(file, Compression::default());
+        encoder.write_all(content.as_bytes())?;
+        encoder.finish()?;
+
+        Ok(())
+    }
+}
+
+// S3 implementation
+pub struct S3Backend {
+    client: Client,
+    bucket: String,
+    prefix: String,
+}
+
+impl S3Backend {
+    async fn read_file(&self, path: &str) -> Result<String, DbError> {
+        let key = format!("{}/{}", self.prefix, path);
+
+        match self
+            .client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(&key)
+            .send()
+            .await
+        {
+            Ok(response) => {
+                let bytes = response
+                    .body
+                    .collect()
+                    .await
+                    .map_err(|e| DbError::S3(format!("Failed to collect bytes: {}", e)))?;
+                String::from_utf8(bytes.to_vec())
+                    .map_err(|e| DbError::S3(format!("Invalid UTF-8: {}", e)))
+            }
+            Err(err) => {
+                if let SdkError::ServiceError(service_err) = &err {
+                    if service_err.err().is_no_such_key() {
+                        return Ok(String::new());
+                    }
+                }
+                Err(DbError::S3(err.to_string()))
+            }
+        }
+    }
+
+    async fn write_file(&self, path: &str, data: &[u8]) -> Result<(), DbError> {
+        let key = format!("{}/{}", self.prefix, path);
+
+        self.client
+            .put_object()
+            .bucket(&self.bucket)
+            .key(&key)
+            .body(ByteStream::from(data.to_vec()))
+            .content_type("image/avif")
+            .send()
+            .await
+            .map_err(|e| DbError::S3(e.to_string()))?;
+
+        Ok(())
+    }
+
+    async fn create_backup(&self, content: &str, file_stem: &str) -> Result<(), DbError> {
+        let now = Utc::now();
+        let timestamp = now.format("%y%m%d_%H%M%S").to_string();
+        let key = format!("{}/backup/{}_{}.json.gz", self.prefix, file_stem, timestamp);
+
+        // Compress the content
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(content.as_bytes())?;
+        let compressed = encoder.finish()?;
+
+        self.client
+            .put_object()
+            .bucket(&self.bucket)
+            .key(&key)
+            .body(ByteStream::from(compressed))
+            .content_type("application/gzip")
+            .send()
+            .await
+            .unwrap();
+        //.map_err(DbError::S3)?;
+
+        Ok(())
+    }
+}
+
+pub struct QuestionDatabase {
+    file_path: String,
+    storage: Storage,
+}
+
+impl QuestionDatabase {
+    pub async fn new(config: &StorageConfig) -> Result<Self, DbError> {
+        let (storage, file_path) = match config {
+            StorageConfig::Filesystem {
+                base_path,
+                file_path,
+            } => {
+                let backup_dir = base_path.join("question_backup");
+                (
+                    Storage::Filesystem(FilesystemBackend {
+                        base_path: base_path.clone(),
+                        backup_dir,
+                    }),
+                    file_path.clone(),
+                )
+            }
+            StorageConfig::S3 {
+                bucket,
+                region,
+                prefix,
+                file_path,
+            } => {
+                let config = aws_sdk_s3::Config::builder()
+                    .region(Region::new(region.clone()))
+                    .endpoint_url(format!("https://s3.{}.backblazeb2.com", region))
+                    .build();
+
+                let client = Client::from_conf(config);
+
+                (
+                    Storage::S3(S3Backend {
+                        client,
+                        bucket: bucket.clone(),
+                        prefix: prefix.clone(),
+                    }),
+                    file_path.clone(),
+                )
+            }
+        };
+
+        Ok(Self { file_path, storage })
+    }
+
+    pub async fn read_stored_data(&self) -> Result<StoredData, DbError> {
+        let content = self.storage.read_file(&self.file_path).await?;
+        if content.is_empty() {
+            return Ok(StoredData {
                 media: Vec::new(),
                 characters: Vec::new(),
                 questions: Vec::new(),
                 options: Vec::new(),
                 sets: Vec::new(),
-            })
+            });
         }
+
+        let json_content: StoredData = serde_json::from_str(&content)?;
+        json_content.validate_stored_data()?;
+        Ok(json_content)
     }
 
-    pub fn set_stored_data(&self, data: StoredData) -> Result<(), DbError> {
-        let json = serde_json::to_string(&data)?;
+    pub async fn set_stored_data(&self, data: StoredData) -> Result<(), DbError> {
         data.validate_stored_data()?;
-        fs::write(self.file_path.clone(), json)?;
-        Ok(())
+        let json = serde_json::to_string(&data)?;
+        self.storage
+            .write_file(&self.file_path, json.as_bytes())
+            .await
     }
 
-    pub fn backup_stored_data(&self) -> Result<(), DbError> {
-        let stored_data = self.read_stored_data()?;
+    pub async fn store_character_image(
+        &self,
+        character_name: &str,
+        data: &[u8],
+    ) -> Result<String, DbError> {
+        self.storage
+            .store_character_image(character_name, data)
+            .await
+    }
+
+    pub async fn backup_stored_data(&self) -> Result<(), DbError> {
+        let stored_data = self.read_stored_data().await?;
         let json = serde_json::to_string_pretty(&stored_data)?;
 
-        let original_path = Path::new(&self.file_path);
-
-        let backup_dir = original_path
-            .parent()
-            .map(|p| p.join("question_backup"))
-            .unwrap_or_else(|| PathBuf::from("question_backup"));
-
-        // Create backup directory if it doesn't exist
-        fs::create_dir_all(&backup_dir)?;
-
-        let file_stem = original_path
+        let file_stem = Path::new(&self.file_path)
             .file_stem()
             .and_then(|s| s.to_str())
             .ok_or_else(|| {
@@ -274,22 +492,11 @@ impl QuestionDatabase {
                 ))
             })?;
 
-        let now = Utc::now();
-        let timestamp = now.format("%y%m%d_%H%M%S").to_string();
-
-        let filename = format!("{}_{}.json.gz", file_stem, timestamp);
-        let full_path = backup_dir.join(filename);
-
-        let file = File::create(&full_path)?;
-        let mut encoder = GzEncoder::new(file, Compression::default());
-        encoder.write_all(json.as_bytes())?;
-        encoder.finish()?;
-
-        Ok(())
+        self.storage.create_backup(&json, file_stem).await
     }
 
-    pub fn load_questions(&self) -> Result<(Vec<GameQuestion>, Vec<QuestionSet>), DbError> {
-        let stored_data = self.read_stored_data()?;
+    pub async fn load_questions(&self) -> Result<(Vec<GameQuestion>, Vec<QuestionSet>), DbError> {
+        let stored_data = self.read_stored_data().await?;
         stored_data.validate_stored_data()?;
 
         let game_questions: Vec<GameQuestion> = stored_data

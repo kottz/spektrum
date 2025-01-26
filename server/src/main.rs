@@ -1,7 +1,7 @@
 use crate::question::QuestionStore;
 use crate::server::{
     check_sessions_handler, create_lobby_handler, get_stored_data_handler, set_stored_data_handler,
-    ws_handler, AppState,
+    upload_character_image_handler, ws_handler, AppState,
 };
 use axum::{
     routing::{any, post},
@@ -11,6 +11,7 @@ use config::Config;
 use http::HeaderValue;
 use serde::Deserialize;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use tokio::signal;
 use tokio::time::Duration;
 use tower_http::compression::{CompressionLayer, CompressionLevel};
@@ -38,10 +39,27 @@ struct LoggingConfig {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(tag = "type")]
+enum StorageConfig {
+    #[serde(rename = "filesystem")]
+    Filesystem {
+        base_path: PathBuf,
+        file_path: String,
+    },
+    #[serde(rename = "s3")]
+    S3 {
+        bucket: String,
+        region: String,
+        prefix: String,
+        file_path: String,
+    },
+}
+
+#[derive(Debug, Deserialize)]
 struct AppConfig {
     server: ServerConfig,
     logging: LoggingConfig,
-    question_path: String,
+    storage: StorageConfig,
     admin_password: String,
 }
 
@@ -118,7 +136,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             http::header::ACCEPT,
         ]);
 
-    let question_store = QuestionStore::new(&app_config.question_path).await?;
+    let question_store = QuestionStore::new(&app_config.storage).await?;
 
     let state = AppState::new(question_store, app_config.admin_password);
     let app = Router::new()
@@ -127,6 +145,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/check-sessions", post(check_sessions_handler))
         .route("/api/questions", post(get_stored_data_handler))
         .route("/api/update-questions", post(set_stored_data_handler))
+        .route(
+            "/api/upload-character-image/{character_name}",
+            post(upload_character_image_handler),
+        )
         .with_state(state)
         .layer(
             TraceLayer::new_for_http()
