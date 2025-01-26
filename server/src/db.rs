@@ -394,6 +394,8 @@ impl S3Backend {
         // Determine content type based on file extension
         let content_type = if path.ends_with(".avif") {
             "image/avif"
+        } else if path.ends_with(".webm") {
+            "video/webm"
         } else if is_json {
             "application/gzip" // Store JSON data as compressed
         } else {
