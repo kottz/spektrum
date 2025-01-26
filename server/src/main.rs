@@ -63,7 +63,7 @@ struct AppConfig {
     server: ServerConfig,
     logging: LoggingConfig,
     storage: StorageConfig,
-    admin_password: String,
+    admin_password: Vec<String>,
 }
 
 fn init_tracing(json_logging: bool) {

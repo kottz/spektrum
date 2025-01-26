@@ -96,15 +96,15 @@ pub struct AppState {
     pub manager: Arc<Mutex<GameManager>>,
     //pub questions: Arc<Vec<GameQuestion>>,
     pub store: Arc<QuestionStore>,
-    admin_password: String,
+    admin_passwords: Vec<String>,
 }
 
 impl AppState {
-    pub fn new(question_manager: QuestionStore, admin_password: String) -> Self {
+    pub fn new(question_manager: QuestionStore, admin_passwords: Vec<String>) -> Self {
         let state = Self {
             manager: Arc::new(Mutex::new(GameManager::new())),
             store: Arc::new(question_manager),
-            admin_password,
+            admin_passwords,
         };
 
         let manager = state.manager.clone();
@@ -177,7 +177,7 @@ pub async fn get_stored_data_handler(
     State(state): State<AppState>,
     Json(req): Json<GetStoredDataRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
-    if req.password != state.admin_password {
+    if !state.admin_passwords.contains(&req.password) {
         return Err(ApiError::Unauthorized);
     }
 
@@ -200,7 +200,7 @@ pub async fn set_stored_data_handler(
     State(state): State<AppState>,
     Json(req): Json<SetStoredDataRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
-    if req.password != state.admin_password {
+    if !state.admin_passwords.contains(&req.password) {
         return Err(ApiError::Unauthorized);
     }
 
@@ -263,7 +263,7 @@ pub async fn upload_character_image_handler(
         }
     }
     let password = password.ok_or(ApiError::Unauthorized)?;
-    if password != state.admin_password {
+    if !state.admin_passwords.contains(&password) {
         return Err(ApiError::Unauthorized);
     }
     let image_data = image_data.ok_or(ApiError::BadRequest("Missing image file".to_string()))?;
