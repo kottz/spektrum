@@ -126,7 +126,7 @@
 					{/if}
 				</div>
 			{/each}
-			{#if filteredCharacters.length === 0}
+			{#if filteredCharacters().length === 0}
 				<div class="col-span-12 mt-4 text-center text-gray-500">No characters found</div>
 			{/if}
 		</div>
