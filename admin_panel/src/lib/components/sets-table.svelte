@@ -2,12 +2,13 @@
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
 	import { adminStore } from '$lib/stores/data-manager.svelte';
-	import type { QuestionSet } from '$lib/types';
+	import type { QuestionOption, QuestionSet } from '$lib/types';
 	import { cn } from '$lib/utils';
 	import TableContainer from './table/table-container.svelte';
 	import SearchInput from './table/search-input.svelte';
 	import Pagination from './table/pagination.svelte';
 	import EditableInput from './table/editable-input.svelte';
+	import { Checkbox } from '$lib/components/ui/checkbox';
 
 	const state = $state({
 		currentPage: 0,
@@ -19,9 +20,14 @@
 			id: 0,
 			name: '',
 			question_ids: []
-		} as Partial<QuestionSet>
+		} as Partial<QuestionSet>,
+		editingSet: null as QuestionSet | null,
+		questionSearch: '',
+		selectedQuestionIds: new Set<number>(),
+		bulkActionState: 'none' as 'none' | 'select' | 'deselect'
 	});
 
+	// Derived state
 	const filteredData = $derived(() => {
 		const sets = adminStore.getState().sets;
 		return sets.filter(
@@ -40,13 +46,42 @@
 		);
 	});
 
+	// Question management derived state
+	const allQuestions = $derived(adminStore.getState().questions);
+	const mediaMap = $derived(new Map(adminStore.getState().media.map((m) => [m.id, m])));
+
+	const optionsByQuestionId = $derived(
+		adminStore.getState().options.reduce((map, opt) => {
+			map.set(opt.question_id, [...(map.get(opt.question_id) || []), opt]);
+			return map;
+		}, new Map<number, QuestionOption[]>())
+	);
+
+	const filteredQuestions = $derived(() => {
+		if (!state.editingSet) return [];
+		const searchLower = state.questionSearch.toLowerCase();
+		return allQuestions.filter((q) => {
+			const media = mediaMap.get(q.media_id);
+			const questionOptions = optionsByQuestionId.get(q.id) || [];
+			return (
+				q.id.toString().includes(state.questionSearch) ||
+				q.question_text?.toLowerCase().includes(searchLower) ||
+				media?.title.toLowerCase().includes(searchLower) ||
+				questionOptions.some((opt) => opt.option_text.toLowerCase().includes(searchLower))
+			);
+		});
+	});
+
+	const allFilteredSelected = $derived(
+		filteredQuestions().every((q) => state.selectedQuestionIds.has(q.id))
+	);
+
 	function getQuestionDetails(questionIds: number[]) {
-		const storeState = adminStore.getState();
 		return questionIds
 			.map((id) => {
-				const question = storeState.questions.find((q) => q.id === id);
+				const question = allQuestions.find((q) => q.id === id);
 				if (!question) return null;
-				const media = storeState.media.find((m) => m.id === question.media_id);
+				const media = mediaMap.get(question.media_id);
 				return { question, media };
 			})
 			.filter(Boolean);
@@ -114,9 +149,46 @@
 		adminStore.deleteEntity('sets', setId);
 	}
 
+	function startEditSet(set: QuestionSet) {
+		state.editingSet = { ...set };
+		state.selectedQuestionIds = new Set(set.question_ids);
+		state.questionSearch = '';
+	}
+
+	function cancelEdit() {
+		state.editingSet = null;
+		state.selectedQuestionIds.clear();
+	}
+
+	function saveSetQuestions() {
+		if (!state.editingSet) return;
+
+		const newQuestionIds = Array.from(state.selectedQuestionIds);
+		adminStore.modifyEntity('sets', state.editingSet.id, {
+			question_ids: newQuestionIds
+		});
+		cancelEdit();
+	}
+
+	function toggleQuestionSelection(id: number) {
+		const newSelection = new Set(state.selectedQuestionIds);
+		newSelection.has(id) ? newSelection.delete(id) : newSelection.add(id);
+		state.selectedQuestionIds = newSelection;
+	}
+
+	function toggleAllFiltered() {
+		const newSelection = new Set(state.selectedQuestionIds);
+		const currentlyAllSelected = filteredQuestions().every((q) => newSelection.has(q.id));
+
+		filteredQuestions().forEach((q) => {
+			currentlyAllSelected ? newSelection.delete(q.id) : newSelection.add(q.id);
+		});
+
+		state.selectedQuestionIds = newSelection;
+	}
+
 	function handleManageQuestions(set: QuestionSet) {
-		// TODO: Implement question management
-		console.log('Manage questions for set:', set);
+		startEditSet(set);
 	}
 </script>
 
@@ -240,6 +312,77 @@
 			{/each}
 		</Table.Body>
 	</Table.Root>
+
+	{#if state.editingSet}
+		<div class="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" on:click={cancelEdit} />
+		<div
+			class="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-lg bg-white p-6 shadow-xl"
+		>
+			<h2 class="mb-4 text-xl font-semibold">Manage Questions for {state.editingSet.name}</h2>
+
+			<div class="mb-4 flex items-center gap-2">
+				<SearchInput
+					value={state.questionSearch}
+					placeholder="Search questions..."
+					onInput={(value) => (state.questionSearch = value)}
+				/>
+				<Button variant="outline" onclick={toggleAllFiltered}>
+					{allFilteredSelected ? 'Deselect All' : 'Select All'}
+				</Button>
+			</div>
+
+			<div class="max-h-[60vh] overflow-y-auto">
+				<Table.Root>
+					<Table.Header>
+						<Table.Row>
+							<Table.Head class="w-8">
+								<Checkbox checked={allFilteredSelected} onCheckedChange={toggleAllFiltered} />
+							</Table.Head>
+							<Table.Head>ID</Table.Head>
+							<Table.Head>Media</Table.Head>
+							<Table.Head>Type</Table.Head>
+							<Table.Head>Options</Table.Head>
+							<Table.Head>Question</Table.Head>
+						</Table.Row>
+					</Table.Header>
+					<Table.Body>
+						{#each filteredQuestions() as question}
+							<Table.Row>
+								<Table.Cell>
+									<Checkbox
+										checked={state.selectedQuestionIds.has(question.id)}
+										onChange={() => toggleQuestionSelection(question.id)}
+									/>
+								</Table.Cell>
+								<Table.Cell>{question.id}</Table.Cell>
+								<Table.Cell>
+									{mediaMap.get(question.media_id)?.title || 'Unknown media'}
+								</Table.Cell>
+								<Table.Cell>{question.question_type}</Table.Cell>
+								<Table.Cell>
+									{optionsByQuestionId
+										.get(question.id)
+										?.map((opt) => opt.option_text)
+										.join(', ')}
+								</Table.Cell>
+								<Table.Cell>
+									{question.question_text || 'N/A'}
+									{#if question.image_url}
+										<span class="ml-2 text-xs text-gray-500">(Image)</span>
+									{/if}
+								</Table.Cell>
+							</Table.Row>
+						{/each}
+					</Table.Body>
+				</Table.Root>
+			</div>
+
+			<div class="mt-4 flex justify-end gap-2">
+				<Button variant="outline" on:click={cancelEdit}>Cancel</Button>
+				<Button on:click={saveSetQuestions}>Save Changes</Button>
+			</div>
+		</div>
+	{/if}
 
 	<Pagination
 		currentPage={state.currentPage}
