@@ -65,7 +65,7 @@
 <div class={`rounded-md border bg-white ${className} flex h-full flex-col`}>
 	<!-- Header -->
 	<div class="flex-none border-b p-4">
-		<div class="mb-4 flex items-center justify-between">
+		<div class="flex items-center justify-between">
 			<h2 class="w-48 text-lg font-semibold">Character Bank</h2>
 			<Input
 				class="mr-4"

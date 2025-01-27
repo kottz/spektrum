@@ -4,9 +4,9 @@
 	}>();
 </script>
 
-<div class="rounded-md border">
+<div class="h-full rounded-md border">
 	{#if showHeader}
-		<div class="mb-4 flex items-center justify-between">
+		<div class="m-4 flex items-center justify-between">
 			<slot name="header-left" />
 			<slot name="header-right" />
 		</div>
