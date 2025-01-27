@@ -16,6 +16,9 @@
 	import { Check, ChevronsUpDown } from 'lucide-svelte';
 	import { Color } from '$lib/types';
 	import { cn } from '$lib/utils';
+	import TableContainer from './table/table-container.svelte';
+	import SearchInput from './table/search-input.svelte';
+	import Pagination from './table/pagination.svelte';
 
 	// State using runes
 	const state = $state({
@@ -265,30 +268,31 @@
 </script>
 
 <div class="flex h-full flex-col">
-	<!-- Table section with header, table, and pagination as one unit -->
 	<div class={showCharacterBank() ? 'h-1/2' : 'h-full'}>
-		<!-- Header -->
-		<div class="flex items-center justify-between p-4">
-			<div class="flex items-center gap-4">
-				<Input
-					type="text"
-					placeholder="Search questions..."
-					bind:value={state.searchTerm}
-					oninput={() => (state.currentPage = 0)}
-					class="max-w-sm"
-				/>
-				<Button
-					variant="outline"
-					on:click={() => (state.forceShowCharacterBank = !state.forceShowCharacterBank)}
-				>
-					Toggle Character Bank
-				</Button>
-			</div>
-			<Button on:click={handleAddQuestion}>Add Question</Button>
-		</div>
+		<TableContainer>
+			<svelte:fragment slot="header-left">
+				<div class="flex items-center gap-4">
+					<SearchInput
+						value={state.searchTerm}
+						placeholder="Search questions..."
+						onInput={(value) => {
+							state.searchTerm = value;
+							state.currentPage = 0;
+						}}
+					/>
+					<Button
+						variant="outline"
+						on:click={() => (state.forceShowCharacterBank = !state.forceShowCharacterBank)}
+					>
+						Toggle Character Bank
+					</Button>
+				</div>
+			</svelte:fragment>
 
-		<div class="h-[calc(100%-5rem)] rounded-md border">
-			<!-- ScrollArea - take full height minus pagination -->
+			<svelte:fragment slot="header-right">
+				<Button on:click={handleAddQuestion}>Add Question</Button>
+			</svelte:fragment>
+
 			<ScrollArea class="h-[calc(100%-4rem)]">
 				<Table.Root>
 					<Table.Header>
@@ -548,8 +552,8 @@
 										<div class="mb-2">
 											<img
 												src={PUBLIC_SPEKTRUM_CDN_URL
-													? `${PUBLIC_SPEKTRUM_CDN_URL}/${char.image_url}`
-													: char.image_url}
+													? `${PUBLIC_SPEKTRUM_CDN_URL}/${question.image_url}`
+													: question.image_url}
 												alt="Question"
 												class="h-12 w-12 rounded object-cover"
 											/>
@@ -645,45 +649,16 @@
 					</Table.Body>
 				</Table.Root>
 			</ScrollArea>
-
-			<!-- Pagination -->
-			<div class="flex items-center justify-between border-t p-4">
-				<div class="text-sm text-muted-foreground">
-					Showing {state.currentPage * state.itemsPerPage + 1} to {Math.min(
-						(state.currentPage + 1) * state.itemsPerPage,
-						filteredData().length
-					)} of {filteredData().length} questions
-				</div>
-				<div class="flex gap-2">
-					<Button
-						variant="outline"
-						size="sm"
-						on:click={() => (state.currentPage = 0)}
-						disabled={state.currentPage === 0}>First</Button
-					>
-					<Button
-						variant="outline"
-						size="sm"
-						on:click={previousPage}
-						disabled={state.currentPage === 0}>Previous</Button
-					>
-					<Button
-						variant="outline"
-						size="sm"
-						on:click={nextPage}
-						disabled={state.currentPage >= totalPages - 1}>Next</Button
-					>
-					<Button
-						variant="outline"
-						size="sm"
-						on:click={() => (state.currentPage = totalPages - 1)}
-						disabled={state.currentPage >= totalPages - 1}>Last</Button
-					>
-				</div>
-			</div>
-		</div>
+			<Pagination
+				currentPage={state.currentPage}
+				{totalPages}
+				totalItems={filteredData().length}
+				itemsPerPage={state.itemsPerPage}
+				onPageChange={(page) => (state.currentPage = page)}
+			/>
+		</TableContainer>
 	</div>
-	<!-- Character bank -->
+
 	{#if showCharacterBank()}
 		<div class="h-1/2">
 			<CharacterBank />
