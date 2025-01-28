@@ -1,3 +1,4 @@
+use crate::db::QuestionSet;
 use crate::question::GameQuestion;
 use rand::seq::SliceRandom;
 use serde::Serialize;
@@ -228,12 +229,40 @@ pub struct GameEngine {
 }
 
 impl GameEngine {
-    pub fn new(admin_id: Uuid, questions: Arc<Vec<GameQuestion>>, round_duration: u64) -> Self {
+    pub fn new(
+        admin_id: Uuid,
+        questions: Arc<Vec<GameQuestion>>,
+        set: Option<&QuestionSet>,
+        round_duration: u64,
+    ) -> Self {
         let mut rng = rand::thread_rng();
-        let question_count = questions.len();
-        let mut indices: Vec<usize> = (0..question_count).collect();
-        indices.shuffle(&mut rng);
-        // TODO: USE THE INDICES
+
+        let indices = match set {
+            None => {
+                // No set -> use all questions
+                let mut all_indices: Vec<usize> = (0..questions.len()).collect();
+                all_indices.shuffle(&mut rng);
+                all_indices
+            }
+            Some(question_set) => {
+                let id_to_index: HashMap<i64, usize> = questions
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, q)| (i64::from(q.id), idx))
+                    .collect();
+
+                // Build indices array only for questions that exist in the set
+                let mut set_indices: Vec<usize> = question_set
+                    .question_ids
+                    .iter()
+                    .filter_map(|id| id_to_index.get(id).copied())
+                    .collect();
+
+                set_indices.shuffle(&mut rng);
+                set_indices
+            }
+        };
+
         Self {
             state: GameState {
                 phase: GamePhase::Lobby,
@@ -730,39 +759,11 @@ impl GameEngine {
             .map(|&idx| self.state.all_questions[idx].clone())
             .collect()
     }
-
-    // pub fn get_current_state(&self) -> GameStateResponse {
-    //     GameStateResponse {
-    //         phase: self.state.phase,
-    //         question_type: self
-    //             .state
-    //             .current_question
-    //             .as_ref()
-    //             .map(|q| q.get_question_type().to_string())
-    //             .unwrap_or_default(),
-    //         alternatives: self.state.current_alternatives.clone(),
-    //         scoreboard: self.get_scoreboard(),
-    //         current_song: self.state.current_question.as_ref().map(|q| match q {
-    //             GameQuestion::Color(c) => CurrentSongInfo {
-    //                 song_name: c.song.clone(),
-    //                 artist: c.artist.clone(),
-    //                 youtube_id: c.youtube_id.clone(),
-    //             },
-    //             GameQuestion::Character(c) => CurrentSongInfo {
-    //                 song_name: c.song.clone(),
-    //                 artist: "".to_string(), // Character questions don't have artist
-    //                 youtube_id: c.youtube_id.clone(),
-    //             },
-    //         }),
-    //     }
-    // }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::question::Color;
-    use crate::question::GameQuestion;
 
     #[test]
     fn test_name_validation() {

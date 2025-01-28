@@ -244,7 +244,7 @@ impl GameQuestion {
 
 pub struct QuestionStore {
     pub questions: RwLock<Arc<Vec<GameQuestion>>>,
-    sets: RwLock<Arc<Vec<QuestionSet>>>,
+    pub sets: RwLock<Arc<Vec<QuestionSet>>>,
     db: QuestionDatabase,
 }
 

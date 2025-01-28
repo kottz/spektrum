@@ -1,3 +1,4 @@
+use crate::db::QuestionSet;
 use crate::game::{GameEngine, GameEvent, GameResponse, Recipients, ResponsePayload};
 use crate::messages::ServerMessage;
 use crate::question::GameQuestion;
@@ -87,6 +88,7 @@ impl GameLobby {
         id: Uuid,
         admin_id: Uuid,
         questions: Arc<Vec<GameQuestion>>,
+        set: Option<&QuestionSet>,
         round_duration: u64,
     ) -> Self {
         let now = Instant::now();
@@ -95,6 +97,7 @@ impl GameLobby {
             engine: Arc::new(RwLock::new(GameEngine::new(
                 admin_id,
                 questions,
+                set,
                 round_duration,
             ))),
             connections: Arc::new(RwLock::new(HashMap::new())),
@@ -305,6 +308,7 @@ impl GameManager {
     pub fn create_lobby(
         &self,
         questions: Arc<Vec<GameQuestion>>,
+        set: Option<&QuestionSet>,
         round_duration: u64,
     ) -> GameResult<(Uuid, String, Uuid)> {
         let lobby_id = Uuid::new_v4();
@@ -314,6 +318,7 @@ impl GameManager {
             lobby_id,
             admin_id,
             questions,
+            set,
             round_duration,
         ));
         let join_code = self.generate_join_code(lobby_id)?;

@@ -128,9 +128,39 @@ impl AppState {
     }
 }
 
+#[derive(Debug, Serialize)]
+pub struct SetInfo {
+    pub id: i64,
+    pub name: String,
+    pub question_count: usize,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ListSetsResponse {
+    pub sets: Vec<SetInfo>,
+}
+
+pub async fn list_sets_handler(
+    State(state): State<AppState>,
+) -> Result<Json<ListSetsResponse>, ApiError> {
+    let sets = state.store.sets.read().await;
+
+    let sets_info: Vec<SetInfo> = sets
+        .iter()
+        .map(|set| SetInfo {
+            id: set.id,
+            name: set.name.clone(),
+            question_count: set.question_ids.len(),
+        })
+        .collect();
+
+    Ok(Json(ListSetsResponse { sets: sets_info }))
+}
+
 #[derive(Debug, Deserialize)]
 pub struct CreateLobbyRequest {
     round_duration: Option<u64>,
+    set_id: Option<i64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -152,13 +182,26 @@ pub async fn create_lobby_handler(
     }
 
     let questions = state.store.questions.read().await;
+    let sets = state.store.sets.read().await;
+
+    // Validate and get the set if an ID is provided
+    let selected_set = if let Some(set_id) = req.set_id {
+        Some(
+            sets.iter()
+                .find(|set| set.id == set_id)
+                .ok_or_else(|| ApiError::Validation(format!("Set with id {} not found", set_id)))?,
+        )
+    } else {
+        None
+    };
+
     let mgr = state
         .manager
         .lock()
         .map_err(|e| ApiError::Lock(e.to_string()))?;
 
     let (lobby_id, join_code, admin_id) = mgr
-        .create_lobby(questions.clone(), round_duration)
+        .create_lobby(questions.clone(), selected_set, round_duration)
         .map_err(|e| ApiError::Lobby(e.to_string()))?;
 
     Ok(Json(CreateLobbyResponse {
