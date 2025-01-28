@@ -192,6 +192,7 @@
 			<div>
 				<Input
 					type="password"
+					autocomplete="off"
 					placeholder="Enter password to apply changes"
 					bind:value={state.password}
 				/>
