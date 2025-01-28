@@ -1,18 +1,18 @@
 <script lang="ts">
 	import HomeScreen from '$lib/components/game/home-screen.svelte';
-	import PlayerGameScreen from '$lib/components/game/player-game-screen.svelte'; // For players
-	import AdminGameScreen from '$lib/components/game/admin-game-screen.svelte'; // For admins
+	import PlayerGameScreen from '$lib/components/game/player-game-screen.svelte';
+	import AdminGameScreen from '$lib/components/game/admin-game-screen.svelte';
 	import { gameStore } from '$lib/stores/game';
 
-	let playerName = '';
-	let lobbyCode = '';
+	let playerName = $state('');
+	let lobbyCode = $state('');
 </script>
 
 {#if $gameStore.lobbyId}
 	{#if $gameStore.isAdmin}
-		<AdminGameScreen /> <!-- Only admin controls and info -->
+		<AdminGameScreen />
 	{:else}
-		<PlayerGameScreen {playerName} {lobbyCode} /> <!-- Full game interface for players -->
+		<PlayerGameScreen {playerName} {lobbyCode} />
 	{/if}
 {:else}
 	<HomeScreen bind:playerName bind:lobbyCode />

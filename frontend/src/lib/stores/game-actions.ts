@@ -26,7 +26,7 @@ class GameActions {
 	/**
 	 * Create a new lobby, then automatically join it as admin.
 	 */
-	public async createGame(playerName: string = 'Admin') {
+	public async createGame(playerName: string = 'Admin', set: number | null = null) {
 		try {
 			const response = await fetch(`${PUBLIC_SPEKTRUM_SERVER_URL}/api/lobbies`, {
 				method: 'POST',
@@ -35,7 +35,7 @@ class GameActions {
 				},
 				body: JSON.stringify({
 					round_duration: 60,
-					lobby_name: 'New Lobby'
+					set_id: set
 				})
 			});
 
