@@ -12,6 +12,7 @@
 	const phase = $derived($gameStore.phase?.toLowerCase() || 'lobby');
 	const players = $derived(Array.from($gameStore.players.values()));
 	const playerCount = $derived(players.length);
+	const outOfQuestions = $derived($gameStore.upcomingQuestions?.length === 0);
 
 	// Game state checks
 	const isGameRunning = $derived(phase !== 'lobby' && phase !== 'gameover');
@@ -46,7 +47,10 @@
 			<Separator class="my-4" />
 			<!-- Start/End Round button -->
 			{#if isGameRunning}
-				<Button on:click={() => (isInQuestion ? gameActions.endRound() : gameActions.startRound())}>
+				<Button
+					disabled={outOfQuestions}
+					on:click={() => (isInQuestion ? gameActions.endRound() : gameActions.startRound())}
+				>
 					{isInQuestion ? 'End Round' : 'Start Round'}
 				</Button>
 			{/if}
@@ -54,7 +58,7 @@
 			<!-- Skip Question button - always visible but conditionally disabled -->
 			<Button
 				variant="outline"
-				disabled={isInQuestion || !isGameRunning}
+				disabled={isInQuestion || !isGameRunning || outOfQuestions}
 				on:click={() => gameActions.skipQuestion()}
 			>
 				Skip Question

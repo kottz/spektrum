@@ -137,12 +137,14 @@ pub struct SetInfo {
 
 #[derive(Debug, Serialize)]
 pub struct ListSetsResponse {
+    pub num_questions: usize,
     pub sets: Vec<SetInfo>,
 }
 
 pub async fn list_sets_handler(
     State(state): State<AppState>,
 ) -> Result<Json<ListSetsResponse>, ApiError> {
+    let num_questions = state.store.questions.read().await.len();
     let sets = state.store.sets.read().await;
 
     let sets_info: Vec<SetInfo> = sets
@@ -154,7 +156,10 @@ pub async fn list_sets_handler(
         })
         .collect();
 
-    Ok(Json(ListSetsResponse { sets: sets_info }))
+    Ok(Json(ListSetsResponse {
+        num_questions,
+        sets: sets_info,
+    }))
 }
 
 #[derive(Debug, Deserialize)]

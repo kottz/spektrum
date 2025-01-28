@@ -23,10 +23,7 @@
 			const response = await fetch(`${PUBLIC_SPEKTRUM_SERVER_URL}/api/list-sets`);
 			if (!response.ok) throw new Error('Failed to fetch question sets');
 			const data = await response.json();
-			const totalQuestions = data.sets.reduce(
-				(acc: number, set: any) => acc + set.question_count,
-				0
-			);
+			const totalQuestions = data.num_questions;
 			sets = [{ id: null, name: 'All Questions', question_count: totalQuestions }, ...data.sets];
 		} catch (err) {
 			notifications.add('Failed to load question sets', 'destructive');
