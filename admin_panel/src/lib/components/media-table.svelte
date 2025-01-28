@@ -21,18 +21,41 @@
 			release_year: new Date().getFullYear(),
 			spotify_uri: '',
 			youtube_id: ''
-		} as Partial<Media>
+		} as Partial<Media>,
+		sortKey: 'id' as 'id' | 'title' | 'artist' | 'release_year',
+		sortDirection: 'asc' as 'asc' | 'desc'
 	});
 
 	const filteredData = $derived(() => {
 		const data = adminStore.getState().media;
-		return data.filter((media) => {
+		const filtered = data.filter((media) => {
 			const searchLower = state.searchTerm.toLowerCase();
 			return (
 				media.title.toLowerCase().includes(searchLower) ||
 				media.artist.toLowerCase().includes(searchLower) ||
 				media.id.toString().includes(state.searchTerm)
 			);
+		});
+
+		return filtered.slice().sort((a, b) => {
+			if (state.sortKey === 'id') {
+				return state.sortDirection === 'asc' ? a.id - b.id : b.id - a.id;
+			} else if (state.sortKey === 'title') {
+				const titleA = a.title?.toLowerCase() || 'zzz_unknown';
+				const titleB = b.title?.toLowerCase() || 'zzz_unknown';
+				const comparison = titleA.localeCompare(titleB);
+				return state.sortDirection === 'asc' ? comparison : -comparison;
+			} else if (state.sortKey === 'artist') {
+				const artistA = a.artist?.toLowerCase() || 'zzz_unknown';
+				const artistB = b.artist?.toLowerCase() || 'zzz_unknown';
+				const comparison = artistA.localeCompare(artistB);
+				return state.sortDirection === 'asc' ? comparison : -comparison;
+			} else if (state.sortKey === 'release_year') {
+				const yearA = a.release_year || 0;
+				const yearB = b.release_year || 0;
+				return state.sortDirection === 'asc' ? yearA - yearB : yearB - yearA;
+			}
+			return 0;
 		});
 	});
 
@@ -151,6 +174,16 @@
 			state.currentPage--;
 		}
 	}
+
+	function handleSort(key: 'id' | 'title' | 'artist' | 'release_year') {
+		if (state.sortKey === key) {
+			state.sortDirection = state.sortDirection === 'asc' ? 'desc' : 'asc';
+		} else {
+			state.sortKey = key;
+			state.sortDirection = 'asc';
+		}
+		state.currentPage = 0; // Reset to first page when changing sort
+	}
 </script>
 
 <TableContainer>
@@ -172,10 +205,54 @@
 	<Table.Root>
 		<Table.Header>
 			<Table.Row>
-				<Table.Head>ID</Table.Head>
-				<Table.Head>Title</Table.Head>
-				<Table.Head>Artist</Table.Head>
-				<Table.Head>Release Year</Table.Head>
+				<Table.Head>
+					<div class="flex items-center gap-1">
+						ID
+						<Button variant="ghost" size="sm" on:click={() => handleSort('id')}>
+							{#if state.sortKey === 'id'}
+								{state.sortDirection === 'asc' ? '↑' : '↓'}
+							{:else}
+								↕
+							{/if}
+						</Button>
+					</div>
+				</Table.Head>
+				<Table.Head>
+					<div class="flex items-center gap-1">
+						Title
+						<Button variant="ghost" size="sm" on:click={() => handleSort('title')}>
+							{#if state.sortKey === 'title'}
+								{state.sortDirection === 'asc' ? '↑' : '↓'}
+							{:else}
+								↕
+							{/if}
+						</Button>
+					</div>
+				</Table.Head>
+				<Table.Head>
+					<div class="flex items-center gap-1">
+						Artist
+						<Button variant="ghost" size="sm" on:click={() => handleSort('artist')}>
+							{#if state.sortKey === 'artist'}
+								{state.sortDirection === 'asc' ? '↑' : '↓'}
+							{:else}
+								↕
+							{/if}
+						</Button>
+					</div>
+				</Table.Head>
+				<Table.Head>
+					<div class="flex items-center gap-1">
+						Release Year
+						<Button variant="ghost" size="sm" on:click={() => handleSort('release_year')}>
+							{#if state.sortKey === 'release_year'}
+								{state.sortDirection === 'asc' ? '↑' : '↓'}
+							{:else}
+								↕
+							{/if}
+						</Button>
+					</div>
+				</Table.Head>
 				<Table.Head>Questions</Table.Head>
 				<Table.Head>Spotify</Table.Head>
 				<Table.Head>YouTube</Table.Head>
@@ -188,7 +265,7 @@
 					<Table.Cell>{state.newMediaData.id}</Table.Cell>
 					<Table.Cell>
 						<EditableInput
-							value={state.newMediaData.title}
+							value={state.newMediaData.title || ''}
 							placeholder="Title"
 							onChange={(value) => (state.newMediaData.title = value)}
 							onCommit={(value) => (state.newMediaData.title = value)}
@@ -196,7 +273,7 @@
 					</Table.Cell>
 					<Table.Cell>
 						<EditableInput
-							value={state.newMediaData.artist}
+							value={state.newMediaData.artist || ''}
 							placeholder="Artist"
 							onChange={(value) => (state.newMediaData.artist = value)}
 							onCommit={(value) => (state.newMediaData.artist = value)}
@@ -205,7 +282,7 @@
 					<Table.Cell>
 						<EditableInput
 							type="number"
-							value={state.newMediaData.release_year.toString()}
+							value={state.newMediaData.release_year?.toString() || ''}
 							onChange={(value) => (state.newMediaData.release_year = parseInt(value))}
 							onCommit={(value) => (state.newMediaData.release_year = parseInt(value))}
 						/>
@@ -253,14 +330,14 @@
 					<Table.Cell>{media.id}</Table.Cell>
 					<Table.Cell>
 						<EditableInput
-							value={getEditingValue(media.id, 'title', media.title)}
+							value={getEditingValue(media.id, 'title', media.title).toString()}
 							onChange={(value) => handleMediaFieldChange(media.id, 'title', value)}
 							onCommit={(value) => commitChanges(media.id, 'title')}
 						/>
 					</Table.Cell>
 					<Table.Cell>
 						<EditableInput
-							value={getEditingValue(media.id, 'artist', media.artist)}
+							value={getEditingValue(media.id, 'artist', media.artist).toString()}
 							onChange={(value) => handleMediaFieldChange(media.id, 'artist', value)}
 							onCommit={(value) => commitChanges(media.id, 'artist')}
 						/>
@@ -283,7 +360,7 @@
 					</Table.Cell>
 					<Table.Cell>
 						<EditableInput
-							value={getEditingValue(media.id, 'spotify_uri', media.spotify_uri || '')}
+							value={getEditingValue(media.id, 'spotify_uri', media.spotify_uri || '').toString()}
 							placeholder="Spotify URI"
 							onChange={(value) => handleMediaFieldChange(media.id, 'spotify_uri', value)}
 							onCommit={(value) => commitChanges(media.id, 'spotify_uri')}
@@ -302,7 +379,7 @@
 						<div class="flex items-center gap-2">
 							<div>
 								<EditableInput
-									value={getEditingValue(media.id, 'youtube_id', media.youtube_id || '')}
+									value={getEditingValue(media.id, 'youtube_id', media.youtube_id || '').toString()}
 									placeholder="YouTube ID"
 									onChange={(value) => handleMediaFieldChange(media.id, 'youtube_id', value)}
 									onCommit={(value) => commitChanges(media.id, 'youtube_id')}

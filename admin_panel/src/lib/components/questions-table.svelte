@@ -38,7 +38,9 @@
 			is_active: true
 		},
 		tempOptions: [] as QuestionOption[],
-		tempOptionCounter: -1
+		tempOptionCounter: -1,
+		sortKey: 'id' as 'id' | 'media',
+		sortDirection: 'asc' as 'asc' | 'desc'
 	});
 
 	const showCharacterBank = $derived(
@@ -57,7 +59,7 @@
 
 	const filteredData = $derived(() => {
 		const searchLower = state.searchTerm.toLowerCase();
-		return adminStore.getState().questions.filter((question) => {
+		const filtered = adminStore.getState().questions.filter((question) => {
 			if (!state.selectedTypes.has(question.question_type)) return false;
 
 			const media = mediaById.get(question.media_id);
@@ -69,6 +71,18 @@
 				media?.title.toLowerCase().includes(searchLower) ||
 				questionOptions.some((opt) => opt.option_text.toLowerCase().includes(searchLower))
 			);
+		});
+
+		return filtered.slice().sort((a, b) => {
+			if (state.sortKey === 'id') {
+				return state.sortDirection === 'asc' ? a.id - b.id : b.id - a.id;
+			} else if (state.sortKey === 'media') {
+				const mediaA = mediaById.get(a.media_id)?.title?.toLowerCase() || 'zzz_unknown';
+				const mediaB = mediaById.get(b.media_id)?.title?.toLowerCase() || 'zzz_unknown';
+				const comparison = mediaA.localeCompare(mediaB);
+				return state.sortDirection === 'asc' ? comparison : -comparison;
+			}
+			return 0;
 		});
 	});
 
@@ -98,8 +112,7 @@
 	});
 
 	function getMediaTitle(mediaId: number): string {
-		const media = adminStore.getState().media.find((m) => m.id === mediaId);
-		return media?.title || 'Unknown Media';
+		return mediaById.get(mediaId)?.title || 'Unknown Media';
 	}
 
 	function getMediaInfo(mediaId: number): Media | null {
@@ -108,6 +121,16 @@
 
 	function getQuestionOptions(questionId: number) {
 		return adminStore.getState().options.filter((opt) => opt.question_id === questionId);
+	}
+
+	function handleSort(key: 'id' | 'media') {
+		if (state.sortKey === key) {
+			state.sortDirection = state.sortDirection === 'asc' ? 'desc' : 'asc';
+		} else {
+			state.sortKey = key;
+			state.sortDirection = 'asc';
+		}
+		state.currentPage = 0; // Reset to first page when changing sort
 	}
 
 	function handleDrop(event: DragEvent, questionId: number) {
@@ -297,8 +320,30 @@
 				<Table.Root>
 					<Table.Header>
 						<Table.Row>
-							<Table.Head>ID</Table.Head>
-							<Table.Head>Media</Table.Head>
+							<Table.Head>
+								<div class="flex items-center gap-1">
+									ID
+									<Button variant="ghost" size="sm" on:click={() => handleSort('id')}>
+										{#if state.sortKey === 'id'}
+											{state.sortDirection === 'asc' ? '↑' : '↓'}
+										{:else}
+											↕
+										{/if}
+									</Button>
+								</div>
+							</Table.Head>
+							<Table.Head class="w-48">
+								<div class="flex items-center gap-1">
+									Media
+									<Button variant="ghost" size="sm" on:click={() => handleSort('media')}>
+										{#if state.sortKey === 'media'}
+											{state.sortDirection === 'asc' ? '↑' : '↓'}
+										{:else}
+											↕
+										{/if}
+									</Button>
+								</div>
+							</Table.Head>
 							<Table.Head class="ml-0 pl-1">
 								<DropdownMenu.Root>
 									<DropdownMenu.Trigger asChild let:builder>
