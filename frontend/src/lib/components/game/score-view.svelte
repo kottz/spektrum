@@ -9,7 +9,6 @@
 </script>
 
 <div class="container mx-auto max-w-2xl space-y-6 p-6">
-	<!-- Scoreboard -->
 	<Card>
 		<CardContent class="p-6">
 			<Scoreboard />

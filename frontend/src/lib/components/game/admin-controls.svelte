@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { gameStore } from '../../stores/game';
 	import { gameActions } from '../../stores/game-actions';
+	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Separator } from '$lib/components/ui/separator';
@@ -72,19 +73,20 @@
 				<span class="font-medium">{phase}</span>
 			</div>
 
-			<!-- Players list -->
 			<div class="space-y-2">
 				<div class="flex justify-between text-sm">
 					<span class="text-muted-foreground">Players ({playerCount})</span>
 				</div>
-				<div class="space-y-1">
-					{#each players as player}
-						<div class="flex items-center justify-between rounded bg-muted p-2 text-sm">
-							<span>{player.name}</span>
-							<span class="text-muted-foreground">{player.score}</span>
-						</div>
-					{/each}
-				</div>
+				<ScrollArea class="h-64 rounded-md border">
+					<div class="space-y-1 p-2">
+						{#each players as player}
+							<div class="flex items-center justify-between rounded bg-muted p-2 text-sm">
+								<span>{player.name}</span>
+								<span class="text-muted-foreground">{player.score}</span>
+							</div>
+						{/each}
+					</div>
+				</ScrollArea>
 			</div>
 		</div>
 
