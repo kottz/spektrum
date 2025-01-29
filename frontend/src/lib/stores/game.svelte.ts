@@ -1,7 +1,7 @@
 // src/lib/stores/game.ts
 
 import { browser } from '$app/environment';
-import { youtubeStore } from './youtube-store';
+import { youtubeStore } from '$lib/stores/youtube-store.svelte';
 import { timerStore } from '$lib/stores/timer-store.svelte';
 import { info, warn } from '$lib/utils/logger';
 

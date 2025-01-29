@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { youtubeStore } from '../../stores/youtube-store';
+	import { youtubeStore } from '$lib/stores/youtube-store.svelte';
 	import { gameStore } from '$lib/stores/game.svelte';
 	import { Card, CardContent } from '$lib/components/ui/card';
 	import { info, warn } from '$lib/utils/logger';

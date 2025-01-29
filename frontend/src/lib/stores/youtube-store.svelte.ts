@@ -1,6 +1,5 @@
-import { writable, get } from 'svelte/store';
-import { info } from '$lib/utils/logger';
-import { warn } from '$lib/utils/logger';
+// src/lib/stores/youtube-store.ts
+import { info, warn } from '$lib/utils/logger';
 
 interface YouTubeState {
 	player: YT.Player | null;
@@ -11,7 +10,7 @@ interface YouTubeState {
 }
 
 function createYouTubeStore() {
-	const { subscribe, set, update } = writable<YouTubeState>({
+	const state = $state<YouTubeState>({
 		player: null,
 		isLoading: false,
 		currentVideoId: null,
@@ -45,7 +44,6 @@ function createYouTubeStore() {
 	}
 
 	function loadVideo(videoId: string) {
-		const state = get({ subscribe });
 		info('Load video requested:', videoId, 'Player ready:', state.isPlayerReady);
 
 		if (!apiInitialized) {
@@ -55,25 +53,21 @@ function createYouTubeStore() {
 
 		if (!state.isPlayerReady || !state.player) {
 			info('Player not ready, storing video ID for later:', videoId);
-			update((state) => ({ ...state, pendingVideoId: videoId }));
+			state.pendingVideoId = videoId;
 			return;
 		}
 
 		if (state.currentVideoId !== videoId) {
 			info('Loading new video:', videoId);
 			state.player.cueVideoById(videoId);
-			update((state) => ({
-				...state,
-				currentVideoId: videoId,
-				pendingVideoId: null
-			}));
+			state.currentVideoId = videoId;
+			state.pendingVideoId = null;
 		} else {
 			info('Video already loaded:', videoId);
 		}
 	}
 
 	async function verifyAndPlayVideo(expectedVideoId: string): Promise<boolean> {
-		const state = get({ subscribe });
 		if (!state.player || !state.isPlayerReady) {
 			info('Player not ready for verification');
 			return false;
@@ -86,7 +80,7 @@ function createYouTubeStore() {
 			if (currentVideoId !== expectedVideoId) {
 				info('Video mismatch, loading correct video');
 				state.player.loadVideoById(expectedVideoId);
-				update((state) => ({ ...state, currentVideoId: expectedVideoId }));
+				state.currentVideoId = expectedVideoId;
 				return true;
 			} else {
 				info('Correct video already loaded, playing');
@@ -100,7 +94,6 @@ function createYouTubeStore() {
 	}
 
 	function handlePhaseChange(phase: string) {
-		const state = get({ subscribe });
 		if (!state.player || !state.isPlayerReady) {
 			if (phase === 'question') {
 				info('Setting autoplay pending due to player not ready');
@@ -128,58 +121,55 @@ function createYouTubeStore() {
 		}
 	}
 
+	function setPlayer(player: YT.Player) {
+		info('Setting player');
+
+		state.player = player;
+		state.isPlayerReady = true;
+
+		if (state.pendingVideoId) {
+			info('Loading pending video:', state.pendingVideoId);
+			loadVideo(state.pendingVideoId);
+		}
+
+		if (autoplayPending && state.currentVideoId) {
+			info('Executing pending autoplay');
+			player.playVideo();
+			autoplayPending = false;
+		}
+	}
+
+	function cleanup() {
+		info('Cleaning up YouTube player');
+
+		if (state.player) {
+			state.player.destroy();
+		}
+
+		// Reset API initialization flag
+		apiInitialized = false;
+
+		// Reset the store state
+		state.player = null;
+		state.isLoading = false;
+		state.currentVideoId = null;
+		state.isPlayerReady = false;
+		state.pendingVideoId = null;
+
+		// Remove the YouTube iframe if it exists
+		const iframe = document.querySelector('iframe[src*="youtube.com"]');
+		if (iframe) {
+			iframe.remove();
+		}
+	}
+
 	return {
-		subscribe,
+		state,
 		initializeAPI,
-		setPlayer: (player: YT.Player) => {
-			info('Setting player');
-			const state = get({ subscribe });
-
-			update((state) => ({
-				...state,
-				player,
-				isPlayerReady: true
-			}));
-
-			if (state.pendingVideoId) {
-				info('Loading pending video:', state.pendingVideoId);
-				loadVideo(state.pendingVideoId);
-			}
-
-			if (autoplayPending && state.currentVideoId) {
-				info('Executing pending autoplay');
-				player.playVideo();
-				autoplayPending = false;
-			}
-		},
+		setPlayer,
 		loadVideo,
 		handlePhaseChange,
-		cleanup: () => {
-			info('Cleaning up YouTube player');
-			const state = get({ subscribe });
-
-			if (state.player) {
-				state.player.destroy();
-			}
-
-			// Reset API initialization flag
-			apiInitialized = false;
-
-			// Reset the store state
-			set({
-				player: null,
-				isLoading: false,
-				currentVideoId: null,
-				isPlayerReady: false,
-				pendingVideoId: null
-			});
-
-			// Remove the YouTube iframe if it exists
-			const iframe = document.querySelector('iframe[src*="youtube.com"]');
-			if (iframe) {
-				iframe.remove();
-			}
-		}
+		cleanup
 	};
 }
 
