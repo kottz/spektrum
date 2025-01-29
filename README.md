@@ -37,16 +37,19 @@ npm run build         # Production
 
 ### Creating Custom Questions
 
-Questions are stored in `server/data` as CSV files. The game supports two types of questions:
+There is also a separate admin panel you can use as a convenient way to add and remove questions and sets.
+```bash
+cd admin_panel
+npm run dev --host    # Development
+npm run build         # Production
+```
+Questions are stored in `server/data` a JSON file. The game supports two types of questions:
 
-Color questions require:
-- Song title and artist name
+**Color** questions require:
+- Media (Song with a YouTube-link)
 - One or more colors from: Red, Green, Blue, Yellow, Purple, Gold, Silver, Pink, Black, White, Brown, Orange, Gray
-- YouTube link for playback
 
-Character questions require:
-- Song title
-- One correct character name
-- Five alternative character names
-- YouTube link
-- 300x300 AVIF image for each character in `static/img`, filename matching the character name in CSV
+**Character** questions require:
+- Media (Song with a YouTube-link)
+- Six different character options per question
+- 300x300 AVIF image for each character
