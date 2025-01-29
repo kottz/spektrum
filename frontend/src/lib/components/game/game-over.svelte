@@ -8,9 +8,6 @@
 		Array.from(gameStore.state.players.values()).sort((a, b) => b.score - a.score)
 	);
 	const winner = $derived(players[0]);
-	const currentPlayer = $derived(
-		gameStore.state.playerName ? gameStore.state.players.get(gameStore.state.playerName) : undefined
-	);
 </script>
 
 <div class="space-y-6">

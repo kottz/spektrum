@@ -19,7 +19,6 @@
 	);
 
 	const hasAnswered = $derived(currentPlayer?.hasAnswered || false);
-	const selectedAnswer = $derived(currentPlayer?.answer);
 	const currentAnswers = $derived(gameStore.state.currentAnswers);
 
 	// Determine if player's answer was correct

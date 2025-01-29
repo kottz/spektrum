@@ -4,6 +4,7 @@
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { gameActions } from '$lib/stores/game-actions';
 	import { gameStore } from '$lib/stores/game.svelte';
+	import type { SessionInfo } from '$lib/stores/game.svelte';
 	import { notifications } from '$lib/stores/notification-store';
 	import NotificationList from '$lib/components/NotificationList.svelte';
 	import SetSelector from '$lib/components/set-selector.svelte';
@@ -37,7 +38,7 @@
 		}
 	}
 
-	function reconnectToSession(session: any) {
+	function reconnectToSession(session: SessionInfo) {
 		gameStore.setLobbyId(session.lobbyId);
 		gameStore.setPlayerId(session.playerId);
 		gameStore.setPlayerName(session.playerName);

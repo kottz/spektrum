@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { gameStore } from '$lib/stores/game.svelte';
 	import { gameActions } from '../../stores/game-actions';
-	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
+	import { Card, CardContent } from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
 	import Scoreboard from './scoreboard.svelte';
 
