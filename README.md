@@ -2,6 +2,10 @@
 
 An interactive multiplayer music quiz where players compete to identify songs through colors and characters.
 
+https://github.com/user-attachments/assets/d50f094a-d155-4ae6-9604-a3b4732e76a4
+
+(*sound on* ↑)
+
 ## How to Play
 
 Spektrum is meant to be played with all participants in the same room. One person acts as the host and is responsible for music playback. The host creates a lobby and shares the join code with the group. When players have joined, the host starts the game.
