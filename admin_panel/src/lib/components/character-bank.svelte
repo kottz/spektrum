@@ -4,16 +4,28 @@
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import { adminStore } from '$lib/stores/data-manager.svelte';
 	import UploadDialog from '$lib/components/character-upload-dialog.svelte';
+	import { Button } from '$lib/components/ui/button';
 
 	let { className = '' } = $props();
 
 	const state = $state({
 		searchTerm: '',
 		hoveredCharacter: null as number | null,
-		cachedUsage: new Set<number>() // Set of character IDs that are in use
+		cachedUsage: new Set<number>(),
+		sortKey: 'id' as 'id' | 'name',
+		sortDirection: 'asc' as 'asc' | 'desc'
 	});
 
 	const store = $derived(adminStore.getState());
+
+	function handleSort(key: 'id' | 'name') {
+		if (state.sortKey === key) {
+			state.sortDirection = state.sortDirection === 'asc' ? 'desc' : 'asc';
+		} else {
+			state.sortKey = key;
+			state.sortDirection = 'asc';
+		}
+	}
 
 	function isCharacterUsed(characterId: number): boolean {
 		if (state.cachedUsage.has(characterId)) {
@@ -49,7 +61,6 @@
 		state.cachedUsage.delete(id);
 	}
 
-	// Basic search without complex transformations
 	const filteredCharacters = $derived(() => {
 		const searchLower = state.searchTerm.toLowerCase();
 		return store.characters
@@ -58,7 +69,18 @@
 				...c,
 				image_url: c._pendingImage?.dataUrl || c.image_url,
 				isPending: !!c._pendingImage
-			}));
+			}))
+			.sort((a, b) => {
+				if (state.sortKey === 'id') {
+					return state.sortDirection === 'asc' ? a.id - b.id : b.id - a.id;
+				} else if (state.sortKey === 'name') {
+					const nameA = a.name.toLowerCase();
+					const nameB = b.name.toLowerCase();
+					const comparison = nameA.localeCompare(nameB);
+					return state.sortDirection === 'asc' ? comparison : -comparison;
+				}
+				return 0;
+			});
 	});
 </script>
 
@@ -66,12 +88,36 @@
 	<!-- Header -->
 	<div class="flex-none border-b p-4">
 		<div class="flex items-center justify-between">
-			<h2 class="w-48 text-lg font-semibold">Character Bank</h2>
+			<div class="flex items-center gap-4">
+				<h2 class="text-lg font-semibold">Character Bank</h2>
+				<div class="flex items-center gap-2">
+					<div class="flex items-center gap-1">
+						ID
+						<Button variant="ghost" size="sm" on:click={() => handleSort('id')}>
+							{#if state.sortKey === 'id'}
+								{state.sortDirection === 'asc' ? '↑' : '↓'}
+							{:else}
+								↕
+							{/if}
+						</Button>
+					</div>
+					<div class="flex w-16 items-center gap-1">
+						A-Z
+						<Button variant="ghost" size="sm" on:click={() => handleSort('name')}>
+							{#if state.sortKey === 'name'}
+								{state.sortDirection === 'asc' ? '↑' : '↓'}
+							{:else}
+								↕
+							{/if}
+						</Button>
+					</div>
+				</div>
+			</div>
 			<Input
-				class="mr-4"
 				type="text"
 				placeholder="Search characters..."
 				bind:value={state.searchTerm}
+				class="ml-4 mr-4 w-full"
 			/>
 			<UploadDialog />
 		</div>
