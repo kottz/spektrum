@@ -1,6 +1,6 @@
 // src/lib/stores/game-actions.ts
 
-import { websocketStore } from './websocket';
+import { websocketStore } from './websocket.svelte';
 import { gameStore } from './game';
 import { youtubeStore } from './youtube-store';
 import { timerStore } from './timer-store';

@@ -14,9 +14,7 @@
 
 <div class="container mx-auto p-6">
 	<div class="grid grid-cols-[1fr,300px] gap-6">
-		<!-- Main content -->
 		<div class="space-y-6">
-			<!-- Join code -->
 			{#if joinCode}
 				<Card>
 					<div class="flex items-center justify-between p-4">
@@ -25,7 +23,9 @@
 					</div>
 				</Card>
 			{/if}
-			<!-- Scoreboard (shown in score phase and game over) -->
+
+			<YouTubePlayer />
+
 			{#if showScoreboard}
 				<Card>
 					<div class="p-6">
@@ -33,14 +33,12 @@
 					</div>
 				</Card>
 			{/if}
-			<!-- YouTube player -->
-			<YouTubePlayer />
 			<!-- Question preview - using new AdminQuestionView -->
 			{#if phase === GamePhase.Question}
 				<AdminQuestionView />
 			{/if}
 		</div>
-		<!-- Admin controls sidebar -->
+
 		<div class="space-y-6">
 			<AdminControls />
 			{#if $gameStore.error}
