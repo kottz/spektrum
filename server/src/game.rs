@@ -359,16 +359,16 @@ impl GameEngine {
             }];
         }
 
+        self.state
+            .players
+            .insert(ctx.sender_id, PlayerState::new(name.clone()));
+
         let current_players: Vec<(String, i32)> = self
             .state
             .players
             .values()
             .map(|p| (p.name.clone(), p.score))
             .collect();
-
-        self.state
-            .players
-            .insert(ctx.sender_id, PlayerState::new(name.clone()));
 
         vec![
             GameResponse {
