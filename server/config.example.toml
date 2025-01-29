@@ -1,13 +1,27 @@
-question_path = "data/questions.json"
-admin_password = "password123"
+admin_password = ["admin_password123"]
+
+# If you want to use local filesystem
+[storage]
+type = "filesystem"
+base_path = "data" # Folder for questions and backups
+file_path = "questions.json" # Questions file name
+
+# If you want to use B2 instead, comment out the filesystem config
+#[storage]
+# type = "s3" # Backblaze B2
+# bucket = "your-bucket-name"
+# region = "eu-central-003"  # your B2 region
+# prefix = "data" # Folder in the bucket
+# question_folder = "questions" # Folder for questions and backups (relative prefix folder)
+# question_file = "questions.json" # Questions file name
+#
+# access_key_id = "xyz" # Your B2 access key
+# secret_access_key = "secret_xyz" # Your B2 secret key
+
 
 [server]
 port = 8765
-cors_origins = ["http://localhost:5173", "https://quiz.myawesomedomain.com"]
+cors_origins = ["http://localhost:5173", "https://quiz.mydomain.com"]
 
 [logging]
 json = false
-
-[questions]
-color_questions_csv = "data/color_quiz.csv"
-character_questions_csv = "data/movie_character_quiz.csv"
