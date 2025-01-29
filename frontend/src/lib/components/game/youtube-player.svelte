@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { youtubeStore } from '../../stores/youtube-store';
-	import { gameStore } from '../../stores/game';
+	import { gameStore } from '$lib/stores/game.svelte';
 	import { Card, CardContent } from '$lib/components/ui/card';
 	import { info, warn } from '$lib/utils/logger';
 
@@ -40,8 +40,8 @@
 	});
 
 	// Watch for game phase changes
-	$: if ($gameStore.phase) {
-		youtubeStore.handlePhaseChange($gameStore.phase);
+	$: if (gameStore.state.phase) {
+		youtubeStore.handlePhaseChange(gameStore.state.phase);
 	}
 </script>
 

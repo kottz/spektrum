@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { gameStore } from '../../stores/game';
+	import { gameStore } from '$lib/stores/game.svelte';
 	import { Card, CardContent } from '$lib/components/ui/card';
 	import { PUBLIC_SPEKTRUM_CDN_URL } from '$env/static/public';
 	const imageBaseUrl = $derived(`${PUBLIC_SPEKTRUM_CDN_URL}/img`);
 
-	const alternatives = $derived($gameStore.currentQuestion?.alternatives || []);
-	const questionType = $derived($gameStore.currentQuestion?.type || 'default');
-	const upcomingQuestions = $derived($gameStore.upcomingQuestions || []);
+	const alternatives = $derived(gameStore.state.currentQuestion?.alternatives || []);
+	const questionType = $derived(gameStore.state.currentQuestion?.type || 'default');
+	const upcomingQuestions = $derived(gameStore.state.upcomingQuestions || []);
 
 	/**
 	 * Get all correct answers from the first upcoming question

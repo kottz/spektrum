@@ -1,15 +1,14 @@
 <script lang="ts">
-	import { gameStore } from '../../stores/game';
+	import { gameStore } from '$lib/stores/game.svelte';
 	import QuestionView from './question-view.svelte';
 	import ScoreView from './score-view.svelte';
 	import LobbyView from './lobby-view.svelte';
 	import GameOver from './game-over.svelte';
-	import { GamePhase } from '../../types/game';
+	import { GamePhase } from '$lib/types/game';
 
-	export let playerName: string;
-	export let lobbyCode: string;
+	//let { playerName, lobbyCode } = $props<{ playerName: string; lobbyCode: string }>();
 
-	$: phase = $gameStore.phase;
+	const phase = $derived(gameStore.state.phase);
 </script>
 
 <!-- Players see different views based on game phase -->

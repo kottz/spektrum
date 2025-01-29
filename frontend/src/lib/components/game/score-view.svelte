@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { gameStore } from '../../stores/game';
+	import { gameStore } from '$lib/stores/game.svelte';
 	import { gameActions } from '../../stores/game-actions';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
 	import Scoreboard from './scoreboard.svelte';
 
-	$: isAdmin = $gameStore.isAdmin;
+	const isAdmin = $derived(gameStore.state.isAdmin);
 </script>
 
 <div class="container mx-auto max-w-2xl space-y-6 p-6">

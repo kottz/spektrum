@@ -1,13 +1,16 @@
 <script lang="ts">
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import Scoreboard from './scoreboard.svelte';
-	import { gameStore } from '../../stores/game';
+	import { gameStore } from '$lib/stores/game.svelte';
 
-	$: players = Array.from($gameStore.players.values()).sort((a, b) => b.score - a.score);
-	$: winner = players[0];
-	$: currentPlayer = $gameStore.playerName
-		? $gameStore.players.get($gameStore.playerName)
-		: undefined;
+	// Replace reactive statements with derived computations
+	const players = $derived(
+		Array.from(gameStore.state.players.values()).sort((a, b) => b.score - a.score)
+	);
+	const winner = $derived(players[0]);
+	const currentPlayer = $derived(
+		gameStore.state.playerName ? gameStore.state.players.get(gameStore.state.playerName) : undefined
+	);
 </script>
 
 <div class="space-y-6">
@@ -20,7 +23,7 @@
 			<div class="space-y-2 text-center">
 				{#if winner}
 					<div class="text-2xl font-bold">
-						{#if winner.name === $gameStore.playerName}
+						{#if winner.name === gameStore.state.playerName}
 							🎉 You Won! 🎉
 						{:else}
 							Winner: {winner.name}
@@ -33,7 +36,6 @@
 			</div>
 		</CardContent>
 	</Card>
-
 	<!-- Final Scoreboard -->
 	<Card>
 		<CardHeader>

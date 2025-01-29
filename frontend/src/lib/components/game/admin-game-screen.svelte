@@ -1,14 +1,15 @@
 <script lang="ts">
-	import { gameStore } from '../../stores/game';
+	import { gameStore } from '$lib/stores/game.svelte';
 	import AdminControls from './admin-controls.svelte';
 	import Scoreboard from './scoreboard.svelte';
 	import { Card } from '$lib/components/ui/card';
-	import { GamePhase } from '../../types/game';
+	import { GamePhase } from '$lib/types/game';
 	import YouTubePlayer from './youtube-player.svelte';
-	import AdminQuestionView from './admin-question-view.svelte'; // Changed import
+	import AdminQuestionView from './admin-question-view.svelte';
 
-	const joinCode = $derived($gameStore.joinCode);
-	const phase = $derived($gameStore.phase);
+	const joinCode = $derived(gameStore.state.joinCode);
+	const error = $derived(gameStore.state.error);
+	const phase = $derived(gameStore.state.phase);
 	const showScoreboard = $derived(phase === GamePhase.Score || phase === GamePhase.GameOver);
 </script>
 
@@ -41,10 +42,10 @@
 
 		<div class="space-y-6">
 			<AdminControls />
-			{#if $gameStore.error}
+			{#if error}
 				<Card class="border-red-500/20 bg-red-500/10">
 					<div class="p-4 text-red-500">
-						{$gameStore.error}
+						{error}
 					</div>
 				</Card>
 			{/if}

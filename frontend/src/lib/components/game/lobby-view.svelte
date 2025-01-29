@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { gameStore } from '../../stores/game';
+	import { gameStore } from '$lib/stores/game.svelte';
 	import { gameActions } from '../../stores/game-actions';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
 	import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
 
-	$: players = Array.from($gameStore.players.values());
+	$: players = Array.from(gameStore.state.players.values());
 
 	function handleLeaveGame() {
 		gameActions.leaveGame();
@@ -27,7 +27,7 @@
 							<div class="flex items-center rounded bg-muted p-2">
 								<span class="font-medium">
 									{player.name}
-									{#if player.name === $gameStore.playerName}
+									{#if player.name === gameStore.state.playerName}
 										<span class="text-muted-foreground">(You)</span>
 									{/if}
 								</span>

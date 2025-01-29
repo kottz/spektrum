@@ -1,11 +1,9 @@
 // src/lib/stores/game-actions.ts
-
 import { websocketStore } from './websocket.svelte';
-import { gameStore } from './game';
+import { gameStore } from '$lib/stores/game.svelte';
 import { youtubeStore } from './youtube-store';
-import { timerStore } from './timer-store';
+import { timerStore } from '$lib/stores/timer-store.svelte';
 import { info, warn } from '$lib/utils/logger';
-
 import type { ClientMessage, AdminAction } from '../types/game';
 import { PUBLIC_SPEKTRUM_SERVER_URL } from '$env/static/public';
 
@@ -44,13 +42,14 @@ class GameActions {
 			}
 
 			const data = await response.json();
-			// Store admin info and connect as admin
-			gameStore.setAdmin(data.admin_id);
-			gameStore.setJoinCode(data.join_code);
-			gameStore.setLobbyId(data.lobby_id);
 
-			websocketStore.connect(data.join_code, playerName, data.admin_id);
+			// Store admin info - now using direct state mutations
+			gameStore.state.isAdmin = true;
+			gameStore.state.adminId = data.admin_id;
+			gameStore.state.joinCode = data.join_code;
+			gameStore.state.lobbyId = data.lobby_id;
 
+			await websocketStore.connect(data.join_code, playerName, data.admin_id);
 			return data.join_code;
 		} catch (error) {
 			warn('Failed to create game:', error);
@@ -60,7 +59,6 @@ class GameActions {
 
 	/**
 	 * Attempt to reconnect using any credentials stored in localStorage.
-	 * If the server recognizes the lobby/player, it will restore the session.
 	 */
 	public reconnectGame() {
 		info('Attempting to reconnect...');
@@ -71,18 +69,17 @@ class GameActions {
 	 * Submit an answer to the current question.
 	 */
 	public submitAnswer(answer: string) {
-		const state = gameStore.getState();
-		if (!state.lobbyId) {
+		const { lobbyId } = gameStore.state;
+		if (!lobbyId) {
 			warn('No active lobby');
 			return;
 		}
 
 		const message: ClientMessage = {
 			type: 'Answer',
-			lobby_id: state.lobbyId,
+			lobby_id: lobbyId,
 			answer
 		};
-
 		websocketStore.send(message);
 	}
 
@@ -90,18 +87,17 @@ class GameActions {
 	 * Helper to send an admin action if the user is authorized as admin.
 	 */
 	private sendAdminAction(action: AdminAction) {
-		const state = gameStore.getState();
-		if (!state.lobbyId || !state.isAdmin) {
+		const { lobbyId, isAdmin } = gameStore.state;
+		if (!lobbyId || !isAdmin) {
 			warn('Not authorized to perform admin action');
 			return;
 		}
 
 		const message: ClientMessage = {
 			type: 'AdminAction',
-			lobby_id: state.lobbyId,
+			lobby_id: lobbyId,
 			action
 		};
-
 		info('Sending admin action:', message);
 		websocketStore.send(message);
 	}
@@ -144,14 +140,13 @@ class GameActions {
 	 * Leave the current game (if any), then clean up local state and YouTube player.
 	 */
 	public leaveGame() {
-		const state = gameStore.getState();
-		if (!state.lobbyId) return;
+		const { lobbyId } = gameStore.state;
+		if (!lobbyId) return;
 
 		const message: ClientMessage = {
 			type: 'Leave',
-			lobby_id: state.lobbyId
+			lobby_id: lobbyId
 		};
-
 		websocketStore.send(message);
 		gameStore.cleanup();
 		youtubeStore.cleanup();

@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { Progress } from '$lib/components/ui/progress';
-	import { timerStore } from '../../stores/timer-store';
-	import { gameStore } from '../../stores/game';
+	import { timerStore } from '$lib/stores/timer-store.svelte';
+	import { gameStore } from '$lib/stores/game.svelte';
 
-	// Just subscribe to the time
-	const timeLeft = $derived($timerStore);
-	const progress = $derived((timeLeft / $gameStore.roundDuration) * 100);
+	// Access the time directly from the store's state
+	const timeLeft = $derived(timerStore.state.timeLeft);
+	const progress = $derived((timeLeft / gameStore.state.roundDuration) * 100);
 </script>
 
 <div class="space-y-2">

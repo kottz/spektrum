@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { gameStore } from '../../stores/game';
-	$: upcomingQuestions = $gameStore.upcomingQuestions || [];
+	import { gameStore } from '$lib/stores/game.svelte';
+	const upcomingQuestions = $derived(gameStore.state.upcomingQuestions || []);
 </script>
 
 <div class="space-y-2">

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { gameStore } from '../../stores/game';
+	import { gameStore } from '$lib/stores/game.svelte';
 	import { gameActions } from '../../stores/game-actions';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import { Button } from '$lib/components/ui/button';
@@ -9,13 +9,13 @@
 	import AnswerProgress from '$lib/components/game/answer-progress.svelte';
 	import RoundTimer from './round-timer.svelte';
 
-	// Reactive values from store
-	const phase = $derived($gameStore.phase?.toLowerCase() || 'lobby');
-	const players = $derived(Array.from($gameStore.players.values()));
+	// Reactive values from store using the new state structure
+	const phase = $derived(gameStore.state.phase?.toLowerCase() || 'lobby');
+	const players = $derived(Array.from(gameStore.state.players.values()));
 	const playerCount = $derived(players.length);
-	const outOfQuestions = $derived($gameStore.upcomingQuestions?.length === 0);
+	const outOfQuestions = $derived(gameStore.state.upcomingQuestions?.length === 0);
 
-	// Game state checks
+	// Game state checks remain the same logic but use the new reactive values
 	const isGameRunning = $derived(phase !== 'lobby' && phase !== 'gameover');
 	const isInQuestion = $derived(phase === 'question');
 	const isGameOver = $derived(phase === 'gameover');

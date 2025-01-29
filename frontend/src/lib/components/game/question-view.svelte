@@ -1,37 +1,34 @@
 <script lang="ts">
-	import { gameStore } from '../../stores/game';
+	import { gameStore } from '$lib/stores/game.svelte';
 	import { gameActions } from '../../stores/game-actions';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import AnswerProgress from './answer-progress.svelte';
 	import RoundTimer from './round-timer.svelte';
 	import { PUBLIC_SPEKTRUM_CDN_URL } from '$env/static/public';
-	import { timerStore } from '../../stores/timer-store';
+	import { timerStore } from '$lib/stores/timer-store.svelte';
 
 	const imageBaseUrl = $derived(`${PUBLIC_SPEKTRUM_CDN_URL}/img`);
 
-	/**
-	 * Subscribe to necessary parts of the game store
-	 */
-	const alternatives = $derived($gameStore.currentQuestion?.alternatives || []);
-	const questionType = $derived($gameStore.currentQuestion?.type || 'default');
+	// Access state directly through the new store structure
+	const alternatives = $derived(gameStore.state.currentQuestion?.alternatives || []);
+	const questionType = $derived(gameStore.state.currentQuestion?.type || 'default');
+
+	// Get current player info
 	const currentPlayer = $derived(
-		$gameStore.playerName ? $gameStore.players.get($gameStore.playerName) : undefined
+		gameStore.state.playerName ? gameStore.state.players.get(gameStore.state.playerName) : undefined
 	);
+
 	const hasAnswered = $derived(currentPlayer?.hasAnswered || false);
 	const selectedAnswer = $derived(currentPlayer?.answer);
-	const currentAnswers = $derived($gameStore.currentAnswers);
+	const currentAnswers = $derived(gameStore.state.currentAnswers);
 
-	/**
-	 * Determine if this player's answer was correct.
-	 */
-	const myAnswer = $derived(currentAnswers.find((a) => a.name === $gameStore.playerName));
+	// Determine if player's answer was correct
+	const myAnswer = $derived(currentAnswers.find((a) => a.name === gameStore.state.playerName));
 	const wasCorrect = $derived(myAnswer?.correct);
 
 	let clickedAnswer = $state<string | null>(null);
 
-	/**
-	 * Map of color names to hex codes
-	 */
+	// Color map remains unchanged
 	const colorMap: Record<string, string> = {
 		red: '#FF0000',
 		green: '#00FF00',
@@ -48,9 +45,6 @@
 		gray: '#808080'
 	};
 
-	/**
-	 * Submit an answer if the player hasn't already answered.
-	 */
 	function handleAnswer(answer: string) {
 		if (!hasAnswered) {
 			clickedAnswer = answer;
@@ -59,18 +53,12 @@
 		}
 	}
 
-	/**
-	 * Build the list of CSS classes for a given alternative.
-	 * This handles rings, hover effects, and metallic classes.
-	 */
 	function getButtonStyles(alternative: string) {
 		const styles: string[] = [];
 		styles.push('aspect-square', 'rounded-lg', 'transition-all', 'duration-150', 'relative');
 
-		// First establish base background for character type
 		if (questionType === 'character') {
 			styles.push('p-0', 'overflow-hidden');
-			// Only add the muted background if it's not a clicked answer
 			if (!(alternative === clickedAnswer && myAnswer)) {
 				styles.push('bg-gray-200');
 			}
@@ -78,7 +66,6 @@
 			styles.push('bg-muted');
 		}
 
-		// Handle correct/incorrect answer styling
 		if (alternative === clickedAnswer) {
 			styles.push('ring-4', 'z-10');
 			if (myAnswer) {
@@ -92,7 +79,6 @@
 			}
 		}
 
-		// Rest of the styles remain the same
 		if (clickedAnswer && alternative !== clickedAnswer) {
 			styles.push('opacity-40');
 		}
@@ -104,7 +90,7 @@
 		if (questionType === 'color') {
 			const lower = alternative.toLowerCase();
 			if (lower === 'white') {
-				styles.push('border-2', 'border-black'); //, 'border-black');
+				styles.push('border-2', 'border-black');
 			}
 			if (lower === 'gold') {
 				styles.push('metallic-gold');

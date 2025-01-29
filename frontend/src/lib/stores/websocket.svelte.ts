@@ -2,7 +2,7 @@
 
 import type { ServerMessage, ClientMessage } from '../types/game';
 import { PUBLIC_SPEKTRUM_WS_SERVER_URL } from '$env/static/public';
-import { gameStore } from './game';
+import { gameStore } from '$lib/stores/game.svelte';
 import { info, warn } from '$lib/utils/logger';
 
 interface WebSocketState {
@@ -85,10 +85,11 @@ function createWebSocketStore() {
 				try {
 					const message = JSON.parse(event.data) as ServerMessage;
 					info('Received message:', message);
-					state.messages = [...state.messages, message];
+
+					gameStore.processServerMessage(message);
 
 					if (message.type === 'Error') {
-						reject(new Error(message.error || 'Server error'));
+						reject(new Error(message.code || 'Server error'));
 						return;
 					}
 

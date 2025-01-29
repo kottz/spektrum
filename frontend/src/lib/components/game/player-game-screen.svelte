@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { gameStore } from '../../stores/game';
+	import { gameStore } from '$lib/stores/game.svelte';
 	import { gameActions } from '../../stores/game-actions';
 	import QuestionView from './question-view.svelte';
 	import ScoreView from './score-view.svelte';
@@ -8,8 +8,8 @@
 	import { GamePhase } from '../../types/game';
 	import { Card } from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
-	$: phase = $gameStore.phase;
-	$: joinCode = $gameStore.joinCode;
+	const phase = $derived(gameStore.state.phase);
+	const joinCode = $derived(gameStore.state.joinCode);
 </script>
 
 <div class="flex h-[100dvh] flex-col">
