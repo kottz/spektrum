@@ -559,6 +559,7 @@ async fn handle_reconnect(
                     question_type,
                     alternatives,
                     scoreboard,
+                    round_scores,
                 } = game_response.payload
                 {
                     let phase_str = match phase {
@@ -574,6 +575,7 @@ async fn handle_reconnect(
                             question_type,
                             alternatives,
                             scoreboard,
+                            round_scores,
                             current_song: None,
                         },
                     });

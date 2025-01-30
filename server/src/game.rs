@@ -20,6 +20,7 @@ pub enum GamePhase {
 pub struct PlayerState {
     pub name: String,
     pub score: i32,
+    pub round_score: i32,
     pub has_answered: bool,
     pub answer: Option<String>,
 }
@@ -29,6 +30,7 @@ impl PlayerState {
         Self {
             name,
             score: 0,
+            round_score: 0,
             has_answered: false,
             answer: None,
         }
@@ -41,6 +43,7 @@ pub struct GameStateResponse {
     pub question_type: String,
     pub alternatives: Vec<String>,
     pub scoreboard: Vec<(String, i32)>,
+    pub round_scores: Vec<(String, i32)>,
     pub current_song: Option<CurrentSongInfo>,
 }
 
@@ -123,12 +126,14 @@ pub enum ResponsePayload {
         name: String,
         correct: bool,
         new_score: i32,
+        round_score: i32,
     },
     StateChanged {
         phase: GamePhase,
         question_type: String,
         alternatives: Vec<String>,
         scoreboard: Vec<(String, i32)>,
+        round_scores: Vec<(String, i32)>,
     },
     GameOver {
         final_scores: Vec<(String, i32)>,
@@ -280,6 +285,14 @@ impl GameEngine {
         }
     }
 
+    pub fn get_round_scores(&self) -> Vec<(String, i32)> {
+        self.state
+            .players
+            .values()
+            .map(|p| (p.name.clone(), p.round_score))
+            .collect()
+    }
+
     pub fn process_event(&mut self, event: GameEvent) -> Vec<GameResponse> {
         let GameEvent { context, action } = event;
 
@@ -322,6 +335,7 @@ impl GameEngine {
                         .unwrap_or_default(),
                     alternatives: self.state.current_alternatives.clone(),
                     scoreboard: self.get_scoreboard(),
+                    round_scores: self.get_round_scores(),
                 },
             }],
             GameAction::EndRound => self.handle_end_round(context),
@@ -388,6 +402,7 @@ impl GameEngine {
                     question_type: "".to_string(),
                     alternatives: self.state.current_alternatives.clone(),
                     scoreboard: self.get_scoreboard(),
+                    round_scores: self.get_round_scores(),
                 },
             },
         ]
@@ -476,6 +491,7 @@ impl GameEngine {
             .correct_answers
             .as_ref()
             .map_or(false, |answers| answers.contains(&answer));
+
         let new_score = if correct {
             let score_delta = ((self.state.round_duration as f64 * 100.0
                 - (elapsed.as_secs_f64() * 100.0))
@@ -486,6 +502,20 @@ impl GameEngine {
             player.score
         };
 
+        let score_delta = if correct {
+            let elapsed = match self.state.round_start_time {
+                Some(start_time) => ctx.timestamp.duration_since(start_time),
+                None => Duration::from_secs(self.state.round_duration / 2),
+            };
+
+            ((self.state.round_duration as f64 * 100.0 - (elapsed.as_secs_f64() * 100.0)).max(0.0))
+                as i32
+        } else {
+            0
+        };
+
+        player.round_score = score_delta; // Set round score
+        player.score += score_delta; // Add to total score
         player.has_answered = true;
         player.answer = Some(answer);
 
@@ -495,6 +525,7 @@ impl GameEngine {
                 name: player.name.clone(),
                 correct,
                 new_score,
+                round_score: player.round_score,
             },
         }]
     }
@@ -519,6 +550,7 @@ impl GameEngine {
                 question_type: "".to_string(),
                 alternatives: Vec::new(),
                 scoreboard: self.get_scoreboard(),
+                round_scores: self.get_round_scores(),
             },
         }];
 
@@ -565,6 +597,7 @@ impl GameEngine {
         for player in self.state.players.values_mut() {
             player.has_answered = false;
             player.answer = None;
+            player.round_score = 0;
         }
 
         match self.setup_round(specified_alternatives) {
@@ -589,6 +622,7 @@ impl GameEngine {
                         question_type: question.get_question_type().to_string(),
                         alternatives: self.state.current_alternatives.clone(),
                         scoreboard: self.get_scoreboard(),
+                        round_scores: self.get_round_scores(),
                     },
                 }];
 
@@ -622,7 +656,6 @@ impl GameEngine {
             }];
         }
 
-        // Reset state for next round
         self.state.current_question = None;
         self.state.current_question_index += 1;
         self.state.current_alternatives.clear();
@@ -636,10 +669,10 @@ impl GameEngine {
                 question_type: "".to_string(),
                 alternatives: Vec::new(),
                 scoreboard: self.get_scoreboard(),
+                round_scores: self.get_round_scores(),
             },
         }];
 
-        // Send next 3 upcoming questions to admin
         let upcoming = self.get_upcoming_questions(3);
         if !upcoming.is_empty() {
             responses.push(GameResponse {

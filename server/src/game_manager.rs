@@ -259,6 +259,7 @@ impl GameLobby {
                 question_type: "".to_string(), // Only needed during question phase
                 alternatives: Vec::new(),      // Only needed during question phase
                 scoreboard: engine.get_scoreboard(),
+                round_scores: engine.get_round_scores(),
             },
         })
     }

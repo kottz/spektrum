@@ -66,6 +66,7 @@ pub struct GameState {
     pub question_type: String,
     pub alternatives: Vec<String>,
     pub scoreboard: Vec<(String, i32)>,
+    pub round_scores: Vec<(String, i32)>,
     pub current_song: Option<CurrentSong>,
 }
 
@@ -96,6 +97,7 @@ pub enum ServerMessage {
         name: String,
         correct: bool,
         new_score: i32,
+        round_score: i32,
     },
     GameOver {
         scores: Vec<(String, i32)>,
@@ -112,6 +114,7 @@ pub enum ServerMessage {
         question_type: String,
         alternatives: Vec<String>,
         scoreboard: Vec<(String, i32)>,
+        round_scores: Vec<(String, i32)>,
     },
     AdminInfo {
         question: AdminQuestion,
@@ -154,6 +157,7 @@ pub fn convert_to_server_message(payload: &ResponsePayload) -> ServerMessage {
                 question_type: game_state.question_type.clone(),
                 alternatives: game_state.alternatives.clone(),
                 scoreboard: game_state.scoreboard.clone(),
+                round_scores: game_state.round_scores.clone(),
                 current_song: game_state.current_song.as_ref().map(|song| CurrentSong {
                     song_name: song.song_name.clone(),
                     artist: song.artist.clone(),
@@ -166,21 +170,25 @@ pub fn convert_to_server_message(payload: &ResponsePayload) -> ServerMessage {
             name,
             correct,
             new_score,
+            round_score,
         } => ServerMessage::PlayerAnswered {
             name: name.clone(),
             correct: *correct,
             new_score: *new_score,
+            round_score: *round_score,
         },
         ResponsePayload::StateChanged {
             phase,
             question_type,
             alternatives,
             scoreboard,
+            round_scores,
         } => ServerMessage::StateChanged {
             phase: phase.into(),
             question_type: question_type.clone(),
             alternatives: alternatives.clone(),
             scoreboard: scoreboard.clone(),
+            round_scores: round_scores.clone(),
         },
         ResponsePayload::GameOver {
             final_scores,
