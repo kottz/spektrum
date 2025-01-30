@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
 	import { youtubeStore } from '$lib/stores/youtube-store.svelte';
 	import { gameStore } from '$lib/stores/game.svelte';
 	import { Card, CardContent } from '$lib/components/ui/card';
@@ -7,14 +6,13 @@
 
 	let playerId = 'youtube-player';
 
-	onMount(() => {
+	$effect.root(() => {
 		info('YouTube component mounted');
 		youtubeStore.initializeAPI();
 
-		// Define global callback for YouTube API
-		(window as any).onYouTubeIframeAPIReady = () => {
+		const initializePlayer = () => {
 			info('YouTube API Ready');
-			const player = new YT.Player(playerId, {
+			return new YT.Player(playerId, {
 				height: '360',
 				width: '640',
 				playerVars: {
@@ -33,29 +31,34 @@
 				}
 			});
 		};
+
+		(window as any).onYouTubeIframeAPIReady = initializePlayer;
+
+		// Cleanup function
+		return () => {
+			youtubeStore.cleanup();
+			// Clean up the global callback
+			delete (window as any).onYouTubeIframeAPIReady;
+		};
 	});
 
-	onDestroy(() => {
-		youtubeStore.cleanup();
+	$effect(() => {
+		const phase = gameStore.state.phase;
+		if (phase) {
+			youtubeStore.handlePhaseChange(phase);
+		}
 	});
-
-	// Watch for game phase changes
-	$: if (gameStore.state.phase) {
-		youtubeStore.handlePhaseChange(gameStore.state.phase);
-	}
 </script>
 
 <Card>
 	<CardContent class="p-4">
 		<div class="aspect-video w-full bg-muted">
-			<!-- Create a div with the ID that YouTube API will use -->
 			<div id={playerId}></div>
 		</div>
 	</CardContent>
 </Card>
 
 <style>
-	/* Ensure the player container has dimensions */
 	#youtube-player {
 		width: 100%;
 		height: 100%;
