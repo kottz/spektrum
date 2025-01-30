@@ -162,7 +162,7 @@ function createGameStore() {
 				state.players = new Map(
 					message.players.map(([name, score]) => [
 						name,
-						{ name, score, hasAnswered: false, answer: null }
+						{ name, score, roundScore: 0, hasAnswered: false, answer: null }
 					])
 				);
 				break;
@@ -170,7 +170,6 @@ function createGameStore() {
 
 			case 'ReconnectSuccess': {
 				const storedSessions = loadSessions();
-
 				state.phase = message.game_state.phase as GamePhase;
 				state.currentQuestion = message.game_state.alternatives
 					? {
@@ -181,7 +180,7 @@ function createGameStore() {
 				state.players = new Map(
 					message.game_state.scoreboard.map(([name, score]) => [
 						name,
-						{ name, score, hasAnswered: false, answer: null }
+						{ name, score, roundScore: 0, hasAnswered: false, answer: null }
 					])
 				);
 				break;
@@ -189,14 +188,25 @@ function createGameStore() {
 
 			case 'StateChanged': {
 				const newPlayers = new Map(state.players);
+
 				message.scoreboard.forEach(([name, score]) => {
 					newPlayers.set(name, {
 						name,
 						score,
+						roundScore: 0,
 						hasAnswered: false,
 						answer: null
 					});
 				});
+
+				// Update round scores
+				message.round_scores.forEach(([name, roundScore]) => {
+					const player = newPlayers.get(name);
+					if (player) {
+						player.roundScore = roundScore;
+					}
+				});
+
 				const newPhase = message.phase.toLowerCase() as GamePhase;
 				youtubeStore.handlePhaseChange(newPhase);
 
@@ -206,9 +216,11 @@ function createGameStore() {
 
 				state.phase = newPhase;
 				state.players = newPlayers;
+
 				if (newPhase === 'score') {
 					state.currentAnswers = [];
 				}
+
 				state.currentQuestion = message.alternatives
 					? {
 							type: message.question_type,

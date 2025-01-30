@@ -41,6 +41,7 @@ export interface PlayerAnswer {
 export interface PlayerState {
 	name: string;
 	score: number;
+	roundScore: number;
 	hasAnswered: boolean;
 	answer: string | null;
 }
@@ -113,6 +114,7 @@ export type ServerMessage =
 				question_type: string;
 				alternatives: string[];
 				scoreboard: [string, number][]; // [playerName, score]
+				round_scores: [string, number][]; // [playerName, score]
 				current_song?: {
 					song_name: string;
 					artist: string;
@@ -129,6 +131,7 @@ export type ServerMessage =
 			name: string;
 			correct: boolean;
 			new_score: number;
+			round_score: number;
 	  }
 	| {
 			type: 'StateChanged';
@@ -136,6 +139,7 @@ export type ServerMessage =
 			question_type: string;
 			alternatives: string[];
 			scoreboard: [string, number][]; // [playerName, score]
+			round_scores: [string, number][]; // [playerName, score]
 	  }
 	| {
 			type: 'GameOver';

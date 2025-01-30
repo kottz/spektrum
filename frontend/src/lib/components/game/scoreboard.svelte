@@ -7,11 +7,19 @@
 		Array.from(gameStore.state.players.values()).sort((a, b) => b.score - a.score)
 	);
 	const maxScore = $derived(players[0]?.score || 0);
+	const maxRoundScore = $derived(Math.max(...players.map((p) => p.roundScore), 0));
+	const gameOver = $derived(gameStore.state.phase === 'gameover');
 
-	// Keep the helper function as is since it doesn't need reactivity
+	// Helper functions
 	function getScoreWidth(score: number): string {
 		if (maxScore === 0) return '0%';
 		return `${(score / maxScore) * 100}%`;
+	}
+
+	function getRoundScoreClass(roundScore: number): string {
+		if (roundScore === 0) return 'text-muted-foreground';
+		if (roundScore === maxRoundScore) return 'text-green-500 font-bold';
+		return 'text-primary';
 	}
 </script>
 
@@ -39,7 +47,16 @@
 								{/if}
 							</span>
 						</div>
-						<span class="font-medium">{player.score} pts</span>
+						<div class="flex items-center gap-2">
+							<!-- Round score with indicator -->
+							{#if player.roundScore > 0 && !gameOver}
+								<span class={getRoundScoreClass(player.roundScore)}>
+									+{player.roundScore}
+								</span>
+							{/if}
+							<!-- Total score -->
+							<span class="font-medium">{player.score} pts</span>
+						</div>
 					</div>
 				</div>
 			{/each}
