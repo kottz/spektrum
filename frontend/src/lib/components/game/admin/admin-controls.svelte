@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { gameStore } from '$lib/stores/game.svelte';
-	import { gameActions } from '../../stores/game-actions';
+	import { gameActions } from '$lib/stores/game-actions';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Separator } from '$lib/components/ui/separator';
 	import UpcomingQuestions from '$lib/components/game/upcoming-questions.svelte';
 	import AnswerProgress from '$lib/components/game/answer-progress.svelte';
-	import RoundTimer from './round-timer.svelte';
+	import RoundTimer from '$lib/components/game/round-timer.svelte';
 
 	// Reactive values from store using the new state structure
 	const phase = $derived(gameStore.state.phase?.toLowerCase() || 'lobby');

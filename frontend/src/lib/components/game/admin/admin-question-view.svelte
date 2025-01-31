@@ -79,38 +79,34 @@
 </script>
 
 <Card>
-	<CardContent class="py-2">
-		<div class="flex items-center gap-4">
-			<!-- Question options -->
-			<div class="grid flex-1 grid-cols-6 gap-2">
-				{#each alternatives as alternative}
-					<button
-						class={getButtonStyles(alternative)}
-						disabled={true}
-						style={questionType === 'color' &&
-						!(alternative.toLowerCase() === 'gold' || alternative.toLowerCase() === 'silver')
-							? `background-color: ${colorMap[alternative.toLowerCase()]};`
-							: ''}
-					>
-						{#if questionType === 'character'}
-							<div class="aspect-square w-full">
-								<img
-									src={`${imageBaseUrl}/${alternative}.avif`}
-									alt={alternative}
-									class="h-full w-full object-contain"
-								/>
-							</div>
-						{:else if questionType === 'color'}
-							<span class="sr-only">{alternative}</span>
-						{:else}
-							<!-- Fallback text for non-color, non-character questions -->
-							<div class="flex h-full w-full items-center justify-center text-sm font-medium">
-								{alternative}
-							</div>
-						{/if}
-					</button>
-				{/each}
-			</div>
+	<CardContent class="p-2">
+		<div class="grid grid-cols-3 gap-2">
+			{#each alternatives as alternative}
+				<button
+					class={getButtonStyles(alternative)}
+					disabled={true}
+					style={questionType === 'color' &&
+					!(alternative.toLowerCase() === 'gold' || alternative.toLowerCase() === 'silver')
+						? `background-color: ${colorMap[alternative.toLowerCase()]};`
+						: ''}
+				>
+					{#if questionType === 'character'}
+						<div class="aspect-square w-full">
+							<img
+								src={`${imageBaseUrl}/${alternative}.avif`}
+								alt={alternative}
+								class="h-full w-full object-contain"
+							/>
+						</div>
+					{:else if questionType === 'color'}
+						<span class="sr-only">{alternative}</span>
+					{:else}
+						<div class="flex h-full w-full items-center justify-center text-sm font-medium">
+							{alternative}
+						</div>
+					{/if}
+				</button>
+			{/each}
 		</div>
 	</CardContent>
 </Card>
