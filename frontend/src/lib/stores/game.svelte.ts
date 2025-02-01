@@ -12,7 +12,7 @@ import { PUBLIC_SPEKTRUM_SERVER_URL } from '$env/static/public';
 /* ------------------------------------------------------------------
    Multi-session storage for localStorage
 ------------------------------------------------------------------ */
-interface SessionInfo {
+export interface SessionInfo {
 	lobbyId: string;
 	playerId: string;
 	playerName: string;

@@ -24,8 +24,7 @@
 </script>
 
 <div class="space-y-4">
-	<h2 class="mb-8 text-center text-2xl font-bold">Leaderboard</h2>
-	<ScrollArea class="h-72 h-[50vh] rounded-md border p-4">
+	<ScrollArea class="h-72 h-[40vh] rounded-md border p-4">
 		<div class="space-y-3">
 			{#each players as player, i}
 				<div class="relative">

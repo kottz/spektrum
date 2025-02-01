@@ -80,7 +80,7 @@
 
 <Card>
 	<CardContent class="p-2">
-		<div class="grid grid-cols-3 gap-2">
+		<div class="grid grid-cols-6 gap-2">
 			{#each alternatives as alternative}
 				<button
 					class={getButtonStyles(alternative)}

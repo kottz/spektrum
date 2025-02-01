@@ -25,11 +25,11 @@
 					</span>
 					{#if question.question_type === 'character'}
 						<span class="truncate">
-							Answer: {question.options.find((opt) => opt.is_correct)?.option || 'Unknown'}
+							{question.options.find((opt) => opt.is_correct)?.option || 'Unknown'}
 						</span>
 					{:else if question.question_type === 'color'}
 						<span class="truncate">
-							Colors: {question.options
+							{question.options
 								.filter((opt) => opt.is_correct)
 								.map((opt) => opt.option)
 								.join(', ')}
