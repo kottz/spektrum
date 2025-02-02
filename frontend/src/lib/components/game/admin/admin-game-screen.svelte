@@ -10,6 +10,7 @@
 	import UpcomingQuestions from '$lib/components/game/admin/upcoming-questions.svelte';
 	import RoundTimer from '../round-timer.svelte';
 	import AnswerProgress from '../answer-progress.svelte';
+	import EndLeaveButton from './controls/end-leave-button.svelte';
 
 	const phase = $derived(gameStore.state.phase);
 	const showScoreboard = $derived(phase === GamePhase.Score || phase === GamePhase.GameOver);
@@ -25,6 +26,7 @@
 			<!-- Mobile: 2-column grid for top row, Desktop: stacked in left column -->
 			<div class="grid grid-cols-2 gap-4 lg:grid-cols-1">
 				<div class="space-y-2">
+					<EndLeaveButton />
 					<JoinCodeCard />
 					<GameVideo />
 				</div>
@@ -61,7 +63,7 @@
 		<!-- Right section - only visible on desktop -->
 		<div class="hidden min-h-0 lg:col-span-3 lg:flex lg:flex-col lg:space-y-4">
 			<div class="flex min-h-0 flex-1 flex-col space-y-4">
-				<div class="rounded-lg bg-white p-4 shadow">
+				<div class="h-64 rounded-lg bg-white p-4 shadow">
 					<PlayersList />
 				</div>
 				<div class="flex-1 rounded-lg bg-white p-4 shadow">
