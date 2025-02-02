@@ -6,7 +6,7 @@
 </script>
 
 <Card class="bg-card">
-    <div class="p-6 flex flex-col items-center justify-center">
+    <div class="p-2 flex flex-col items-center justify-center">
         <h2 class="text-xl font-semibold mb-2">Join Code</h2>
         <div class="text-3xl font-mono font-bold">{joinCode}</div>
     </div>

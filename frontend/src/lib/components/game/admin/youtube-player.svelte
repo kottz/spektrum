@@ -51,7 +51,7 @@
 </script>
 
 <Card>
-	<CardContent class="p-4">
+	<CardContent class="p-1">
 		<div class="aspect-video w-full bg-muted">
 			<div id={playerId}></div>
 		</div>

@@ -4,9 +4,6 @@
 </script>
 
 <div class="space-y-2">
-	<div class="flex justify-between text-sm">
-		<span class="text-muted-foreground">Upcoming Questions</span>
-	</div>
 	<div class="space-y-1">
 		{#each upcomingQuestions as question, i}
 			<div class="space-y-1 rounded bg-muted p-2">
@@ -14,11 +11,9 @@
 					<span class="flex-1 truncate font-medium">{question.title}</span>
 					<span class="ml-2 text-muted-foreground">#{i + 1}</span>
 				</div>
-				{#if question.artist}
 					<div class="truncate text-sm text-muted-foreground">
 						{question.artist}
 					</div>
-				{/if}
 				<div class="flex items-center gap-2 text-xs text-muted-foreground/70">
 					<span class="rounded bg-muted-foreground/10 px-1.5 py-0.5">
 						{question.question_type}
