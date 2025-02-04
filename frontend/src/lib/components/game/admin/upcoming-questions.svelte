@@ -11,9 +11,9 @@
 					<span class="flex-1 truncate font-medium">{question.title}</span>
 					<span class="ml-2 text-muted-foreground">#{i + 1}</span>
 				</div>
-					<div class="truncate text-sm text-muted-foreground">
-						{question.artist}
-					</div>
+				<div class="truncate text-sm text-muted-foreground">
+					{question.artist}
+				</div>
 				<div class="flex items-center gap-2 text-xs text-muted-foreground/70">
 					<span class="rounded bg-muted-foreground/10 px-1.5 py-0.5">
 						{question.question_type}
