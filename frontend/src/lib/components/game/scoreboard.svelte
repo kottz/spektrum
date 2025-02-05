@@ -2,7 +2,6 @@
 	import { gameStore } from '$lib/stores/game.svelte';
 	import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
 
-	// Convert reactive statements to derived computations
 	const players = $derived(
 		Array.from(gameStore.state.players.values()).sort((a, b) => b.score - a.score)
 	);
@@ -10,7 +9,6 @@
 	const maxRoundScore = $derived(Math.max(...players.map((p) => p.roundScore), 0));
 	const gameOver = $derived(gameStore.state.phase === 'gameover');
 
-	// Helper functions
 	function getScoreWidth(score: number): string {
 		if (maxScore === 0) return '0%';
 		return `${(score / maxScore) * 100}%`;
@@ -23,20 +21,18 @@
 	}
 </script>
 
-<div class="flex flex-1">
-	<ScrollArea type="always" class="w-1 flex-1 rounded-md border">
+<div class="flex h-full min-h-0 w-full">
+	<ScrollArea type="always" class="min-h-0 w-1 flex-1 rounded-md border">
 		<div class="space-y-3 p-4">
 			{#each players as player, i}
 				<div class="relative">
 					<!-- Background for full width context -->
 					<div class="absolute inset-0 rounded-lg bg-muted"></div>
-
 					<!-- Score bar -->
 					<div
 						class="absolute inset-0 rounded-lg bg-primary/20 transition-all duration-500 ease-out"
 						style="width: {getScoreWidth(player.score)}"
 					></div>
-
 					<!-- Content -->
 					<div class="relative flex items-center justify-between px-4 py-2">
 						<div class="flex items-center gap-3">
