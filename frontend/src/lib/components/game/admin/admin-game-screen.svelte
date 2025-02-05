@@ -3,14 +3,16 @@
 	import { GamePhase } from '$lib/types/game';
 	import JoinCodeCard from '$lib/components/game/admin/join-code-card.svelte';
 	import GameVideo from '$lib/components/game/admin/youtube-player.svelte';
-	import AdminControls from '$lib/components/game/admin/admin-controls.svelte';
 	import PlayersList from '$lib/components/game/admin/player-list.svelte';
 	import Scoreboard from '$lib/components/game/scoreboard.svelte';
 	import QuestionView from '$lib/components/game/admin/admin-question-view.svelte';
 	import UpcomingQuestions from '$lib/components/game/admin/upcoming-questions.svelte';
 	import RoundTimer from '../round-timer.svelte';
 	import AnswerProgress from '../answer-progress.svelte';
+	import StartButton from './controls/start-game-button.svelte';
 	import EndLeaveButton from './controls/end-leave-button.svelte';
+	import RoundButton from './controls/round-control-button.svelte';
+	import SkipButton from './controls/skip-control-button.svelte';
 
 	const phase = $derived(gameStore.state.phase);
 	const showScoreboard = $derived(phase === GamePhase.Score || phase === GamePhase.GameOver);
@@ -54,9 +56,10 @@
 					<Scoreboard />
 				</div>
 			{:else if GamePhase.Lobby}
-				<div class="flex min-h-0 flex-1 lg:mt-0">
+				<div class="mb-4 flex min-h-0 flex-1 lg:mt-0">
 					<PlayersList />
 				</div>
+				<StartButton />
 			{/if}
 		</div>
 
@@ -74,7 +77,8 @@
 	</div>
 
 	<!-- Admin Controls - Always at bottom -->
-	<div class="mt-4">
-		<AdminControls />
+	<div class="fixed bottom-0 left-0 right-0 z-10 mt-4 flex bg-white p-3">
+		<SkipButton />
+		<RoundButton />
 	</div>
 </div>

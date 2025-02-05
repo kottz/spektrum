@@ -10,7 +10,6 @@
 		<!-- Top Row -->
 		<div class="grid grid-cols-2 gap-3">
 			<StartButton />
-			<EndLeaveButton />
 		</div>
 		<!-- Bottom Row -->
 		<div class="grid grid-cols-2 gap-3">
