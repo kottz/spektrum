@@ -232,6 +232,7 @@ function createGameStore() {
 
 			case 'GameOver': {
 				state.phase = 'gameover';
+				state.upcomingQuestions = undefined;
 				break;
 			}
 
