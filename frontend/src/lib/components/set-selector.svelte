@@ -48,8 +48,8 @@
 	});
 </script>
 
-<div class="flex h-[600px] flex-col">
-	<ScrollArea class="flex-1">
+<div class="flex h-full flex-col">
+	<ScrollArea class="min-h-0 flex-1">
 		<div class="space-y-4 p-4">
 			{#if isLoading}
 				<div class="text-center text-muted-foreground">Loading question sets...</div>
@@ -75,7 +75,6 @@
 			{/if}
 		</div>
 	</ScrollArea>
-
 	<div class="border-t bg-card p-4">
 		<div class="flex justify-end gap-2">
 			<Button onclick={handleCreate} disabled={isLoading}>Create Lobby</Button>

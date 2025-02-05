@@ -12,7 +12,6 @@
 
 	// Make props bindable
 	let { playerName = $bindable(''), lobbyCode = $bindable('') } = $props();
-
 	let isJoining = $state(false);
 	let showSetSelector = $state(false);
 	let storedSessions = $state([]);
@@ -55,12 +54,19 @@
 
 	<div class="grid w-full max-w-lg gap-6">
 		<Card>
-			<CardHeader>
-				<CardTitle>{showSetSelector ? 'Select Question Set' : 'Create New Lobby'}</CardTitle>
+			<CardHeader class="mb-2">
+				<div class="flex items-center gap-4">
+					{#if showSetSelector}
+						<Button variant="outline" size="sm" on:click={() => (showSetSelector = false)}>
+							Back
+						</Button>
+					{/if}
+					<CardTitle>{showSetSelector ? 'Select Question Set' : 'Create New Lobby'}</CardTitle>
+				</div>
 			</CardHeader>
-			<CardContent>
+			<CardContent class={showSetSelector ? 'h-[400px] p-0' : 'p-4'}>
 				{#if showSetSelector}
-					<SetSelector on:back={() => (showSetSelector = false)} />
+					<SetSelector />
 				{:else}
 					<Button size="lg" class="w-full" on:click={() => (showSetSelector = true)}>
 						Create Lobby
@@ -69,47 +75,49 @@
 			</CardContent>
 		</Card>
 
-		{#if storedSessions.length > 0}
+		{#if !showSetSelector}
+			{#if storedSessions.length > 0}
+				<Card>
+					<CardHeader>
+						<CardTitle>Saved Sessions</CardTitle>
+					</CardHeader>
+					<CardContent class="grid gap-2">
+						{#each storedSessions as session}
+							<Button size="lg" class="w-full" on:click={() => reconnectToSession(session)}>
+								Reconnect: {session.playerName} ({new Date(session.createdAt).toLocaleString()})
+							</Button>
+						{/each}
+					</CardContent>
+				</Card>
+			{/if}
+
 			<Card>
 				<CardHeader>
-					<CardTitle>Saved Sessions</CardTitle>
+					<CardTitle>Join Existing Lobby</CardTitle>
 				</CardHeader>
-				<CardContent class="grid gap-2">
-					{#each storedSessions as session}
-						<Button size="lg" class="w-full" on:click={() => reconnectToSession(session)}>
-							Reconnect: {session.playerName} ({new Date(session.createdAt).toLocaleString()})
-						</Button>
-					{/each}
+				<CardContent class="grid gap-4">
+					<Input
+						name="lobbyCode"
+						placeholder="Enter lobby code"
+						bind:value={lobbyCode}
+						disabled={isJoining}
+					/>
+					<Input
+						name="playerName"
+						placeholder="Enter your name"
+						bind:value={playerName}
+						disabled={isJoining}
+					/>
+					<Button
+						size="lg"
+						class="w-full"
+						on:click={handleJoinGame}
+						disabled={isJoining || !lobbyCode || !playerName}
+					>
+						{isJoining ? 'Joining...' : 'Join Game'}
+					</Button>
 				</CardContent>
 			</Card>
 		{/if}
-
-		<Card>
-			<CardHeader>
-				<CardTitle>Join Existing Lobby</CardTitle>
-			</CardHeader>
-			<CardContent class="grid gap-4">
-				<Input
-					name="lobbyCode"
-					placeholder="Enter lobby code"
-					bind:value={lobbyCode}
-					disabled={isJoining}
-				/>
-				<Input
-					name="playerName"
-					placeholder="Enter your name"
-					bind:value={playerName}
-					disabled={isJoining}
-				/>
-				<Button
-					size="lg"
-					class="w-full"
-					on:click={handleJoinGame}
-					disabled={isJoining || !lobbyCode || !playerName}
-				>
-					{isJoining ? 'Joining...' : 'Join Game'}
-				</Button>
-			</CardContent>
-		</Card>
 	</div>
 </div>
