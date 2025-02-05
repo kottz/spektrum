@@ -19,66 +19,67 @@
 	const error = $derived(gameStore.state.error);
 </script>
 
-<!-- Main container with height constraints -->
 <div class="container mx-auto flex h-screen max-h-screen flex-col overflow-hidden p-3">
-	<!-- Scrollable content area that will shrink if needed -->
 	<div class="flex min-h-0 flex-1 flex-col space-y-4 lg:grid lg:grid-cols-12 lg:gap-4 lg:space-y-0">
-		<!-- Left section -->
-		<div class="lg:col-span-3 lg:flex lg:flex-col lg:space-y-4">
-			<!-- Mobile: 2-column grid for top row, Desktop: stacked in left column -->
-			<div class="grid grid-cols-2 gap-4 lg:grid-cols-1">
-				<div class="space-y-2">
+		<!-- Left column that contains shared elements -->
+		<div class="lg:col-span-4">
+			<!-- These elements are always in the left column -->
+			<div class="space-y-4 lg:block {phase === GamePhase.Lobby ? 'block' : 'grid grid-cols-2 gap-4'}">
+				<div class="space-y-4">
 					<EndLeaveButton />
 					<JoinCodeCard />
-					<GameVideo />
+					<div class="aspect-video w-full">
+						<GameVideo />
+					</div>
 				</div>
-				<div class="lg:hidden">
+				
+				<!-- UpcomingQuestions appears right on mobile, bottom on desktop -->
+				<div class="lg:mt-4">
 					<UpcomingQuestions />
+				</div>
+
+				<!-- Desktop-only controls -->
+				<div class="hidden lg:block space-y-4">
+					<div class="flex gap-2">
+						<SkipButton />
+						<RoundButton />
+						<StartButton />
+					</div>
+					<div class="grid grid-cols-2 gap-4">
+						<AnswerProgress />
+						<RoundTimer />
+					</div>
 				</div>
 			</div>
 		</div>
 
-		<!-- Middle section -->
-		<div class="flex min-h-0 flex-col lg:col-span-6 lg:space-y-4">
-			<!-- QuestionView - Always visible on desktop, only during question phase on mobile -->
-
+		<!-- Right column content -->
+		<div class="lg:col-span-8">
 			{#if phase === GamePhase.Question}
-				<div class="flex min-h-0 flex-col space-y-4 lg:mt-0">
-					<!-- QuestionView - Only visible on mobile during question phase -->
+				<div class="flex min-h-0 flex-col space-y-4">
 					<QuestionView />
-					<div class="lg:grid lg:grid-cols-2 lg:gap-4">
+					<!-- Mobile-only timer and progress -->
+					<div class="grid grid-cols-2 gap-4 lg:hidden">
 						<AnswerProgress />
 						<RoundTimer />
 					</div>
 				</div>
 			{:else if showScoreboard}
-				<div class="flex min-h-0 flex-1 lg:mt-0">
+				<div class="flex min-h-0 flex-1">
 					<Scoreboard />
 				</div>
-			{:else if GamePhase.Lobby}
-				<div class="mb-4 flex min-h-0 flex-1 lg:mt-0">
+			{:else if phase === GamePhase.Lobby}
+				<div class="rounded-lg bg-white p-4 shadow">
 					<PlayersList />
 				</div>
-				<StartButton />
 			{/if}
-		</div>
-
-		<!-- Right section - only visible on desktop -->
-		<div class="hidden min-h-0 lg:col-span-3 lg:flex lg:flex-col lg:space-y-4">
-			<div class="flex min-h-0 flex-1 flex-col space-y-4">
-				<div class="h-64 rounded-lg bg-white p-4 shadow">
-					<PlayersList />
-				</div>
-				<div class="flex-1 rounded-lg bg-white p-4 shadow">
-					<UpcomingQuestions />
-				</div>
-			</div>
 		</div>
 	</div>
 
-	<!-- Admin Controls - Always at bottom -->
-	<div class="fixed bottom-0 left-0 right-0 z-10 mt-4 flex bg-white p-3">
+	<!-- Mobile-only bottom controls -->
+	<div class="fixed bottom-0 left-0 right-0 z-10 mt-4 flex bg-white p-3 lg:hidden">
 		<SkipButton />
 		<RoundButton />
+		<StartButton />
 	</div>
 </div>
