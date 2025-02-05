@@ -85,7 +85,7 @@ export interface GameQuestion {
 }
 
 export interface GameQuestionOption {
-	option: String;
+	option: string;
 	is_correct: boolean;
 }
 

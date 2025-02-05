@@ -16,7 +16,6 @@
 
 	const phase = $derived(gameStore.state.phase);
 	const showScoreboard = $derived(phase === GamePhase.Score || phase === GamePhase.GameOver);
-	const error = $derived(gameStore.state.error);
 </script>
 
 <div class="container mx-auto flex h-screen flex-col overflow-hidden p-3">
