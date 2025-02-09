@@ -26,7 +26,7 @@ cp config.example.toml config.toml  # Edit as needed
 cargo run --release
 ```
 
-If you want to deploy your own instance there is a provided Dockerfile that pairs well with fly.io.
+If you want to deploy your own instance there is a provided Dockerfile that pairs well with fly.io. Create a Backblaze B2 bucket, look at the `server/env.example` for the environment variables you have to set in fly.io. Make a `env.prod` and apply the keys with `cat env.prod | fly secrets import`.
 
 ### Frontend Setup
 ```bash
