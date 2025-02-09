@@ -4,5 +4,7 @@ key*
 *.pem
 config.toml
 config.prod.toml
+config.dev.sh
+config.prod.sh
 fly.toml
 data/question_backup
