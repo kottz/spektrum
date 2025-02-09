@@ -69,7 +69,6 @@ struct AppConfig {
 fn init_tracing(json_logging: bool) {
     let env_filter =
         tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into());
-
     let registry = tracing_subscriber::registry().with(env_filter);
 
     if json_logging {
@@ -108,16 +107,24 @@ async fn shutdown_signal() {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let settings = Config::builder()
-        .add_source(config::Environment::default().separator("__"))
+        .add_source(
+            config::Environment::with_prefix("SPEKTRUM")
+                .separator("__")
+                .list_separator(",")
+                .with_list_parse_key("admin_password")
+                .with_list_parse_key("server.cors_origins")
+                .try_parsing(true),
+        )
         .add_source(config::File::with_name("config").required(false))
         .build()
         .map_err(|e| format!("Failed to build config: {}", e))?;
+
     let app_config: AppConfig = settings
         .try_deserialize()
         .map_err(|e| format!("Failed to parse config: {}", e))?;
+
     init_tracing(app_config.logging.json);
 
-    // Parse all CORS origins
     let cors_origins: Vec<HeaderValue> = app_config
         .server
         .cors_origins
@@ -140,8 +147,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ]);
 
     let question_store = QuestionStore::new(&app_config.storage).await?;
-
     let state = AppState::new(question_store, app_config.admin_password);
+
     let app = Router::new()
         .route("/ws", any(ws_handler))
         .route("/api/list-sets", get(list_sets_handler))
@@ -168,22 +175,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = SocketAddr::from(([0, 0, 0, 0], app_config.server.port));
     info!("Starting server on {}", addr);
 
-    // Create server handle for shutdown
+    // Create server handle for shutdown.
     let handle = axum_server::Handle::new();
     let handle_clone = handle.clone();
 
-    // Spawn shutdown signal handler
     tokio::spawn(async move {
         shutdown_signal().await;
         info!("Shutdown signal received, starting graceful shutdown");
         handle_clone.graceful_shutdown(Some(Duration::from_secs(3)));
     });
 
-    // Create the server and configure HTTP/2
     let mut server = axum_server::bind(addr);
     server.http_builder().http2().enable_connect_protocol();
 
-    // Run the server
     server
         .handle(handle)
         .serve(app.into_make_service_with_connect_info::<SocketAddr>())
