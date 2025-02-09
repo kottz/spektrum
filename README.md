@@ -43,7 +43,7 @@ cd admin_panel
 npm run dev --host    # Development
 npm run build         # Production
 ```
-Questions are stored in `server/data` a JSON file. The game supports two types of questions:
+Questions are stored in `server/data` as a JSON file. The game supports two types of questions:
 
 **Color** questions require:
 - Media (Song with a YouTube-link)
