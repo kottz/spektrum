@@ -15,8 +15,6 @@ FROM debian:bookworm-slim AS runtime
 WORKDIR /app
 RUN apt-get update && apt-get install -y ca-certificates
 COPY --from=builder /app/target/release/spektrum /usr/local/bin/
-COPY data/*.csv /app/data/
-COPY config.prod.toml /app/config.toml
 
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/spektrum"]
