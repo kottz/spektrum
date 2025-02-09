@@ -492,30 +492,17 @@ impl GameEngine {
             .as_ref()
             .map_or(false, |answers| answers.contains(&answer));
 
-        let new_score = if correct {
-            let score_delta = ((self.state.round_duration as f64 * 100.0
-                - (elapsed.as_secs_f64() * 100.0))
-                .max(0.0)) as i32;
-            player.score += score_delta;
-            player.score
-        } else {
-            player.score
-        };
-
         let score_delta = if correct {
-            let elapsed = match self.state.round_start_time {
-                Some(start_time) => ctx.timestamp.duration_since(start_time),
-                None => Duration::from_secs(self.state.round_duration / 2),
-            };
-
             ((self.state.round_duration as f64 * 100.0 - (elapsed.as_secs_f64() * 100.0)).max(0.0))
                 as i32
         } else {
             0
         };
 
-        player.round_score = score_delta; // Set round score
-        player.score += score_delta; // Add to total score
+        if correct {
+            player.score += score_delta;
+        }
+        player.round_score = score_delta;
         player.has_answered = true;
         player.answer = Some(answer);
 
@@ -524,7 +511,7 @@ impl GameEngine {
             payload: ResponsePayload::PlayerAnswered {
                 name: player.name.clone(),
                 correct,
-                new_score,
+                new_score: player.score,
                 round_score: player.round_score,
             },
         }]
