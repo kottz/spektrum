@@ -489,33 +489,51 @@ async fn handle_text_message(
     text: String,
     conn_state: &Arc<RwLock<WSConnectionState>>,
     state: &AppState,
-    tx: &UnboundedSender<ServerMessage>,
+    tx: &tokio::sync::mpsc::UnboundedSender<ServerMessage>,
 ) {
     match serde_json::from_str::<ClientMessage>(&text) {
-        Ok(client_msg) => match &client_msg {
-            ClientMessage::Reconnect {
-                lobby_id,
-                player_id,
-            } => {
-                handle_reconnect(
-                    *lobby_id, // These are now Uuid already
-                    *player_id, conn_state, state, tx,
-                )
-                .await;
+        Ok(client_msg) => {
+            match client_msg {
+                ClientMessage::JoinLobby {
+                    join_code,
+                    admin_id,
+                    name,
+                    player_id,
+                } => {
+                    if let Some(existing_uuid) = player_id {
+                        // Attempt to reconnect using the provided UUID.
+                        handle_reconnect(
+                            join_code,
+                            existing_uuid,
+                            name,
+                            admin_id,
+                            conn_state,
+                            state,
+                            tx,
+                        )
+                        .await;
+                    } else {
+                        // Proceed as a normal join.
+                        handle_join_lobby(
+                            &join_code,
+                            admin_id.as_ref(),
+                            &name,
+                            player_id,
+                            conn_state,
+                            state,
+                            tx,
+                        )
+                        .await;
+                    }
+                }
+                // Other variants are handled as usual.
+                other => {
+                    handle_game_message(other, conn_state, Instant::now()).await;
+                }
             }
-            ClientMessage::JoinLobby {
-                join_code,
-                admin_id,
-                name,
-            } => {
-                handle_join_lobby(join_code, admin_id.as_ref(), name, conn_state, state, tx).await;
-            }
-            _ => {
-                handle_game_message(client_msg, conn_state, Instant::now()).await;
-            }
-        },
+        }
         Err(e) => {
-            warn!("Failed to parse client message: {}", e);
+            eprintln!("Failed to parse client message: {}", e);
             let _ = tx.send(ServerMessage::Error {
                 message: format!("Invalid message format: {}", e),
             });
@@ -524,78 +542,81 @@ async fn handle_text_message(
 }
 
 async fn handle_reconnect(
-    lobby_id: Uuid,
+    join_code: String,
     player_id: Uuid,
+    name: String,
+    admin_id: Option<Uuid>,
     conn_state: &Arc<RwLock<WSConnectionState>>,
     state: &AppState,
-    tx: &UnboundedSender<ServerMessage>,
+    tx: &tokio::sync::mpsc::UnboundedSender<ServerMessage>,
 ) {
-    // Get the lobby reference in a separate scope
-    let lobby = {
-        let manager = match state.manager.lock() {
-            Ok(guard) => guard,
-            Err(e) => {
-                error!("Failed to lock manager: {}", e);
-                return;
-            }
+    // Look up the lobby ID from the join code.
+    let lobby_id = {
+        let manager = state.manager.lock().unwrap();
+        manager
+            .get_lobby_id_from_join_code(&join_code)
+            .unwrap_or(None)
+    };
+    if let Some(lobby_id) = lobby_id {
+        let lobby_option = {
+            let manager = state.manager.lock().unwrap();
+            manager.get_lobby(&lobby_id).unwrap_or(None)
         };
-
-        match manager.get_lobby(&lobby_id) {
-            Ok(Some(lobby)) => Some(lobby.clone()),
-            _ => None,
-        }
-    }; // MutexGuard is dropped here
-
-    // Now we can safely use await since we no longer hold the lock
-    if let Some(lobby) = lobby {
-        if let Ok(()) = lobby.reconnect_player(player_id, tx.clone()) {
-            let mut state = conn_state.write().await;
-            state.player_id = Some(player_id);
-            state.lobby_ref = Some(lobby.clone());
-
-            if let Ok(game_response) = lobby.get_game_state() {
-                if let ResponsePayload::StateChanged {
-                    phase,
-                    question_type,
-                    alternatives,
-                    scoreboard,
-                    round_scores,
-                } = game_response.payload
-                {
-                    let phase_str = match phase {
-                        GamePhase::Lobby => "lobby".to_string(),
-                        GamePhase::Score => "score".to_string(),
-                        GamePhase::Question => "question".to_string(),
-                        GamePhase::GameOver => "gameover".to_string(),
-                    };
-
-                    let _ = tx.send(ServerMessage::ReconnectSuccess {
-                        game_state: GameState {
-                            phase: phase_str,
-                            question_type,
-                            alternatives,
-                            scoreboard,
-                            round_scores,
-                            current_song: None,
-                        },
+        if let Some(lobby) = lobby_option {
+            match lobby.reconnect_player(player_id, tx.clone()) {
+                Ok(()) => {
+                    let mut cs = conn_state.write().await;
+                    cs.player_id = Some(player_id);
+                    cs.lobby_ref = Some(lobby.clone());
+                    if let Ok(game_response) = lobby.get_game_state() {
+                        let _ = tx.send(ServerMessage::ReconnectSuccess {
+                            game_state: crate::messages::convert_to_game_state(
+                                &game_response.payload,
+                            ),
+                        });
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Reconnect failed for player {}: {}", player_id, e);
+                    let _ = tx.send(ServerMessage::Error {
+                        message: format!("Reconnect failed: {}", e),
                     });
                 }
             }
+        } else {
+            eprintln!("Lobby not found for join code: {}", join_code);
+            let _ = tx.send(ServerMessage::Error {
+                message: "Lobby not found".into(),
+            });
         }
+    } else {
+        // If no lobby is found for the join code, fall back to a normal join.
+        handle_join_lobby(
+            &join_code,
+            admin_id.as_ref(),
+            &name,
+            Some(player_id),
+            conn_state,
+            state,
+            tx,
+        )
+        .await;
     }
 }
 
-/// Handles initial lobby join
+/// Handles initial lobby join (or reconnect, if a player_id is provided)
 async fn handle_join_lobby(
     join_code: &str,
     admin_id: Option<&Uuid>,
     name: &str,
+    // New optional field: if provided, try to reconnect
+    player_id: Option<Uuid>,
     conn_state: &Arc<RwLock<WSConnectionState>>,
     state: &AppState,
     tx: &UnboundedSender<ServerMessage>,
 ) {
     info!("Joining lobby with code: {}", join_code);
-    // Get what we need from the manager immediately in a separate scope
+    // Look up the lobby from the manager.
     let lobby = {
         let manager = match state.manager.lock() {
             Ok(manager) => manager,
@@ -621,29 +642,51 @@ async fn handle_join_lobby(
             Ok(Some(lobby)) => Some(lobby.clone()),
             _ => None,
         }
-    }; // Manager lock is dropped here
+    }; // manager lock released here
 
     if let Some(lobby) = lobby {
-        let player_id = admin_id.copied().unwrap_or_else(Uuid::new_v4);
+        // If the client provided a player_id, attempt to reconnect.
+        if let Some(existing_uuid) = player_id {
+            if lobby.reconnect_player(existing_uuid, tx.clone()).is_ok() {
+                let mut state_lock = conn_state.write().await;
+                state_lock.player_id = Some(existing_uuid);
+                state_lock.lobby_ref = Some(lobby.clone());
+                drop(state_lock);
+                // Send back current game state to confirm reconnection.
+                if let Ok(game_response) = lobby.get_game_state() {
+                    let _ = tx.send(ServerMessage::ReconnectSuccess {
+                        game_state: crate::messages::convert_to_game_state(&game_response.payload),
+                    });
+                }
+                return; // Reconnect successful; do not create a new join.
+            } else {
+                info!(
+                    "Reconnect attempt for {} failed; falling back to a new join",
+                    existing_uuid
+                );
+            }
+        }
 
-        // Add the connection
-        if lobby.add_connection(player_id, tx.clone()).is_ok() {
-            // Keep track of the connection state
+        // Otherwise (or if reconnect failed), create a new player_id.
+        let new_player_id = Uuid::new_v4();
+        if lobby.add_connection(new_player_id, tx.clone()).is_ok() {
             let mut state_lock = conn_state.write().await;
-            state_lock.player_id = Some(player_id);
+            state_lock.player_id = Some(new_player_id);
             state_lock.lobby_ref = Some(lobby.clone());
-            drop(state_lock); // Release the write lock before processing events
+            drop(state_lock);
 
-            // Restore the join event logic so the server broadcasts updates
             let now = Instant::now();
+            // Create a join event. When constructing the event, we set player_id to None
+            // (since this is a new join) even though the server will use new_player_id.
             let event = create_game_event(
                 ClientMessage::JoinLobby {
                     join_code: join_code.to_string(),
                     admin_id: admin_id.copied(),
                     name: name.to_string(),
+                    player_id: None,
                 },
                 lobby.id(),
-                player_id,
+                new_player_id,
                 now,
             );
 

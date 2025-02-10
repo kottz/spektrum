@@ -20,7 +20,7 @@ export interface SessionInfo {
 	createdAt: string;
 }
 
-function loadSessions(): SessionInfo[] {
+export function loadSessions(): SessionInfo[] {
 	if (!browser) return [];
 	try {
 		const data = localStorage.getItem('spektrumSessions');
@@ -30,7 +30,7 @@ function loadSessions(): SessionInfo[] {
 	}
 }
 
-function saveSession(session: SessionInfo) {
+export function saveSession(session: SessionInfo) {
 	if (!browser) return;
 	const sessions = loadSessions().filter(
 		(s) => !(s.lobbyId === session.lobbyId && s.playerId === session.playerId)
@@ -43,7 +43,7 @@ function saveSessions(sessions: SessionInfo[]) {
 	localStorage.setItem('spektrumSessions', JSON.stringify(sessions));
 }
 
-function removeSession(lobbyId: string, playerId: string) {
+export function removeSession(lobbyId: string, playerId: string) {
 	if (!browser) return;
 	const sessions = loadSessions().filter(
 		(s) => !(s.lobbyId === lobbyId && s.playerId === playerId)
@@ -102,6 +102,7 @@ async function checkSessionsFromServer(): Promise<SessionInfo[]> {
 const initialState: GameState = {
 	phase: GamePhase.Lobby,
 	isAdmin: false,
+	joinCode: undefined,
 	adminId: undefined,
 	lobbyId: undefined,
 	roundDuration: 60,
@@ -114,11 +115,16 @@ function createGameStore() {
 
 	function cleanup() {
 		info('Running cleanup...');
-		// If we have an active session in memory, remove from localStorage
 		if (state.lobbyId && state.playerId) {
 			removeSession(state.lobbyId, state.playerId);
 		}
-		// Reset to initial state
+		state.lobbyId = undefined;
+		state.playerId = undefined;
+		state.playerName = undefined;
+		state.isAdmin = false;
+		state.adminId = undefined;
+		state.joinCode = undefined;
+		// Reset state to initial state
 		Object.assign(state, initialState);
 	}
 
@@ -148,7 +154,7 @@ function createGameStore() {
 					lobbyId: message.lobby_id,
 					playerId: message.player_id,
 					playerName: message.name,
-					joinCode: message.join_code ?? '',
+					joinCode: state.joinCode || '',
 					createdAt: timeString
 				};
 				saveSession(session);
@@ -157,8 +163,8 @@ function createGameStore() {
 				state.playerId = message.player_id;
 				state.playerName = message.name;
 				state.roundDuration = message.round_duration;
-				state.joinCode = message.join_code;
-				state.isAdmin = false;
+				// Instead of always setting isAdmin to false,
+				// check if the message includes an admin_id.
 				state.players = new Map(
 					message.players.map(([name, score]) => [
 						name,
@@ -173,9 +179,9 @@ function createGameStore() {
 				state.phase = message.game_state.phase as GamePhase;
 				state.currentQuestion = message.game_state.alternatives
 					? {
-							type: message.game_state.question_type,
-							alternatives: message.game_state.alternatives
-						}
+						type: message.game_state.question_type,
+						alternatives: message.game_state.alternatives
+					}
 					: undefined;
 				state.players = new Map(
 					message.game_state.scoreboard.map(([name, score]) => [
@@ -223,33 +229,33 @@ function createGameStore() {
 
 				state.currentQuestion = message.alternatives
 					? {
-							type: message.question_type,
-							alternatives: message.alternatives
-						}
+						type: message.question_type,
+						alternatives: message.alternatives
+					}
 					: undefined;
 				break;
 			}
 
 			case 'GameOver': {
-				state.phase = 'gameover';
+				state.phase = GamePhase.GameOver;
 				state.upcomingQuestions = undefined;
 				break;
 			}
 
 			case 'AdminInfo': {
 				if (message.question) {
-					const { youtube_id, song_name, artist } = message.question;
-					info('Received song info:', { youtube_id, song_name, artist });
+					const { youtube_id, title, artist } = message.question;
+					info('Received song info:', { youtube_id, title, artist });
 					if (youtube_id) {
 						youtubeStore.loadVideo(youtube_id);
 					}
 				}
 				state.currentSong = message.question
 					? {
-							songName: message.question.song_name,
-							artist: message.question.artist,
-							youtubeId: message.question.youtube_id
-						}
+						songName: message.question.title,
+						artist: message.question.artist,
+						youtubeId: message.question.youtube_id
+					}
 					: undefined;
 				break;
 			}

@@ -4,6 +4,7 @@ import type { ServerMessage, ClientMessage } from '../types/game';
 import { PUBLIC_SPEKTRUM_WS_SERVER_URL } from '$env/static/public';
 import { gameStore } from '$lib/stores/game.svelte';
 import { info, warn } from '$lib/utils/logger';
+import { loadSessions } from '$lib/stores/game.svelte';
 
 interface WebSocketState {
 	connected: boolean;
@@ -53,31 +54,26 @@ function createWebSocketStore() {
 				clearTimeout(connectionTimeout);
 				info('WebSocket connected');
 				reconnectAttempts = 0;
-
 				state.connected = true;
 				state.error = null;
 				state.isConnecting = false;
 
-				if (joinCode && playerName) {
-					const joinMsg: ClientMessage = {
-						type: 'JoinLobby',
-						join_code: joinCode,
-						name: playerName,
-						admin_id: adminId
-					};
-					send(joinMsg);
-				} else {
-					const { lobbyId, playerId } = $derived(gameStore);
-					if (lobbyId && playerId) {
-						info('Attempting an automatic Reconnect...');
-						const reconnectMsg: ClientMessage = {
-							type: 'Reconnect',
-							lobby_id: lobbyId,
-							player_id: playerId
-						};
-						send(reconnectMsg);
-					}
-				}
+				// Get stored values from gameStore.
+				const { joinCode: storedJoinCode, playerName: storedName, playerId: storedPlayerId, adminId } = gameStore.state;
+				const finalJoinCode = joinCode || storedJoinCode || '';
+				const finalName = playerName || storedName || '';
+
+				// If adminId is present, use it as the admin's identity (and ignore any stored playerId).
+				const joinMsg: ClientMessage = {
+					type: 'JoinLobby',
+					join_code: finalJoinCode,
+					name: finalName,
+					admin_id: adminId, // if admin, this is non-null.
+					// Only include player_id if not admin.
+					player_id: adminId ? undefined : storedPlayerId
+				};
+
+				send(joinMsg);
 				resolve();
 			};
 
@@ -139,7 +135,7 @@ function createWebSocketStore() {
 			return;
 		}
 
-		const { lobbyId, playerId } = $derived(gameStore);
+		const { lobbyId, playerId } = $derived(gameStore.state);
 		if (!lobbyId || !playerId) {
 			info('No valid lobby/player in gameStore, skipping auto-reconnect');
 			return;

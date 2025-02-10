@@ -10,10 +10,9 @@ pub enum ClientMessage {
         join_code: String,
         admin_id: Option<Uuid>,
         name: String,
-    },
-    Reconnect {
-        lobby_id: Uuid,
-        player_id: Uuid,
+        // Optional player UUID provided from client storage:
+        #[serde(default)]
+        player_id: Option<Uuid>,
     },
     Leave {
         lobby_id: Uuid,
@@ -135,6 +134,32 @@ impl From<&GamePhase> for String {
     }
 }
 
+pub fn convert_to_game_state(payload: &ResponsePayload) -> GameState {
+    match payload {
+        ResponsePayload::StateChanged {
+            phase,
+            question_type,
+            alternatives,
+            scoreboard,
+            round_scores,
+        } => GameState {
+            phase: phase.into(),
+            question_type: question_type.clone(),
+            alternatives: alternatives.clone(),
+            scoreboard: scoreboard.clone(),
+            round_scores: round_scores.clone(),
+            current_song: None,
+        },
+        _ => GameState {
+            phase: "".to_string(),
+            question_type: "".to_string(),
+            alternatives: Vec::new(),
+            scoreboard: Vec::new(),
+            round_scores: Vec::new(),
+            current_song: None,
+        },
+    }
+}
 /// Convert a generic `ResponsePayload` from the game logic into a `ServerMessage`.
 pub fn convert_to_server_message(payload: &ResponsePayload) -> ServerMessage {
     match payload {

@@ -53,6 +53,7 @@ export interface GameState {
 	phase: GamePhase;
 	lobbyId?: string;
 	joinCode?: string;
+	adminId?: string;
 	playerId?: string;
 	playerName?: string;
 	isAdmin: boolean;
@@ -64,7 +65,7 @@ export interface GameState {
 	};
 	currentSong?: {
 		songName: string;
-		artist: string;
+		artist: string | undefined;
 		youtubeId: string;
 	};
 	error?: string;
@@ -175,6 +176,7 @@ export type ClientMessage =
 			type: 'JoinLobby';
 			join_code: string;
 			name: string;
+			player_id?: string; // Only if rejoining
 			admin_id?: string; // Only if joining as admin
 	  }
 	| {

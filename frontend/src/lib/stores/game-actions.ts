@@ -6,6 +6,7 @@ import { timerStore } from '$lib/stores/timer-store.svelte';
 import { info, warn } from '$lib/utils/logger';
 import type { ClientMessage, AdminAction } from '../types/game';
 import { PUBLIC_SPEKTRUM_SERVER_URL } from '$env/static/public';
+import { removeSession } from '$lib/stores/game.svelte';
 
 class GameActions {
 	/**
@@ -19,6 +20,7 @@ class GameActions {
 			warn('Failed to join game:', error);
 			throw error;
 		}
+		gameStore.state.joinCode = joinCode;
 	}
 
 	/**
@@ -28,27 +30,24 @@ class GameActions {
 		try {
 			const response = await fetch(`${PUBLIC_SPEKTRUM_SERVER_URL}/api/lobbies`, {
 				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({
-					round_duration: 60,
-					set_id: set
-				})
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ round_duration: 60, set_id: set })
 			});
-
 			if (!response.ok) {
 				throw new Error('Failed to create lobby');
 			}
-
 			const data = await response.json();
 
-			// Store admin info - now using direct state mutations
+			// Set admin flag and update game store state
 			gameStore.state.isAdmin = true;
 			gameStore.state.adminId = data.admin_id;
 			gameStore.state.joinCode = data.join_code;
 			gameStore.state.lobbyId = data.lobby_id;
 
+			// IMPORTANT: Remove any previously saved session for this lobby/player.
+			removeSession(data.lobby_id, data.admin_id);
+
+			// Now, pass the admin_id to the websocket connect call
 			await websocketStore.connect(data.join_code, playerName, data.admin_id);
 			return data.join_code;
 		} catch (error) {
@@ -106,7 +105,7 @@ class GameActions {
 		this.sendAdminAction({ type: 'StartGame' });
 	}
 
-	public startRound(specifiedAlternatives: string[] | null = null) {
+	public startRound(specifiedAlternatives: string[] | undefined = undefined) {
 		this.sendAdminAction({
 			type: 'StartRound',
 			specified_alternatives: specifiedAlternatives
