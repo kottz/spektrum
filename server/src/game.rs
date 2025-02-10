@@ -249,7 +249,6 @@ impl GameEngine {
         connections: Arc<DashMap<Uuid, UnboundedSender<GameUpdate>>>,
     ) -> Self {
         let mut rng = rand::thread_rng();
-
         let indices = match set {
             None => {
                 let mut all_indices: Vec<usize> = (0..questions.len()).collect();
@@ -306,13 +305,38 @@ impl GameEngine {
             .collect()
     }
 
-    /// Push an update packet into the update channel.
+    /// Instead of pushing into an update channel, immediately broadcast the update
+    /// to the proper connections by looking them up in the global connections map.
     fn push_update(&self, recipients: Recipients, update: GameUpdate) {
-        let packet = GameUpdatePacket { recipients, update };
-        let _ = self.update_sender.send(packet);
+        match recipients {
+            Recipients::Single(target) => {
+                if let Some(sender) = self.connections.get(&target) {
+                    let _ = sender.send(update);
+                }
+            }
+            Recipients::Multiple(targets) => {
+                for target in targets {
+                    if let Some(sender) = self.connections.get(&target) {
+                        let _ = sender.send(update.clone());
+                    }
+                }
+            }
+            Recipients::AllExcept(exclusions) => {
+                for entry in self.connections.iter() {
+                    if !exclusions.contains(entry.key()) {
+                        let _ = entry.value().send(update.clone());
+                    }
+                }
+            }
+            Recipients::All => {
+                for entry in self.connections.iter() {
+                    let _ = entry.value().send(update.clone());
+                }
+            }
+        }
     }
 
-    /// Convenience: push a full state update (delta) to a single recipient.
+    /// Convenience: push a state delta update to a single recipient.
     fn push_state(&self, recipient: Uuid) {
         let update = GameUpdate::StateDelta {
             phase: Some(self.state.phase),
@@ -331,7 +355,7 @@ impl GameEngine {
 
     /// Process an event from a client and push one or more updates.
     pub fn process_event(&mut self, event: GameEvent) {
-        // Check for admin-only actions:
+        // Check admin-only actions:
         match &event.action {
             GameAction::StartGame
             | GameAction::StartRound { .. }
@@ -350,7 +374,8 @@ impl GameEngine {
             }
             _ => {}
         }
-        // Process the event and push updates accordingly.
+
+        // Process events and push updates accordingly.
         match event.action {
             GameAction::Join { name } => self.handle_join(event.context, name),
             GameAction::Leave => self.handle_leave(event.context),
@@ -369,9 +394,10 @@ impl GameEngine {
 
     fn handle_join(&mut self, ctx: EventContext, name: String) {
         if self.state.admin_id == ctx.sender_id {
-            // If the admin joins, we assume they’re already connected.
+            // Assume admin is already connected.
             return;
         }
+
         let name = name.trim().to_string();
         let existing_names = self.state.players.values().map(|p| &p.name);
         if let Err(validation_error) = crate::game::validate_player_name(&name, existing_names) {
@@ -395,7 +421,8 @@ impl GameEngine {
         self.state
             .players
             .insert(ctx.sender_id, PlayerState::new(name.clone()));
-        // Push a Connected update to the joining player.
+
+        // Notify the joining player that they are connected.
         self.push_update(
             Recipients::Single(ctx.sender_id),
             GameUpdate::Connected {
@@ -405,7 +432,8 @@ impl GameEngine {
                 round_duration: self.state.round_duration,
             },
         );
-        // Broadcast a state update (without full details) to all others.
+
+        // Broadcast a state update (delta) to all others.
         self.push_update(
             Recipients::AllExcept(vec![ctx.sender_id]),
             GameUpdate::StateDelta {
@@ -454,67 +482,84 @@ impl GameEngine {
             );
             return;
         }
-        let player = match self.state.players.get_mut(&ctx.sender_id) {
-            Some(p) => p,
-            None => {
+
+        let (player_name, new_score, round_score, correct) = {
+            let player = match self.state.players.get_mut(&ctx.sender_id) {
+                Some(p) => p,
+                None => {
+                    self.push_update(
+                        Recipients::Single(ctx.sender_id),
+                        GameUpdate::Error {
+                            message: "Player not found".into(),
+                        },
+                    );
+                    return;
+                }
+            };
+
+            if player.has_answered {
                 self.push_update(
                     Recipients::Single(ctx.sender_id),
                     GameUpdate::Error {
-                        message: "Player not found".into(),
+                        message: "Already answered this round".into(),
                     },
                 );
                 return;
             }
-        };
-        if player.has_answered {
-            self.push_update(
-                Recipients::Single(ctx.sender_id),
-                GameUpdate::Error {
-                    message: "Already answered this round".into(),
-                },
-            );
-            return;
-        }
-        let elapsed = match self.state.round_start_time {
-            Some(start_time) => ctx.timestamp.duration_since(start_time),
-            None => {
-                warn!("Round start time not set; using default duration");
-                Duration::from_secs(self.state.round_duration / 2)
+
+            let elapsed = match self.state.round_start_time {
+                Some(start_time) => ctx.timestamp.duration_since(start_time),
+                None => {
+                    warn!("Round start time not set; using default duration");
+                    Duration::from_secs(self.state.round_duration / 2)
+                }
+            };
+
+            if elapsed.as_secs() > self.state.round_duration {
+                self.push_update(
+                    Recipients::Single(ctx.sender_id),
+                    GameUpdate::Error {
+                        message: "Time expired for this round".into(),
+                    },
+                );
+                return;
             }
+
+            let answer_clone = answer.clone();
+            let correct = self
+                .state
+                .correct_answers
+                .as_ref()
+                .map_or(false, |answers| answers.contains(&answer_clone));
+            let score_delta = if correct {
+                ((self.state.round_duration as f64 * 100.0 - (elapsed.as_secs_f64() * 100.0))
+                    .max(0.0)) as i32
+            } else {
+                0
+            };
+
+            if correct {
+                player.score += score_delta;
+            }
+            player.round_score = score_delta;
+            player.has_answered = true;
+            player.answer = Some(answer_clone.clone());
+
+            (
+                player.name.clone(),
+                player.score,
+                player.round_score,
+                correct,
+            )
         };
-        if elapsed.as_secs() > self.state.round_duration {
-            self.push_update(
-                Recipients::Single(ctx.sender_id),
-                GameUpdate::Error {
-                    message: "Time expired for this round".into(),
-                },
-            );
-            return;
-        }
-        let correct = self
-            .state
-            .correct_answers
-            .as_ref()
-            .map_or(false, |answers| answers.contains(&answer));
-        let score_delta = if correct {
-            ((self.state.round_duration as f64 * 100.0 - (elapsed.as_secs_f64() * 100.0)).max(0.0))
-                as i32
-        } else {
-            0
-        };
-        if correct {
-            player.score += score_delta;
-        }
-        player.round_score = score_delta;
-        player.has_answered = true;
-        player.answer = Some(answer);
+
         self.push_update(
             Recipients::All,
             GameUpdate::Answered {
-                name: player.name.clone(),
+                name: player_name,
                 correct,
-                new_score: player.score,
-                round_score: player.round_score,
+                new_score,
+                round_score,
             },
         );
     }
