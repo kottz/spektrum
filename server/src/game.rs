@@ -305,32 +305,38 @@ impl GameEngine {
             .collect()
     }
 
-    /// Instead of pushing into an update channel, immediately broadcast the update
-    /// to the proper connections by looking them up in the global connections map.
     fn push_update(&self, recipients: Recipients, update: GameUpdate) {
         match recipients {
             Recipients::Single(target) => {
-                if let Some(sender) = self.connections.get(&target) {
-                    let _ = sender.send(update);
+                if self.state.players.contains_key(&target) {
+                    if let Some(sender) = self.connections.get(&target) {
+                        let _ = sender.send(update);
+                    }
                 }
             }
             Recipients::Multiple(targets) => {
                 for target in targets {
-                    if let Some(sender) = self.connections.get(&target) {
-                        let _ = sender.send(update.clone());
+                    if self.state.players.contains_key(&target) {
+                        if let Some(sender) = self.connections.get(&target) {
+                            let _ = sender.send(update.clone());
+                        }
                     }
                 }
             }
             Recipients::AllExcept(exclusions) => {
-                for entry in self.connections.iter() {
-                    if !exclusions.contains(entry.key()) {
-                        let _ = entry.value().send(update.clone());
+                for player_id in self.state.players.keys() {
+                    if !exclusions.contains(player_id) {
+                        if let Some(sender) = self.connections.get(player_id) {
+                            let _ = sender.send(update.clone());
+                        }
                     }
                 }
             }
             Recipients::All => {
-                for entry in self.connections.iter() {
-                    let _ = entry.value().send(update.clone());
+                for player_id in self.state.players.keys() {
+                    if let Some(sender) = self.connections.get(player_id) {
+                        let _ = sender.send(update.clone());
+                    }
                 }
             }
         }
