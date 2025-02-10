@@ -1,10 +1,11 @@
 use crate::db::{DbError, StoredData};
 use crate::game::{
-    EventContext, GameAction, GameEvent, GamePhase, GameResponse, Recipients, ResponsePayload,
+    EventContext, GameAction, GameEngine, GameEvent, GameResponse, GameUpdate, GameUpdatePacket, Recipients
 };
-use crate::game_manager::{GameLobby, GameManager};
-use crate::messages::GameState;
-use crate::messages::{convert_to_server_message, AdminAction, ClientMessage, ServerMessage};
+use tokio::time::{interval, Duration};
+//use crate::game_manager::{GameLobby, GameManager};
+//use crate::messages::GameState;
+//use crate::messages::{convert_to_server_message, AdminAction, ClientMessage, ServerMessage};
 use crate::question::QuestionStore;
 use axum::extract::Path;
 use axum::http::StatusCode;
@@ -17,6 +18,7 @@ use axum::{
     Json,
 };
 use bytes::Bytes;
+use dashmap::DashMap;
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
@@ -29,7 +31,6 @@ use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
-use tokio::time::Duration;
 use tracing::*;
 use uuid::Uuid;
 
@@ -93,37 +94,21 @@ impl From<DbError> for ApiError {
 
 #[derive(Clone)]
 pub struct AppState {
-    pub manager: Arc<Mutex<GameManager>>,
-    //pub questions: Arc<Vec<GameQuestion>>,
+    pub lobbies: Arc<DashMap<Uuid, Arc<GameEngine>>>,
+    pub connections: Arc<DashMap<Uuid, UnboundedSender<GameUpdate>>>,
     pub store: Arc<QuestionStore>,
-    admin_passwords: Vec<String>,
+    pub admin_passwords: Vec<String>,
 }
 
 impl AppState {
     pub fn new(question_manager: QuestionStore, admin_passwords: Vec<String>) -> Self {
         let state = Self {
-            manager: Arc::new(Mutex::new(GameManager::new())),
+            lobbies: Arc::new(DashMap::new()),
+            connections: Arc::new(DashMap::new()),
             store: Arc::new(question_manager),
             admin_passwords,
         };
-
-        let manager = state.manager.clone();
-
-        // Spawn cleanup task
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(3600)); // Run every hour
-            loop {
-                interval.tick().await;
-                if let Ok(mgr) = manager.lock() {
-                    if let Err(e) = mgr.cleanup_inactive_lobbies() {
-                        error!("Error during periodic lobby cleanup: {}", e);
-                    } else {
-                        info!("Periodic cleanup of empty lobbies complete");
-                    }
-                }
-            }
-        });
-
+        // TODO spawn cleanup task
         state
     }
 }
@@ -164,19 +149,19 @@ pub async fn list_sets_handler(
 
 #[derive(Debug, Deserialize)]
 pub struct CreateLobbyRequest {
-    round_duration: Option<u64>,
-    set_id: Option<i64>,
+    pub round_duration: Option<u64>,
+    pub set_id: Option<i64>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, serde::Serialize)]
 pub struct CreateLobbyResponse {
-    lobby_id: Uuid,
-    join_code: String,
-    admin_id: Uuid,
+    pub lobby_id: Uuid,
+    pub join_code: String,
+    pub player_id: Uuid,
 }
 
 pub async fn create_lobby_handler(
-    State(state): State<AppState>,
+    State(state): State<crate::server::AppState>,
     Json(req): Json<CreateLobbyRequest>,
 ) -> Result<Json<CreateLobbyResponse>, ApiError> {
     let round_duration = req.round_duration.unwrap_or(60);
@@ -186,10 +171,11 @@ pub async fn create_lobby_handler(
         ));
     }
 
+    // Read questions and sets from the QuestionStore.
     let questions = state.store.questions.read().await;
     let sets = state.store.sets.read().await;
 
-    // Validate and get the set if an ID is provided
+    // Validate and select a set if requested.
     let selected_set = if let Some(set_id) = req.set_id {
         Some(
             sets.iter()
@@ -200,19 +186,31 @@ pub async fn create_lobby_handler(
         None
     };
 
-    let mgr = state
-        .manager
-        .lock()
-        .map_err(|e| ApiError::Lock(e.to_string()))?;
+    // Generate new IDs and a join code.
+    let lobby_id = Uuid::new_v4();
+    let admin_id = Uuid::new_v4();
+    let join_code = format!("{:06}", fastrand::u32(0..1_000_000));
 
-    let (lobby_id, join_code, admin_id) = mgr
-        .create_lobby(questions.clone(), selected_set, round_duration)
-        .map_err(|e| ApiError::Lobby(e.to_string()))?;
+    // Create an update channel that the GameEngine will use to send out updates.
+    let (update_sender, update_receiver) = unbounded_channel::<GameUpdatePacket>();
+
+    // Create a new game engine.
+    let engine = GameEngine::new(
+        admin_id,
+        Arc::clone(&questions),
+        selected_set,
+        round_duration,
+        update_sender,
+    );
+    let engine = Arc::new(engine);
+
+    // Insert the new engine into the global lobbies map.
+    state.lobbies.insert(lobby_id, engine);
 
     Ok(Json(CreateLobbyResponse {
         lobby_id,
         join_code,
-        admin_id,
+        player_id: admin_id,
     }))
 }
 
@@ -806,6 +804,24 @@ async fn handle_disconnect(conn_state: Arc<RwLock<WSConnectionState>>, state: &A
                 if let Err(e) = manager.remove_lobby(&lobby.id()) {
                     error!("Failed to remove empty lobby: {}", e);
                 }
+            }
+        }
+    }
+}
+
+async fn cleanup_lobbies(lobby_map: Arc<DashMap<Uuid, Arc<GameEngine>>>) {
+    let mut tick = interval(Duration::from_secs(60));
+    loop {
+        tick.tick().await;
+        for entry in lobby_map.iter() {
+            let lobby = entry.value();
+            // Check if there are any active connections.
+            let connections = lobby.get_active_connections();
+            // You can decide: if there are no active senders or if all senders are
+            // marked as disconnected for longer than a threshold, then delete the lobby.
+            if connections.is_empty() && lobby.last_activity_elapsed() > Duration::from_secs(900) {
+                info!("Removing idle lobby {}", lobby.id());
+                lobby_map.remove(&lobby.id());
             }
         }
     }
