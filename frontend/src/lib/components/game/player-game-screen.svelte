@@ -8,6 +8,7 @@
 	import { GamePhase } from '../../types/game';
 	import { Card } from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
+	import LightSwitch from '$lib/components/ui/light-switch.svelte';
 	const phase = $derived(gameStore.state.phase);
 	const joinCode = $derived(gameStore.state.joinCode);
 </script>
@@ -23,7 +24,10 @@
 				</div>
 			</Card>
 		{/if}
-		<Button variant="outline" on:click={() => gameActions.leaveGame()}>Leave Game</Button>
+		<div class="flex gap-4">
+			<Button variant="outline" on:click={() => gameActions.leaveGame()}>Leave Game</Button>
+			<LightSwitch />
+		</div>
 	</div>
 
 	<!-- Game content based on phase - now flex-1 with min-h-0 -->

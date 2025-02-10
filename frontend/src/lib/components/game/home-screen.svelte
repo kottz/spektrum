@@ -8,6 +8,7 @@
 	import { notifications } from '$lib/stores/notification-store';
 	import NotificationList from '$lib/components/NotificationList.svelte';
 	import SetSelector from '$lib/components/set-selector.svelte';
+	import LightSwitch from '$lib/components/ui/light-switch.svelte';
 	import { warn } from '$lib/utils/logger';
 
 	// Make props bindable
@@ -50,6 +51,7 @@
 	<div class="flex items-center gap-3">
 		<span class="text-2xl">🎵</span>
 		<h1 class="text-3xl font-bold">Music Quiz</h1>
+		<LightSwitch />
 	</div>
 
 	<div class="grid w-full max-w-lg gap-6">
