@@ -51,11 +51,9 @@ export interface PlayerState {
  */
 export interface GameState {
 	phase: GamePhase;
-	lobbyId?: string;
-	joinCode?: string;
-	adminId?: string;
 	playerId?: string;
 	playerName?: string;
+	joinCode?: string;
 	isAdmin: boolean;
 	roundDuration: number;
 	players: Map<string, PlayerState>;
@@ -90,82 +88,65 @@ export interface GameQuestionOption {
 	is_correct: boolean;
 }
 
+/**
+ * Extra information for the admin about the upcoming questions.
+ */
+export interface AdminExtraInfo {
+	upcoming_questions: GameQuestion[];
+}
+
 /* ------------------------------------------------------------------
    SERVER -> CLIENT MESSAGES
 ------------------------------------------------------------------ */
 
-/**
- * Extended server messages reflecting the new server.rs protocol.
- */
-export type ServerMessage =
+export type GameUpdate =
 	| {
-			// Sent when the client has successfully joined a lobby
-			type: 'JoinedLobby';
-			player_id: string;
-			lobby_id: string;
-			name: string;
-			round_duration: number;
-			players: [string, number][]; // Tuple [playerName, score]
-	  }
+		type: 'Connected';
+		player_id: string;
+		name: string;
+		round_duration: number;
+	}
 	| {
-			// Sent when a previously connected player is successfully reconnected
-			type: 'ReconnectSuccess';
-			game_state: {
-				phase: string; // same as GamePhase, but might come as a string
-				question_type: string;
-				alternatives: string[];
-				scoreboard: [string, number][]; // [playerName, score]
-				round_scores: [string, number][]; // [playerName, score]
-				current_song?: {
-					song_name: string;
-					artist: string;
-					youtube_id: string;
-				};
-			};
-	  }
+		type: 'StateDelta';
+		phase?: GamePhase;
+		question_type?: string;
+		alternatives?: string[];
+		scoreboard?: [string, number][];
+		round_scores?: [string, number][];
+		admin_extra?: AdminExtraInfo;
+	}
 	| {
-			type: 'PlayerLeft';
-			name: string;
-	  }
+		type: 'PlayerLeft';
+		name: string;
+	}
 	| {
-			type: 'PlayerAnswered';
-			name: string;
-			correct: boolean;
-			new_score: number;
-			round_score: number;
-	  }
+		type: 'Answered';
+		name: string;
+		correct: boolean;
+		new_score: number;
+		round_score: number;
+	}
 	| {
-			type: 'StateChanged';
-			phase: string; // e.g. 'lobby', 'score', 'question', 'gameover'
-			question_type: string;
-			alternatives: string[];
-			scoreboard: [string, number][]; // [playerName, score]
-			round_scores: [string, number][]; // [playerName, score]
-	  }
+		type: 'GameOver';
+		final_scores: [string, number][];
+		reason: string;
+	}
 	| {
-			type: 'GameOver';
-			scores: [string, number][]; // final scores
-			reason: string;
-	  }
+		type: 'GameClosed';
+		reason: string;
+	}
 	| {
-			type: 'GameClosed';
-			reason: string;
-	  }
+		type: 'Error';
+		message: string;
+	}
 	| {
-			type: 'AdminInfo';
-			// Provides extra info about a question to the admin
-			question: GameQuestion;
-	  }
+		type: 'AdminInfo';
+		current_question: GameQuestion;
+	}
 	| {
-			type: 'AdminNextQuestions';
-			// Provides upcoming questions (could be used for preview, etc.)
-			upcoming_questions: GameQuestion[];
-	  }
-	| {
-			type: 'Error';
-			code: ErrorCode;
-			message: string;
-	  };
+		type: 'AdminNextQuestions';
+		upcoming_questions: GameQuestion[];
+	};
 
 /* ------------------------------------------------------------------
    CLIENT -> SERVER MESSAGES
@@ -173,38 +154,27 @@ export type ServerMessage =
 
 export type ClientMessage =
 	| {
-			type: 'JoinLobby';
-			join_code: string;
-			name: string;
-			player_id?: string; // Only if rejoining
-			admin_id?: string; // Only if joining as admin
-	  }
+		type: 'Connect';
+		player_id: string;
+	}
 	| {
-			type: 'Reconnect';
-			lobby_id: string;
-			player_id: string;
-	  }
+		type: 'Leave';
+	}
 	| {
-			type: 'Leave';
-			lobby_id: string;
-	  }
+		type: 'Answer';
+		answer: string;
+	}
 	| {
-			type: 'Answer';
-			lobby_id: string;
-			answer: string;
-	  }
-	| {
-			type: 'AdminAction';
-			lobby_id: string;
-			action: AdminAction;
-	  };
+		type: 'AdminAction';
+		action: AdminAction;
+	};
 
 /**
  * Administrative actions that can be performed in the lobby.
  */
 export type AdminAction =
 	| { type: 'StartGame' }
-	| { type: 'StartRound'; specified_alternatives?: string[] }
+	| { type: 'StartRound' }
 	| { type: 'EndRound' }
 	| { type: 'SkipQuestion' }
 	| { type: 'EndGame'; reason: string }

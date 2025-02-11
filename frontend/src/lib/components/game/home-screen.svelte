@@ -1,52 +1,35 @@
 <script lang="ts">
+	// Import UI components and stores.
 	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
-	import { gameActions } from '$lib/stores/game-actions';
-	import { gameStore } from '$lib/stores/game.svelte';
-	import type { SessionInfo } from '$lib/stores/game.svelte';
-	import { notifications } from '$lib/stores/notification-store';
 	import NotificationList from '$lib/components/NotificationList.svelte';
 	import SetSelector from '$lib/components/set-selector.svelte';
 	import LightSwitch from '$lib/components/ui/light-switch.svelte';
-	import { warn } from '$lib/utils/logger';
+	import JoinLobbyCard from '$lib/components/join-lobby-card.svelte';
+	import { gameActions } from '$lib/stores/game-actions';
+	import { gameStore } from '$lib/stores/game.svelte';
+	import type { SessionInfo } from '$lib/stores/game.svelte';
 
-	// Make props bindable
-	let { playerName = $bindable(''), lobbyCode = $bindable('') } = $props();
-	let isJoining = $state(false);
 	let showSetSelector = $state(false);
-	let storedSessions = $state([]);
+	let storedSessions = $state<SessionInfo[]>([]);
 
-	$effect(() => {
-		storedSessions = gameStore.checkSessions();
-	});
+	// On component initialization, check for saved sessions.
+	//$effect(() => {
+	//	storedSessions = gameStore.checkSessions();
+	//});
 
-	async function handleJoinGame() {
-		if (!lobbyCode || !playerName) {
-			notifications.add('Please enter both lobby code and player name', 'destructive');
-			return;
-		}
-
-		try {
-			isJoining = true;
-			await gameActions.joinGame(lobbyCode, playerName);
-		} catch (error) {
-			warn('Error joining game:', error);
-			notifications.add('Failed to join game', 'destructive');
-		} finally {
-			isJoining = false;
-		}
-	}
-
+	// Function to reconnect using a saved session.
 	function reconnectToSession(session: SessionInfo) {
-		gameStore.setLobbyId(session.lobbyId);
 		gameStore.setPlayerId(session.playerId);
 		gameStore.setPlayerName(session.playerName);
-		gameActions.reconnectGame();
+		gameActions.reconnectGame(session.playerId);
 	}
 </script>
 
+<!-- Notifications -->
 <NotificationList />
+
+<!-- Main container -->
 <div class="container flex min-h-screen flex-col items-center justify-center gap-8 py-8">
 	<div class="flex items-center gap-3">
 		<span class="text-2xl">🎵</span>
@@ -55,6 +38,7 @@
 	</div>
 
 	<div class="grid w-full max-w-lg gap-6">
+		<!-- Create Lobby / Set Selection Card -->
 		<Card>
 			<CardHeader class="mb-2">
 				<div class="flex items-center gap-4">
@@ -78,48 +62,9 @@
 		</Card>
 
 		{#if !showSetSelector}
-			{#if storedSessions.length > 0}
-				<Card>
-					<CardHeader>
-						<CardTitle>Saved Sessions</CardTitle>
-					</CardHeader>
-					<CardContent class="grid gap-2">
-						{#each storedSessions as session}
-							<Button size="lg" class="w-full" on:click={() => reconnectToSession(session)}>
-								Reconnect: {session.playerName} ({new Date(session.createdAt).toLocaleString()})
-							</Button>
-						{/each}
-					</CardContent>
-				</Card>
-			{/if}
 
-			<Card>
-				<CardHeader>
-					<CardTitle>Join Existing Lobby</CardTitle>
-				</CardHeader>
-				<CardContent class="grid gap-4">
-					<Input
-						name="lobbyCode"
-						placeholder="Enter lobby code"
-						bind:value={lobbyCode}
-						disabled={isJoining}
-					/>
-					<Input
-						name="playerName"
-						placeholder="Enter your name"
-						bind:value={playerName}
-						disabled={isJoining}
-					/>
-					<Button
-						size="lg"
-						class="w-full"
-						on:click={handleJoinGame}
-						disabled={isJoining || !lobbyCode || !playerName}
-					>
-						{isJoining ? 'Joining...' : 'Join Game'}
-					</Button>
-				</CardContent>
-			</Card>
+			<!-- Use the new JoinLobbyCard component for joining an existing lobby -->
+			<JoinLobbyCard />
 		{/if}
 	</div>
 </div>

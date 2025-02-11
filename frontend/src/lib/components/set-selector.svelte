@@ -36,7 +36,7 @@
 
 	async function handleCreate() {
 		try {
-			await gameActions.createGame('Admin', selectedSet);
+			await gameActions.createGame(selectedSet);
 		} catch (err) {
 			warn('Lobby creation failed:', err);
 			notifications.add('Failed to create lobby', 'destructive');

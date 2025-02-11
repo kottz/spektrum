@@ -82,6 +82,7 @@ fn validate_player_name<'a>(
 //
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum GamePhase {
     Lobby,
     Score,

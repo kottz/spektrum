@@ -1,4 +1,3 @@
-// src/lib/stores/game-actions.ts
 import { websocketStore } from './websocket.svelte';
 import { gameStore } from '$lib/stores/game.svelte';
 import { youtubeStore } from '$lib/stores/youtube-store.svelte';
@@ -10,25 +9,23 @@ import { removeSession } from '$lib/stores/game.svelte';
 
 class GameActions {
 	/**
-	 * Join an existing lobby with a given joinCode and playerName.
-	 * The store will handle connecting and storing credentials if successful.
+	 * Join an existing lobby with a given player ID.
 	 */
-	public async joinGame(joinCode: string, playerName: string) {
+	public async joinGame(playerId: string) {
 		try {
-			await websocketStore.connect(joinCode, playerName);
+			await websocketStore.connect(playerId);
 		} catch (error) {
 			warn('Failed to join game:', error);
 			throw error;
 		}
-		gameStore.state.joinCode = joinCode;
 	}
 
 	/**
 	 * Create a new lobby, then automatically join it as admin.
 	 */
-	public async createGame(playerName: string = 'Admin', set: number | null = null) {
+	public async createGame(set: number | null = null) {
 		try {
-			const response = await fetch(`${PUBLIC_SPEKTRUM_SERVER_URL}/api/lobbies`, {
+			const response = await fetch(`${PUBLIC_SPEKTRUM_SERVER_URL}/api/create-lobby`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ round_duration: 60, set_id: set })
@@ -38,17 +35,17 @@ class GameActions {
 			}
 			const data = await response.json();
 
-			// Set admin flag and update game store state
-			gameStore.state.isAdmin = true;
-			gameStore.state.adminId = data.admin_id;
-			gameStore.state.joinCode = data.join_code;
-			gameStore.state.lobbyId = data.lobby_id;
 
 			// IMPORTANT: Remove any previously saved session for this lobby/player.
-			removeSession(data.lobby_id, data.admin_id);
+			removeSession(data.player_id);
 
-			// Now, pass the admin_id to the websocket connect call
-			await websocketStore.connect(data.join_code, playerName, data.admin_id);
+			// Connect via websockets. The admin_id becomes the player_id for the Connect message.
+			await websocketStore.connect(data.player_id);
+
+			// Set admin flag and update game store state.
+			gameStore.state.isAdmin = true;
+			gameStore.state.joinCode = data.join_code;
+
 			return data.join_code;
 		} catch (error) {
 			warn('Failed to create game:', error);
@@ -59,24 +56,23 @@ class GameActions {
 	/**
 	 * Attempt to reconnect using any credentials stored in localStorage.
 	 */
-	public reconnectGame() {
+	public reconnectGame(playerId: string) {
 		info('Attempting to reconnect...');
-		websocketStore.connect();
+		websocketStore.connect(playerId);
 	}
 
 	/**
 	 * Submit an answer to the current question.
 	 */
 	public submitAnswer(answer: string) {
-		const { lobbyId } = gameStore.state;
-		if (!lobbyId) {
-			warn('No active lobby');
+		// Ensure we have a valid player ID (stored after joining).
+		if (!gameStore.state.playerId) {
+			warn('No active player');
 			return;
 		}
 
 		const message: ClientMessage = {
 			type: 'Answer',
-			lobby_id: lobbyId,
 			answer
 		};
 		websocketStore.send(message);
@@ -86,15 +82,13 @@ class GameActions {
 	 * Helper to send an admin action if the user is authorized as admin.
 	 */
 	private sendAdminAction(action: AdminAction) {
-		const { lobbyId, isAdmin } = gameStore.state;
-		if (!lobbyId || !isAdmin) {
+		if (!gameStore.state.isAdmin) {
 			warn('Not authorized to perform admin action');
 			return;
 		}
 
 		const message: ClientMessage = {
 			type: 'AdminAction',
-			lobby_id: lobbyId,
 			action
 		};
 		info('Sending admin action:', message);
@@ -105,11 +99,8 @@ class GameActions {
 		this.sendAdminAction({ type: 'StartGame' });
 	}
 
-	public startRound(specifiedAlternatives: string[] | undefined = undefined) {
-		this.sendAdminAction({
-			type: 'StartRound',
-			specified_alternatives: specifiedAlternatives
-		});
+	public startRound() {
+		this.sendAdminAction({ type: 'StartRound' });
 	}
 
 	public endRound() {
@@ -122,29 +113,22 @@ class GameActions {
 	}
 
 	public endGame(reason: string = 'Game ended by admin') {
-		this.sendAdminAction({
-			type: 'EndGame',
-			reason
-		});
+		this.sendAdminAction({ type: 'EndGame', reason });
 	}
 
 	public closeGame(reason: string = 'Game closed by admin') {
-		this.sendAdminAction({
-			type: 'CloseGame',
-			reason
-		});
+		this.sendAdminAction({ type: 'CloseGame', reason });
 	}
 
 	/**
 	 * Leave the current game (if any), then clean up local state and YouTube player.
 	 */
 	public leaveGame() {
-		const { lobbyId } = gameStore.state;
-		if (!lobbyId) return;
+		// Ensure we have a valid player ID.
+		if (!gameStore.state.playerId) return;
 
 		const message: ClientMessage = {
-			type: 'Leave',
-			lobby_id: lobbyId
+			type: 'Leave'
 		};
 		websocketStore.send(message);
 		gameStore.cleanup();

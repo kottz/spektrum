@@ -1,14 +1,13 @@
 // src/lib/stores/websocket.ts
 
-import type { ServerMessage, ClientMessage } from '../types/game';
+import type { GameUpdate, ClientMessage } from '../types/game';
 import { PUBLIC_SPEKTRUM_WS_SERVER_URL } from '$env/static/public';
 import { gameStore } from '$lib/stores/game.svelte';
 import { info, warn } from '$lib/utils/logger';
-import { loadSessions } from '$lib/stores/game.svelte';
 
 interface WebSocketState {
 	connected: boolean;
-	messages: ServerMessage[];
+	messages: GameUpdate[];
 	error: string | null;
 	isConnecting: boolean;
 }
@@ -35,7 +34,7 @@ function createWebSocketStore() {
 		}
 	}
 
-	function connect(joinCode?: string, playerName?: string, adminId?: string): Promise<void> {
+	function connect(playerId: string): Promise<void> {
 		return new Promise((resolve, reject) => {
 			const connectionTimeout = setTimeout(() => {
 				if (socket) {
@@ -57,35 +56,28 @@ function createWebSocketStore() {
 				state.connected = true;
 				state.error = null;
 				state.isConnecting = false;
+				gameStore.setPlayerId(playerId);
 
-				// Get stored values from gameStore.
-				const { joinCode: storedJoinCode, playerName: storedName, playerId: storedPlayerId, adminId } = gameStore.state;
-				const finalJoinCode = joinCode || storedJoinCode || '';
-				const finalName = playerName || storedName || '';
-
-				// If adminId is present, use it as the admin's identity (and ignore any stored playerId).
-				const joinMsg: ClientMessage = {
-					type: 'JoinLobby',
-					join_code: finalJoinCode,
-					name: finalName,
-					admin_id: adminId, // if admin, this is non-null.
-					// Only include player_id if not admin.
-					player_id: adminId ? undefined : storedPlayerId
+				// Send a Connect message using the new protocol.
+				const connectMsg: ClientMessage = {
+					type: 'Connect',
+					player_id: playerId
 				};
 
-				send(joinMsg);
+				send(connectMsg);
 				resolve();
 			};
 
 			socket.onmessage = (event) => {
 				try {
-					const message = JSON.parse(event.data) as ServerMessage;
+					const message = JSON.parse(event.data) as GameUpdate;
 					info('Received message:', message);
 
 					gameStore.processServerMessage(message);
 
+					// For error messages, reject the connection promise.
 					if (message.type === 'Error') {
-						reject(new Error(message.code || 'Server error'));
+						reject(new Error(message.message));
 						return;
 					}
 
@@ -135,9 +127,9 @@ function createWebSocketStore() {
 			return;
 		}
 
-		const { lobbyId, playerId } = $derived(gameStore.state);
-		if (!lobbyId || !playerId) {
-			info('No valid lobby/player in gameStore, skipping auto-reconnect');
+		const playerId = $derived(gameStore.state.playerId);
+		if (!playerId) {
+			info('No valid player in gameStore, skipping auto-reconnect');
 			return;
 		}
 
@@ -147,7 +139,7 @@ function createWebSocketStore() {
 		clearReconnectTimeout();
 		reconnectTimeout = window.setTimeout(() => {
 			info(`Attempting reconnect #${reconnectAttempts}...`);
-			connect();
+			connect(playerId);
 		}, delay);
 	}
 

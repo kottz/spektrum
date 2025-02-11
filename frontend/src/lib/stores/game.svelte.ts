@@ -5,7 +5,7 @@ import { youtubeStore } from '$lib/stores/youtube-store.svelte';
 import { timerStore } from '$lib/stores/timer-store.svelte';
 import { info, warn } from '$lib/utils/logger';
 
-import type { GameState, ServerMessage } from '../types/game';
+import type { GameState, GameUpdate } from '../types/game';
 import { GamePhase } from '../types/game';
 import { PUBLIC_SPEKTRUM_SERVER_URL } from '$env/static/public';
 
@@ -13,7 +13,6 @@ import { PUBLIC_SPEKTRUM_SERVER_URL } from '$env/static/public';
    Multi-session storage for localStorage
 ------------------------------------------------------------------ */
 export interface SessionInfo {
-	lobbyId: string;
 	playerId: string;
 	playerName: string;
 	joinCode: string;
@@ -33,7 +32,7 @@ export function loadSessions(): SessionInfo[] {
 export function saveSession(session: SessionInfo) {
 	if (!browser) return;
 	const sessions = loadSessions().filter(
-		(s) => !(s.lobbyId === session.lobbyId && s.playerId === session.playerId)
+		(s) => !(s.playerId === session.playerId)
 	);
 	sessions.push(session);
 	localStorage.setItem('spektrumSessions', JSON.stringify(sessions));
@@ -43,10 +42,10 @@ function saveSessions(sessions: SessionInfo[]) {
 	localStorage.setItem('spektrumSessions', JSON.stringify(sessions));
 }
 
-export function removeSession(lobbyId: string, playerId: string) {
+export function removeSession(playerId: string) {
 	if (!browser) return;
 	const sessions = loadSessions().filter(
-		(s) => !(s.lobbyId === lobbyId && s.playerId === playerId)
+		(s) => !(s.playerId === playerId)
 	);
 	localStorage.setItem('spektrumSessions', JSON.stringify(sessions));
 }
@@ -66,7 +65,6 @@ async function checkSessionsFromServer(): Promise<SessionInfo[]> {
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
 				sessions: sessions.map((sess) => ({
-					lobby_id: sess.lobbyId,
 					player_id: sess.playerId
 				}))
 			})
@@ -82,11 +80,11 @@ async function checkSessionsFromServer(): Promise<SessionInfo[]> {
 		info('Valid sessions:', data.valid_sessions);
 
 		// Build a set of valid combos
-		const validSet = new Set(data.valid_sessions.map((v) => v.lobby_id + '|' + v.player_id));
+		const validSet = new Set(data.valid_sessions.map((v) => v.player_id));
 
 		// Filter out invalid sessions
 		const validSessions = sessions.filter((sess) =>
-			validSet.has(sess.lobbyId + '|' + sess.playerId)
+			validSet.has(sess.playerId)
 		);
 
 		saveSessions(validSessions);
@@ -96,6 +94,7 @@ async function checkSessionsFromServer(): Promise<SessionInfo[]> {
 		return sessions; // Return unfiltered on fetch error
 	}
 }
+
 /* ------------------------------------------------------------------
    Game store for the currently active session
 ------------------------------------------------------------------ */
@@ -103,8 +102,6 @@ const initialState: GameState = {
 	phase: GamePhase.Lobby,
 	isAdmin: false,
 	joinCode: undefined,
-	adminId: undefined,
-	lobbyId: undefined,
 	roundDuration: 60,
 	players: new Map(),
 	currentAnswers: []
@@ -113,18 +110,19 @@ const initialState: GameState = {
 function createGameStore() {
 	const state = $state<GameState>({ ...initialState });
 
+	/**
+	 * Cleanup resets the store and removes the current session.
+	 */
 	function cleanup() {
 		info('Running cleanup...');
-		if (state.lobbyId && state.playerId) {
-			removeSession(state.lobbyId, state.playerId);
+		if (state.playerId) {
+			removeSession(state.playerId);
 		}
-		state.lobbyId = undefined;
 		state.playerId = undefined;
 		state.playerName = undefined;
 		state.isAdmin = false;
-		state.adminId = undefined;
 		state.joinCode = undefined;
-		// Reset state to initial state
+		// Reset state to initial values.
 		Object.assign(state, initialState);
 	}
 
@@ -132,9 +130,13 @@ function createGameStore() {
 		return await checkSessionsFromServer();
 	}
 
-	function processServerMessage(message: ServerMessage) {
+	/**
+	 * Processes an incoming GameUpdate message from the server.
+	 */
+	function processServerMessage(message: GameUpdate) {
 		info('Handling server message:', message);
 
+		// If the game is closed, run cleanup.
 		if (message.type === 'GameClosed') {
 			info('Game closed, cleaning up...');
 			cleanup();
@@ -142,16 +144,16 @@ function createGameStore() {
 		}
 
 		switch (message.type) {
-			case 'JoinedLobby': {
+			case 'Connected': {
+				// The Connected message is sent after a successful join.
 				const time = new Date();
 				const timeString = time.toLocaleTimeString('en-US', {
 					hour12: false,
 					hour: '2-digit',
 					minute: '2-digit'
 				});
-
+				// Create a session using stored joinCode and lobbyId.
 				const session: SessionInfo = {
-					lobbyId: message.lobby_id,
 					playerId: message.player_id,
 					playerName: message.name,
 					joinCode: state.joinCode || '',
@@ -159,80 +161,84 @@ function createGameStore() {
 				};
 				saveSession(session);
 
-				state.lobbyId = message.lobby_id;
 				state.playerId = message.player_id;
 				state.playerName = message.name;
 				state.roundDuration = message.round_duration;
-				// Instead of always setting isAdmin to false,
-				// check if the message includes an admin_id.
-				state.players = new Map(
-					message.players.map(([name, score]) => [
-						name,
-						{ name, score, roundScore: 0, hasAnswered: false, answer: null }
-					])
-				);
 				break;
 			}
 
-			case 'ReconnectSuccess': {
-				const storedSessions = loadSessions();
-				state.phase = message.game_state.phase as GamePhase;
-				state.currentQuestion = message.game_state.alternatives
-					? {
-						type: message.game_state.question_type,
-						alternatives: message.game_state.alternatives
-					}
-					: undefined;
-				state.players = new Map(
-					message.game_state.scoreboard.map(([name, score]) => [
-						name,
-						{ name, score, roundScore: 0, hasAnswered: false, answer: null }
-					])
-				);
-				break;
-			}
-
-			case 'StateChanged': {
-				const newPlayers = new Map(state.players);
-
-				message.scoreboard.forEach(([name, score]) => {
-					newPlayers.set(name, {
-						name,
-						score,
-						roundScore: 0,
-						hasAnswered: false,
-						answer: null
-					});
-				});
-
-				// Update round scores
-				message.round_scores.forEach(([name, roundScore]) => {
-					const player = newPlayers.get(name);
-					if (player) {
-						player.roundScore = roundScore;
-					}
-				});
-
-				const newPhase = message.phase.toLowerCase() as GamePhase;
-				youtubeStore.handlePhaseChange(newPhase);
-
-				if (newPhase === 'question') {
-					timerStore.startTimer();
+			case 'StateDelta': {
+				// Update phase if provided.
+				if (message.phase !== undefined) {
+					state.phase = message.phase;
 				}
 
-				state.phase = newPhase;
-				state.players = newPlayers;
+				// Update players using provided scoreboard and round scores.
+				if (message.scoreboard) {
+					const newPlayers = new Map(state.players);
+					message.scoreboard.forEach(([name, score]) => {
+						newPlayers.set(name, {
+							name,
+							score,
+							roundScore: 0,
+							hasAnswered: false,
+							answer: null
+						});
+					});
+					if (message.round_scores) {
+						message.round_scores.forEach(([name, roundScore]) => {
+							const player = newPlayers.get(name);
+							if (player) {
+								player.roundScore = roundScore;
+							}
+						});
+					}
+					state.players = newPlayers;
+				}
 
-				if (newPhase === 'score') {
+				// Update the current question if alternatives are provided.
+				if (message.alternatives) {
+					state.currentQuestion = {
+						type: message.question_type || '',
+						alternatives: message.alternatives
+					};
+				} else {
+					state.currentQuestion = undefined;
+				}
+
+				// Perform phase-specific actions.
+				const newPhase = (message.phase && message.phase.toLowerCase()) || '';
+				if (newPhase === GamePhase.Question.toLowerCase()) {
+					timerStore.startTimer();
+				}
+				if (newPhase === GamePhase.Score.toLowerCase()) {
 					state.currentAnswers = [];
 				}
 
-				state.currentQuestion = message.alternatives
-					? {
-						type: message.question_type,
-						alternatives: message.alternatives
+				// Update the phase.
+				state.phase = message.phase || state.phase;
+				break;
+			}
+
+			case 'Answered': {
+				// Update the current answers if not already present.
+				if (state.currentAnswers.some((a) => a.name === message.name)) {
+					break;
+				}
+				state.currentAnswers = [
+					...state.currentAnswers,
+					{
+						name: message.name,
+						correct: message.correct,
+						timestamp: Date.now()
 					}
-					: undefined;
+				];
+				break;
+			}
+
+			case 'PlayerLeft': {
+				info(`Player left: ${message.name}`);
+				// Optionally remove the player from the players map or notify the UI.
 				break;
 			}
 
@@ -243,18 +249,18 @@ function createGameStore() {
 			}
 
 			case 'AdminInfo': {
-				if (message.question) {
-					const { youtube_id, title, artist } = message.question;
+				if (message.current_question) {
+					const { youtube_id, title, artist } = message.current_question;
 					info('Received song info:', { youtube_id, title, artist });
 					if (youtube_id) {
 						youtubeStore.loadVideo(youtube_id);
 					}
 				}
-				state.currentSong = message.question
+				state.currentSong = message.current_question
 					? {
-						songName: message.question.title,
-						artist: message.question.artist,
-						youtubeId: message.question.youtube_id
+						songName: message.current_question.title,
+						artist: message.current_question.artist,
+						youtubeId: message.current_question.youtube_id
 					}
 					: undefined;
 				break;
@@ -270,38 +276,22 @@ function createGameStore() {
 				break;
 			}
 
-			case 'PlayerAnswered': {
-				if (state.currentAnswers.some((a) => a.name === message.name)) {
-					break;
-				}
-				state.currentAnswers = [
-					...state.currentAnswers,
-					{
-						name: message.name,
-						correct: message.correct,
-						timestamp: Date.now()
-					}
-				];
+			case 'Error': {
+				state.error = message.message;
 				break;
 			}
 
-			case 'Error':
-				// Handle error case
-				break;
+			default:
+				warn('Unhandled message type:', message);
 		}
 	}
 
-	function setAdmin(adminId: string) {
+	function setAdmin() {
 		state.isAdmin = true;
-		state.adminId = adminId;
 	}
 
 	function setJoinCode(joinCode: string) {
 		state.joinCode = joinCode;
-	}
-
-	function setLobbyId(lobbyId: string) {
-		state.lobbyId = lobbyId;
 	}
 
 	function setPlayerId(playerId: string) {
@@ -322,7 +312,6 @@ function createGameStore() {
 		processServerMessage,
 		setAdmin,
 		setJoinCode,
-		setLobbyId,
 		setPlayerId,
 		setPlayerName,
 		cleanup,

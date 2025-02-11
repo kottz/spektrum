@@ -233,13 +233,19 @@ pub async fn create_lobby_handler(
     let join_code = state.generate_join_code(lobby_id)?;
 
     // Create a new game engine.
-    let engine = GameEngine::new(
+    let mut engine = GameEngine::new(
         admin_id,
         Arc::clone(&questions),
         selected_set,
         round_duration,
         state.connections.clone(),
     );
+
+    engine.add_player(admin_id, "Admin".to_string()).map_err(|e| ApiError::Lobby(e.to_string()))?;
+
+    state
+        .connections
+        .insert(admin_id, Connection { lobby_id, tx: None });
 
     // Insert the new engine into the global lobbies map.
     state.lobbies.insert(lobby_id, engine);
@@ -287,6 +293,14 @@ pub async fn join_lobby_handler(
     engine
         .add_player(new_player_id, req.name)
         .map_err(|e| ApiError::Lobby(e.to_string()))?;
+
+    state.connections.insert(
+        new_player_id,
+        Connection {
+            lobby_id: *lobby_id,
+            tx: None,
+        },
+    );
 
     // Return the new player's id.
     Ok(Json(JoinLobbyResponse {
@@ -406,7 +420,6 @@ pub async fn upload_character_image_handler(
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionInfo {
     pub player_id: Uuid,
-    pub lobby_id: Uuid,
 }
 
 #[derive(Debug, Deserialize)]
@@ -427,16 +440,14 @@ pub async fn check_sessions_handler(
 
     // Iterate over each session provided by the client.
     for session in req.sessions.iter() {
-        // Look up the lobby in our global DashMap.
-        if let Some(lobby_arc) = state.lobbies.get(&session.lobby_id) {
-            let lobby = lobby_arc.value();
-            if lobby.get_phase() == GamePhase::GameOver && lobby.is_empty() {
-                continue;
+        if let Some(conn) = state.connections.get(&session.player_id) {
+            if let Some(lobby) = state.lobbies.get(&conn.lobby_id) {
+                if !lobby.is_finished() {
+                    valid_sessions.push(session.clone());
+                }
             }
-            valid_sessions.push(session.clone());
         }
     }
-
     Ok(Json(CheckSessionsResponse { valid_sessions }))
 }
 
@@ -524,20 +535,24 @@ async fn process_incoming_messages(
                         Ok(ClientMessage::Connect { player_id }) => {
                             // Look up existing connection info
                             if let Some(conn) = state.connections.get(&player_id) {
-                                // Store player_id in connection state
+                                // Extract the lobby_id and drop the guard before mutating the map.
+                                let lobby_id = conn.lobby_id;
+                                drop(conn);
+
+                                // Store player_id in connection state.
                                 conn_state.write().await.player_id = Some(player_id);
 
-                                // Update sender in connections map
+                                // Update sender in connections map.
                                 state.connections.insert(
                                     player_id,
                                     Connection {
-                                        lobby_id: conn.lobby_id,
+                                        lobby_id,
                                         tx: Some(tx.clone()),
                                     },
                                 );
 
-                                // Get current game state by triggering GetState
-                                if let Some(mut engine) = state.lobbies.get_mut(&conn.lobby_id) {
+                                // Get current game state by triggering GetState.
+                                if let Some(mut engine) = state.lobbies.get_mut(&lobby_id) {
                                     let event = GameEvent {
                                         context: EventContext {
                                             sender_id: player_id,
@@ -554,12 +569,13 @@ async fn process_incoming_messages(
                             }
                         }
                         Ok(msg) => {
-                            // Handle all other messages
+                            // Handle all other messages.
                             let state_read = conn_state.read().await;
                             if let Some(player_id) = state_read.player_id {
                                 if let Some(conn) = state.connections.get(&player_id) {
-                                    if let Some(mut engine) = state.lobbies.get_mut(&conn.lobby_id)
-                                    {
+                                    let lobby_id = conn.lobby_id;
+                                    drop(conn);
+                                    if let Some(mut engine) = state.lobbies.get_mut(&lobby_id) {
                                         let event = GameEvent {
                                             context: EventContext {
                                                 sender_id: player_id,
@@ -945,15 +961,13 @@ async fn send_server_message(
 async fn handle_disconnect(conn_state: Arc<RwLock<WSConnectionState>>, state: &AppState) {
     let state_read = conn_state.read().await;
     if let Some(player_id) = state_read.player_id {
-        // Only remove the sender, preserving the lobby_id
+        // Only remove the sender, preserving the lobby_id.
         if let Some(conn) = state.connections.get(&player_id) {
-            state.connections.insert(
-                player_id,
-                Connection {
-                    lobby_id: conn.lobby_id,
-                    tx: None,
-                },
-            );
+            let lobby_id = conn.lobby_id;
+            drop(conn);
+            state
+                .connections
+                .insert(player_id, Connection { lobby_id, tx: None });
         }
     }
 }
