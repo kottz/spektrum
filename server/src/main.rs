@@ -116,11 +116,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .add_source(config::File::with_name("config").required(false))
         .build()
-        .map_err(|e| format!("Failed to build config: {}", e))?;
+        .map_err(|e| format!("Failed to build config: {e}"))?;
 
     let app_config: AppConfig = settings
         .try_deserialize()
-        .map_err(|e| format!("Failed to parse config: {}", e))?;
+        .map_err(|e| format!("Failed to parse config: {e}"))?;
 
     init_tracing(app_config.logging.json);
 
@@ -131,7 +131,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|origin| {
             origin
                 .parse()
-                .map_err(|e| format!("Invalid CORS origin '{}': {}", origin, e))
+                .map_err(|e| format!("Invalid CORS origin '{origin}': {e}"))
         })
         .collect::<Result<Vec<_>, _>>()?;
 

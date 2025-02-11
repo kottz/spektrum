@@ -730,7 +730,7 @@ impl GameEngine {
         );
     }
 
-    fn handle_close_game(&mut self, _ctx: EventContext, reason: String) {
+    fn handle_close_game(&self, _ctx: EventContext, reason: String) {
         self.push_update(Recipients::All, GameUpdate::GameClosed { reason });
     }
 
@@ -790,7 +790,7 @@ mod tests {
             validate_player_name("Invalid@Name", empty_names.clone()),
             Err(NameValidationError::InvalidCharacters)
         ));
-        let existing_names = vec!["John".to_string()];
+        let existing_names = ["John".to_string()];
         assert!(matches!(
             validate_player_name("John", existing_names.iter()),
             Err(NameValidationError::AlreadyTaken)
