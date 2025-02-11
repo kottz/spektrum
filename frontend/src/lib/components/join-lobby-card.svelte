@@ -5,6 +5,7 @@
 	import { gameActions } from '$lib/stores/game-actions';
 	import { notifications } from '$lib/stores/notification-store';
 	import { warn } from '$lib/utils/logger';
+	import { gameStore } from '$lib/stores/game.svelte';
 	import { PUBLIC_SPEKTRUM_SERVER_URL } from '$env/static/public';
 
 	// Local reactive variables.
@@ -28,6 +29,7 @@
 			if (!response.ok) {
 				throw new Error('Failed to join lobby');
 			}
+			gameStore.setPlayerName(playerName);
 			const data = await response.json();
 			// Then, initiate the websocket connection.
 			await gameActions.joinGame(data.player_id);

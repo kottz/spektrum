@@ -101,52 +101,52 @@ export interface AdminExtraInfo {
 
 export type GameUpdate =
 	| {
-		type: 'Connected';
-		player_id: string;
-		name: string;
-		round_duration: number;
-	}
+			type: 'Connected';
+			player_id: string;
+			name: string;
+			round_duration: number;
+	  }
 	| {
-		type: 'StateDelta';
-		phase?: GamePhase;
-		question_type?: string;
-		alternatives?: string[];
-		scoreboard?: [string, number][];
-		round_scores?: [string, number][];
-		admin_extra?: AdminExtraInfo;
-	}
+			type: 'StateDelta';
+			phase?: GamePhase;
+			question_type?: string;
+			alternatives?: string[];
+			scoreboard?: [string, number][];
+			round_scores?: [string, number][];
+			admin_extra?: AdminExtraInfo;
+	  }
 	| {
-		type: 'PlayerLeft';
-		name: string;
-	}
+			type: 'PlayerLeft';
+			name: string;
+	  }
 	| {
-		type: 'Answered';
-		name: string;
-		correct: boolean;
-		new_score: number;
-		round_score: number;
-	}
+			type: 'Answered';
+			name: string;
+			correct: boolean;
+			new_score: number;
+			round_score: number;
+	  }
 	| {
-		type: 'GameOver';
-		final_scores: [string, number][];
-		reason: string;
-	}
+			type: 'GameOver';
+			final_scores: [string, number][];
+			reason: string;
+	  }
 	| {
-		type: 'GameClosed';
-		reason: string;
-	}
+			type: 'GameClosed';
+			reason: string;
+	  }
 	| {
-		type: 'Error';
-		message: string;
-	}
+			type: 'Error';
+			message: string;
+	  }
 	| {
-		type: 'AdminInfo';
-		current_question: GameQuestion;
-	}
+			type: 'AdminInfo';
+			current_question: GameQuestion;
+	  }
 	| {
-		type: 'AdminNextQuestions';
-		upcoming_questions: GameQuestion[];
-	};
+			type: 'AdminNextQuestions';
+			upcoming_questions: GameQuestion[];
+	  };
 
 /* ------------------------------------------------------------------
    CLIENT -> SERVER MESSAGES
@@ -154,20 +154,20 @@ export type GameUpdate =
 
 export type ClientMessage =
 	| {
-		type: 'Connect';
-		player_id: string;
-	}
+			type: 'Connect';
+			player_id: string;
+	  }
 	| {
-		type: 'Leave';
-	}
+			type: 'Leave';
+	  }
 	| {
-		type: 'Answer';
-		answer: string;
-	}
+			type: 'Answer';
+			answer: string;
+	  }
 	| {
-		type: 'AdminAction';
-		action: AdminAction;
-	};
+			type: 'AdminAction';
+			action: AdminAction;
+	  };
 
 /**
  * Administrative actions that can be performed in the lobby.

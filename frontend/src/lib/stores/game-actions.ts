@@ -35,7 +35,6 @@ class GameActions {
 			}
 			const data = await response.json();
 
-
 			// IMPORTANT: Remove any previously saved session for this lobby/player.
 			removeSession(data.player_id);
 

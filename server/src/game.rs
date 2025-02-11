@@ -164,7 +164,6 @@ pub enum GameAction {
     Answer { answer: String },
     StartGame,
     StartRound,
-    GetState,
     EndRound,
     SkipQuestion,
     EndGame { reason: String },
@@ -345,22 +344,6 @@ impl GameEngine {
         }
     }
 
-    fn push_state(&self, recipient: Uuid) {
-        let update = GameUpdate::StateDelta {
-            phase: Some(self.state.phase),
-            question_type: self
-                .state
-                .current_question
-                .as_ref()
-                .map(|q| q.get_question_type().to_string()),
-            alternatives: Some(self.state.current_alternatives.clone()),
-            scoreboard: Some(self.get_scoreboard()),
-            round_scores: Some(self.get_round_scores()),
-            admin_extra: None,
-        };
-        self.push_update(Recipients::Single(recipient), update);
-    }
-
     pub fn process_event(&mut self, event: GameEvent) {
         // Check admin-only actions:
         match &event.action {
@@ -388,7 +371,6 @@ impl GameEngine {
             GameAction::Answer { answer } => self.handle_answer(event.context, answer),
             GameAction::StartGame => self.handle_start_game(event.context),
             GameAction::StartRound => self.handle_start_round(event.context),
-            GameAction::GetState => self.push_state(event.context.sender_id),
             GameAction::EndRound => self.handle_end_round(event.context),
             GameAction::SkipQuestion => self.handle_skip_question(event.context),
             GameAction::EndGame { reason } => self.handle_end_game(event.context, reason),
@@ -398,6 +380,7 @@ impl GameEngine {
 
     fn handle_connect(&self, ctx: EventContext) {
         if let Some(player) = self.state.players.get(&ctx.sender_id) {
+            // First send the initial connection acknowledgment
             self.push_update(
                 Recipients::Single(ctx.sender_id),
                 GameUpdate::Connected {
@@ -406,6 +389,40 @@ impl GameEngine {
                     round_duration: self.state.round_duration,
                 },
             );
+
+            // Then send the complete current state
+            let state_update = GameUpdate::StateDelta {
+                phase: Some(self.state.phase),
+                question_type: self
+                    .state
+                    .current_question
+                    .as_ref()
+                    .map(|q| q.get_question_type().to_string()),
+                alternatives: Some(self.state.current_alternatives.clone()),
+                scoreboard: Some(self.get_scoreboard()),
+                round_scores: Some(self.get_round_scores()),
+                admin_extra: if ctx.sender_id == self.state.admin_id {
+                    Some(AdminExtraInfo {
+                        upcoming_questions: self.get_upcoming_questions(3),
+                    })
+                } else {
+                    None
+                },
+            };
+            self.push_update(Recipients::Single(ctx.sender_id), state_update);
+
+            // If this is the admin and we're in Question phase, send the current question
+            if ctx.sender_id == self.state.admin_id
+                && self.state.phase == GamePhase::Question
+                && self.state.current_question.is_some()
+            {
+                self.push_update(
+                    Recipients::Single(self.state.admin_id),
+                    GameUpdate::AdminInfo {
+                        current_question: self.state.current_question.clone().unwrap(),
+                    },
+                );
+            }
         } else {
             self.push_update(
                 Recipients::Single(ctx.sender_id),

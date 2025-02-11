@@ -31,9 +31,7 @@ export function loadSessions(): SessionInfo[] {
 
 export function saveSession(session: SessionInfo) {
 	if (!browser) return;
-	const sessions = loadSessions().filter(
-		(s) => !(s.playerId === session.playerId)
-	);
+	const sessions = loadSessions().filter((s) => !(s.playerId === session.playerId));
 	sessions.push(session);
 	localStorage.setItem('spektrumSessions', JSON.stringify(sessions));
 }
@@ -44,9 +42,7 @@ function saveSessions(sessions: SessionInfo[]) {
 
 export function removeSession(playerId: string) {
 	if (!browser) return;
-	const sessions = loadSessions().filter(
-		(s) => !(s.playerId === playerId)
-	);
+	const sessions = loadSessions().filter((s) => !(s.playerId === playerId));
 	localStorage.setItem('spektrumSessions', JSON.stringify(sessions));
 }
 
@@ -83,9 +79,7 @@ async function checkSessionsFromServer(): Promise<SessionInfo[]> {
 		const validSet = new Set(data.valid_sessions.map((v) => v.player_id));
 
 		// Filter out invalid sessions
-		const validSessions = sessions.filter((sess) =>
-			validSet.has(sess.playerId)
-		);
+		const validSessions = sessions.filter((sess) => validSet.has(sess.playerId));
 
 		saveSessions(validSessions);
 		return validSessions;
@@ -258,10 +252,10 @@ function createGameStore() {
 				}
 				state.currentSong = message.current_question
 					? {
-						songName: message.current_question.title,
-						artist: message.current_question.artist,
-						youtubeId: message.current_question.youtube_id
-					}
+							songName: message.current_question.title,
+							artist: message.current_question.artist,
+							youtubeId: message.current_question.youtube_id
+						}
 					: undefined;
 				break;
 			}

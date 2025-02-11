@@ -1,6 +1,5 @@
 use crate::db::{DbError, StoredData};
 use crate::game::{EventContext, GameAction, GameEngine, GameEvent, GameUpdate};
-use crate::messages::{AdminAction, ClientMessage};
 use crate::question::QuestionStore;
 use axum::extract::Path;
 use axum::http::StatusCode;
@@ -77,6 +76,26 @@ impl From<DbError> for ApiError {
     fn from(err: DbError) -> Self {
         ApiError::Database(err.to_string())
     }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type")]
+pub enum ClientMessage {
+    Connect { player_id: Uuid },
+    Leave,
+    Answer { answer: String },
+    AdminAction { action: AdminAction },
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type")]
+pub enum AdminAction {
+    StartGame,
+    StartRound,
+    EndRound,
+    SkipQuestion,
+    EndGame { reason: String },
+    CloseGame { reason: String },
 }
 
 pub struct Connection {
@@ -520,13 +539,10 @@ async fn process_incoming_messages(
                         Ok(ClientMessage::Connect { player_id }) => {
                             // Look up existing connection info
                             if let Some(conn) = state.connections.get(&player_id) {
-                                // Extract the lobby_id and drop the guard before mutating the map.
                                 let lobby_id = conn.lobby_id;
                                 drop(conn);
-
                                 // Store player_id in connection state.
                                 conn_state.write().await.player_id = Some(player_id);
-
                                 // Update sender in connections map.
                                 state.connections.insert(
                                     player_id,
@@ -535,15 +551,14 @@ async fn process_incoming_messages(
                                         tx: Some(tx.clone()),
                                     },
                                 );
-
-                                // Get current game state by triggering GetState.
+                                // Send Connect action to the engine
                                 if let Some(mut engine) = state.lobbies.get_mut(&lobby_id) {
                                     let event = GameEvent {
                                         context: EventContext {
                                             sender_id: player_id,
                                             timestamp: Instant::now(),
                                         },
-                                        action: GameAction::GetState,
+                                        action: GameAction::Connect,
                                     };
                                     engine.process_event(event);
                                 }

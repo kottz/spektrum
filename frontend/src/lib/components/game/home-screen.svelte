@@ -62,7 +62,6 @@
 		</Card>
 
 		{#if !showSetSelector}
-
 			<!-- Use the new JoinLobbyCard component for joining an existing lobby -->
 			<JoinLobbyCard />
 		{/if}
