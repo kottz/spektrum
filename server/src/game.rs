@@ -42,6 +42,12 @@ impl NameValidationError {
     }
 }
 
+impl std::fmt::Display for NameValidationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_message())
+    }
+}
+
 fn validate_player_name<'a>(
     name: &str,
     mut existing_names: impl Iterator<Item = &'a String>,
@@ -149,7 +155,8 @@ pub struct GameUpdatePacket {
 }
 
 //
-// Original types for events, actions, and context remain largely unchanged
+// Original types for events, actions, and context remain largely unchanged,
+// except that the Join event is now renamed to Connect (and carries no name).
 //
 
 #[derive(Clone, Debug)]
@@ -160,7 +167,8 @@ pub struct EventContext {
 
 #[derive(Clone, Debug)]
 pub enum GameAction {
-    Join { name: String },
+    /// Renamed from Join. We now assume that the player is already added.
+    Connect,
     Leave,
     Answer { answer: String },
     StartGame,
@@ -179,8 +187,7 @@ pub struct GameEvent {
 }
 
 //
-// We no longer use a separate ResponsePayload and GameResponse type.
-// Instead, the engine directly pushes GameUpdatePackets.
+// The engine now directly pushes GameUpdatePackets.
 //
 
 #[derive(Clone, Debug)]
@@ -222,7 +229,7 @@ impl PlayerState {
 
 //
 // The new GameEngine – it holds the game state and a sender for updates.
-// Instead of returning vectors of responses, it pushes updates into the channel.
+// Notice that we no longer “add” players upon connection, but instead through a separate function.
 //
 pub struct GameEngine {
     state: GameState,
@@ -277,6 +284,22 @@ impl GameEngine {
             },
             connections,
         }
+    }
+
+    /// New method: add a player to the game.
+    /// Returns an error if the name is invalid or already taken.
+    pub fn add_player(&mut self, player_id: Uuid, name: String) -> Result<(), NameValidationError> {
+        let trimmed = name.trim();
+        let existing_names = self.state.players.values().map(|p| &p.name);
+        validate_player_name(trimmed, existing_names)?;
+        self.state
+            .players
+            .insert(player_id, PlayerState::new(trimmed.to_string()));
+        Ok(())
+    }
+
+    pub fn is_finished(&self) -> bool {
+        self.state.game_finished
     }
 
     pub fn get_round_scores(&self) -> Vec<(String, i32)> {
@@ -379,9 +402,9 @@ impl GameEngine {
             _ => {}
         }
 
-        // Process events and push updates accordingly.
         match event.action {
-            GameAction::Join { name } => self.handle_join(event.context, name),
+            // Instead of adding the player here, we assume the player has already been added.
+            GameAction::Connect => self.handle_connect(event.context),
             GameAction::Leave => self.handle_leave(event.context),
             GameAction::Answer { answer } => self.handle_answer(event.context, answer),
             GameAction::StartGame => self.handle_start_game(event.context),
@@ -394,60 +417,26 @@ impl GameEngine {
         }
     }
 
-    pub fn handle_join(&mut self, ctx: EventContext, name: String) {
-        if self.state.admin_id == ctx.sender_id {
-            // Assume admin is already connected.
-            return;
-        }
-
-        let name = name.trim().to_string();
-        let existing_names = self.state.players.values().map(|p| &p.name);
-        if let Err(validation_error) = crate::game::validate_player_name(&name, existing_names) {
+    /// New handler for the Connect event.
+    /// It checks that the player is already registered; if not, it sends an error update.
+    fn handle_connect(&self, ctx: EventContext) {
+        if let Some(player) = self.state.players.get(&ctx.sender_id) {
+            self.push_update(
+                Recipients::Single(ctx.sender_id),
+                GameUpdate::Connected {
+                    player_id: ctx.sender_id,
+                    name: player.name.clone(),
+                    round_duration: self.state.round_duration,
+                },
+            );
+        } else {
             self.push_update(
                 Recipients::Single(ctx.sender_id),
                 GameUpdate::Error {
-                    message: validation_error.to_message(),
+                    message: "Player not found. Please register before connecting.".into(),
                 },
             );
-            return;
         }
-
-        // if self.state.phase != GamePhase::Lobby {
-        //     self.push_update(
-        //         Recipients::Single(ctx.sender_id),
-        //         GameUpdate::Error {
-        //             message: "You can't join a game that has already started.".into(),
-        //         },
-        //     );
-        //     return;
-        // }
-
-        self.state
-            .players
-            .insert(ctx.sender_id, PlayerState::new(name.clone()));
-
-        // Notify the joining player that they are connected.
-        self.push_update(
-            Recipients::Single(ctx.sender_id),
-            GameUpdate::Connected {
-                player_id: ctx.sender_id,
-                name: name.clone(),
-                round_duration: self.state.round_duration,
-            },
-        );
-
-        // Broadcast a state update (delta) to all others.
-        self.push_update(
-            Recipients::AllExcept(vec![ctx.sender_id]),
-            GameUpdate::StateDelta {
-                phase: Some(self.state.phase),
-                question_type: None,
-                alternatives: None,
-                scoreboard: Some(self.get_scoreboard()),
-                round_scores: Some(self.get_round_scores()),
-                admin_extra: None,
-            },
-        );
     }
 
     fn handle_leave(&mut self, ctx: EventContext) {

@@ -4,7 +4,7 @@ use uuid::Uuid;
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
 pub enum ClientMessage {
-    JoinLobby {
+    Connect {
         player_id: Uuid,
     },
     Leave, 

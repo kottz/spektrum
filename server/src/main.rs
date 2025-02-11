@@ -1,6 +1,6 @@
 use crate::question::QuestionStore;
 use crate::server::{
-    check_sessions_handler, create_lobby_handler, get_stored_data_handler, list_sets_handler,
+    check_sessions_handler, create_lobby_handler, join_lobby_handler, get_stored_data_handler, list_sets_handler,
     set_stored_data_handler, upload_character_image_handler, ws_handler, AppState,
 };
 use axum::{
@@ -152,7 +152,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route("/ws", any(ws_handler))
         .route("/api/list-sets", get(list_sets_handler))
-        .route("/api/lobbies", post(create_lobby_handler))
+        .route("/api/create-lobby", post(create_lobby_handler))
+        .route("/api/join-lobby", post(join_lobby_handler))
         .route("/api/check-sessions", post(check_sessions_handler))
         .route("/api/questions", post(get_stored_data_handler))
         .route("/api/update-questions", post(set_stored_data_handler))

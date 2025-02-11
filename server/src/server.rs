@@ -277,23 +277,7 @@ pub async fn join_lobby_handler(
     // Create a new player id for the joining player.
     let new_player_id = Uuid::new_v4();
 
-    // Create an event context for this join.
-    let now = Instant::now();
-    let ctx = EventContext {
-        sender_id: new_player_id,
-        timestamp: now,
-    };
-
-    let action = GameAction::Join {
-        name: req.name.clone(),
-    };
-
-    let event = GameEvent {
-        context: ctx,
-        action,
-    };
-
-    engine.process_event(event);
+    engine.add_player(new_player_id, req.name).map_err(|e| ApiError::Lobby(e.to_string()))?;
 
     // Return the new player's id.
     Ok(Json(JoinLobbyResponse {
@@ -528,7 +512,7 @@ async fn process_incoming_messages(
             Ok(msg) => match msg {
                 Message::Text(text) => {
                     match serde_json::from_str::<ClientMessage>(&text) {
-                        Ok(ClientMessage::JoinLobby { player_id }) => {
+                        Ok(ClientMessage::Connect { player_id }) => {
                             // Look up existing connection info
                             if let Some(conn) = state.connections.get(&player_id) {
                                 // Store player_id in connection state
@@ -539,7 +523,7 @@ async fn process_incoming_messages(
                                     player_id,
                                     Connection {
                                         lobby_id: conn.lobby_id,
-                                        tx: tx.clone(),
+                                        tx: Some(tx.clone()),
                                     },
                                 );
 
@@ -556,7 +540,7 @@ async fn process_incoming_messages(
                                 }
                             } else {
                                 let _ = tx.send(GameUpdate::Error {
-                                    message: "Must join lobby via HTTP first".into(),
+                                    message: "ID not in lobby. Must join lobby first".into(),
                                 });
                             }
                         }
@@ -971,13 +955,10 @@ async fn cleanup_lobbies(lobby_map: Arc<DashMap<Uuid, Arc<GameEngine>>>) {
         tick.tick().await;
         for entry in lobby_map.iter() {
             let lobby = entry.value();
-            // Check if there are any active connections.
-            let connections = lobby.get_active_connections();
-            // You can decide: if there are no active senders or if all senders are
-            // marked as disconnected for longer than a threshold, then delete the lobby.
-            if connections.is_empty() && lobby.last_activity_elapsed() > Duration::from_secs(900) {
-                info!("Removing idle lobby {}", lobby.id());
-                lobby_map.remove(&lobby.id());
+            if lobby.is_finished() {
+                let lobby_id = *entry.key();
+                info!("Removing finished lobby {}", lobby_id);
+                lobby_map.remove(&lobby_id);
             }
         }
     }
