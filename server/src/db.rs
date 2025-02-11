@@ -296,25 +296,23 @@ impl FilesystemBackend {
     }
 
     async fn create_backup(&self, content: &str, file_stem: &str) -> Result<(), DbError> {
-        // Create backup directory if it doesn't exist
-        tokio::fs::create_dir_all(&self.backup_dir)
-            .await
-            .map_err(DbError::from)?;
-
-        let now = Utc::now();
-        let timestamp = now.format("%y%m%d_%H%M%S").to_string();
-        let filename = format!("{}_{}.json.gz", file_stem, timestamp);
-        let full_path = self.backup_dir.join(filename);
-
-        // We use std::fs::File for the GzEncoder since it's not async
-        // We could make this more async with tokio::spawn but for backup operations
-        // it's probably not critical
-        let file = std::fs::File::create(&full_path)?;
-        let mut encoder = GzEncoder::new(file, Compression::default());
-        encoder.write_all(content.as_bytes())?;
-        encoder.finish()?;
-
-        Ok(())
+        let backup_dir = self.backup_dir.clone();
+        let file_stem = file_stem.to_string();
+        let content = content.to_string();
+        tokio::task::spawn_blocking(move || {
+            std::fs::create_dir_all(&backup_dir)?;
+            let now = Utc::now();
+            let timestamp = now.format("%y%m%d_%H%M%S").to_string();
+            let filename = format!("{}_{}.json.gz", file_stem, timestamp);
+            let full_path = backup_dir.join(filename);
+            let file = std::fs::File::create(&full_path)?;
+            let mut encoder = GzEncoder::new(file, Compression::default());
+            encoder.write_all(content.as_bytes())?;
+            encoder.finish()?;
+            Ok(())
+        })
+        .await
+        .map_err(|e| DbError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?
     }
 }
 
@@ -621,8 +619,9 @@ impl QuestionDatabase {
         }
 
         let weights = Self::calculate_color_weights(&game_questions);
-        if let Ok(mut stored_weights) = COLOR_WEIGHTS.lock() {
-            *stored_weights = weights;
+        COLOR_WEIGHTS.clear();
+        for (key, value) in weights {
+            COLOR_WEIGHTS.insert(key, value);
         }
 
         info!("Loaded {} questions", game_questions.len());
