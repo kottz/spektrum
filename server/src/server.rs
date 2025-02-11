@@ -1,13 +1,6 @@
 use crate::db::{DbError, StoredData};
-use crate::game::{
-    EventContext, GameAction, GameEngine, GameEvent, GamePhase, GameUpdate, GameUpdatePacket,
-    Recipients,
-};
+use crate::game::{EventContext, GameAction, GameEngine, GameEvent, GameUpdate};
 use crate::messages::{AdminAction, ClientMessage};
-use tokio::time::{interval, Duration};
-//use crate::game_manager::{GameLobby, GameManager};
-//use crate::messages::GameState;
-//use crate::messages::{convert_to_server_message, AdminAction, ClientMessage, ServerMessage};
 use crate::question::QuestionStore;
 use axum::extract::Path;
 use axum::http::StatusCode;
@@ -24,15 +17,13 @@ use dashmap::DashMap;
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
-use std::{
-    sync::{Arc, Mutex},
-    time::Instant,
-};
+use std::{sync::Arc, time::Instant};
 use thiserror::Error;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
+use tokio::time::Duration;
 use tracing::*;
 use uuid::Uuid;
 
@@ -53,17 +44,11 @@ pub enum ApiError {
     #[error("No more join codes error")]
     OutOfJoinCodes,
 
-    #[error("Lock acquisition failed: {0}")]
-    Lock(String),
-
     #[error("Unsupported media type")]
     UnsupportedMediaType,
 
     #[error("Bad request: {0}")]
     BadRequest(String),
-
-    #[error("Internal server error: {0}")]
-    InternalServerError(String),
 }
 
 impl IntoResponse for ApiError {
@@ -74,14 +59,10 @@ impl IntoResponse for ApiError {
             ApiError::Database(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
             ApiError::Lobby(_) => (StatusCode::BAD_REQUEST, self.to_string()),
             ApiError::OutOfJoinCodes => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
-            ApiError::Lock(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
             ApiError::UnsupportedMediaType => {
                 (StatusCode::UNSUPPORTED_MEDIA_TYPE, self.to_string())
             }
             ApiError::BadRequest(_) => (StatusCode::BAD_REQUEST, self.to_string()),
-            ApiError::InternalServerError(_) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
-            }
         };
 
         let body = Json(serde_json::json!({
@@ -124,8 +105,10 @@ impl AppState {
 
         {
             let lobbies = state.lobbies.clone();
+            let connections = state.connections.clone();
+            let join_codes = state.join_codes.clone();
             tokio::spawn(async move {
-                cleanup_lobbies(lobbies).await;
+                cleanup_lobbies(lobbies, connections, join_codes).await;
             });
         }
 
@@ -241,7 +224,9 @@ pub async fn create_lobby_handler(
         state.connections.clone(),
     );
 
-    engine.add_player(admin_id, "Admin".to_string()).map_err(|e| ApiError::Lobby(e.to_string()))?;
+    engine
+        .add_player(admin_id, "Admin".to_string())
+        .map_err(|e| ApiError::Lobby(e.to_string()))?;
 
     state
         .connections
@@ -656,297 +641,6 @@ async fn process_incoming_messages(
     }
 }
 
-/// Handles text messages received from the client
-// async fn handle_text_message(
-//     text: String,
-//     conn_state: &Arc<RwLock<WSConnectionState>>,
-//     state: &AppState,
-//     tx: &tokio::sync::mpsc::UnboundedSender<GameUpdate>,
-// ) {
-//     match serde_json::from_str::<ClientMessage>(&text) {
-//         Ok(client_msg) => {
-//             match client_msg {
-//                 ClientMessage::JoinLobby { player_id } => {
-//                     if let Some(existing_uuid) = player_id {
-//                         // Attempt to reconnect using the provided UUID.
-//                         handle_reconnect(
-//                             join_code,
-//                             existing_uuid,
-//                             name,
-//                             admin_id,
-//                             conn_state,
-//                             state,
-//                             tx,
-//                         )
-//                         .await;
-//                     } else {
-//                         // Proceed as a normal join.
-//                         handle_join_lobby(
-//                             &join_code,
-//                             admin_id.as_ref(),
-//                             &name,
-//                             player_id,
-//                             conn_state,
-//                             state,
-//                             tx,
-//                         )
-//                         .await;
-//                     }
-//                 }
-//                 // Other variants are handled as usual.
-//                 other => {
-//                     handle_game_message(other, conn_state, Instant::now()).await;
-//                 }
-//             }
-//         }
-//         Err(e) => {
-//             eprintln!("Failed to parse client message: {}", e);
-//             let _ = tx.send(ServerMessage::Error {
-//                 message: format!("Invalid message format: {}", e),
-//             });
-//         }
-//     }
-// }
-
-// async fn handle_reconnect(
-//     join_code: String,
-//     player_id: Uuid,
-//     name: String,
-//     admin_id: Option<Uuid>,
-//     conn_state: &Arc<RwLock<WSConnectionState>>,
-//     state: &AppState,
-//     tx: &tokio::sync::mpsc::UnboundedSender<ServerMessage>,
-// ) {
-//     // Look up the lobby ID from the join code.
-//     let lobby_id = {
-//         let manager = state.manager.lock().unwrap();
-//         manager
-//             .get_lobby_id_from_join_code(&join_code)
-//             .unwrap_or(None)
-//     };
-//     if let Some(lobby_id) = lobby_id {
-//         let lobby_option = {
-//             let manager = state.manager.lock().unwrap();
-//             manager.get_lobby(&lobby_id).unwrap_or(None)
-//         };
-//         if let Some(lobby) = lobby_option {
-//             match lobby.reconnect_player(player_id, tx.clone()) {
-//                 Ok(()) => {
-//                     let mut cs = conn_state.write().await;
-//                     cs.player_id = Some(player_id);
-//                     cs.lobby_ref = Some(lobby.clone());
-//                     if let Ok(game_response) = lobby.get_game_state() {
-//                         let _ = tx.send(ServerMessage::ReconnectSuccess {
-//                             game_state: crate::messages::convert_to_game_state(
-//                                 &game_response.payload,
-//                             ),
-//                         });
-//                     }
-//                 }
-//                 Err(e) => {
-//                     eprintln!("Reconnect failed for player {}: {}", player_id, e);
-//                     let _ = tx.send(ServerMessage::Error {
-//                         message: format!("Reconnect failed: {}", e),
-//                     });
-//                 }
-//             }
-//         } else {
-//             eprintln!("Lobby not found for join code: {}", join_code);
-//             let _ = tx.send(ServerMessage::Error {
-//                 message: "Lobby not found".into(),
-//             });
-//         }
-//     } else {
-//         // If no lobby is found for the join code, fall back to a normal join.
-//         handle_join_lobby(
-//             &join_code,
-//             admin_id.as_ref(),
-//             &name,
-//             Some(player_id),
-//             conn_state,
-//             state,
-//             tx,
-//         )
-//         .await;
-//     }
-// }
-
-/// Handles initial lobby join (or reconnect, if a player_id is provided)
-// async fn handle_join_lobby(
-//     join_code: &str,
-//     admin_id: Option<&Uuid>,
-//     name: &str,
-//     // New optional field: if provided, try to reconnect
-//     player_id: Option<Uuid>,
-//     conn_state: &Arc<RwLock<WSConnectionState>>,
-//     state: &AppState,
-//     tx: &UnboundedSender<ServerMessage>,
-// ) {
-//     info!("Joining lobby with code: {}", join_code);
-//     // Look up the lobby from the manager.
-//     let lobby = {
-//         let manager = match state.manager.lock() {
-//             Ok(manager) => manager,
-//             Err(e) => {
-//                 error!("Failed to acquire manager lock: {}", e);
-//                 return;
-//             }
-//         };
-//
-//         let lobby_id = match manager.get_lobby_id_from_join_code(join_code) {
-//             Ok(Some(id)) => id,
-//             Ok(None) => {
-//                 warn!("No lobby found for join code: {}", join_code);
-//                 return;
-//             }
-//             Err(e) => {
-//                 error!("Failed to get lobby ID: {}", e);
-//                 return;
-//             }
-//         };
-//
-//         match manager.get_lobby(&lobby_id) {
-//             Ok(Some(lobby)) => Some(lobby.clone()),
-//             _ => None,
-//         }
-//     }; // manager lock released here
-//
-//     if let Some(lobby) = lobby {
-//         // If the client provided a player_id, attempt to reconnect.
-//         if let Some(existing_uuid) = player_id {
-//             if lobby.reconnect_player(existing_uuid, tx.clone()).is_ok() {
-//                 let mut state_lock = conn_state.write().await;
-//                 state_lock.player_id = Some(existing_uuid);
-//                 state_lock.lobby_ref = Some(lobby.clone());
-//                 drop(state_lock);
-//                 // Send back current game state to confirm reconnection.
-//                 if let Ok(game_response) = lobby.get_game_state() {
-//                     let _ = tx.send(ServerMessage::ReconnectSuccess {
-//                         game_state: crate::messages::convert_to_game_state(&game_response.payload),
-//                     });
-//                 }
-//                 return; // Reconnect successful; do not create a new join.
-//             } else {
-//                 info!(
-//                     "Reconnect attempt for {} failed; falling back to a new join",
-//                     existing_uuid
-//                 );
-//             }
-//         }
-//
-//         // Otherwise (or if reconnect failed), create a new player_id.
-//         let new_player_id = Uuid::new_v4();
-//         if lobby.add_connection(new_player_id, tx.clone()).is_ok() {
-//             let mut state_lock = conn_state.write().await;
-//             state_lock.player_id = Some(new_player_id);
-//             state_lock.lobby_ref = Some(lobby.clone());
-//             drop(state_lock);
-//
-//             let now = Instant::now();
-//             // Create a join event. When constructing the event, we set player_id to None
-//             // (since this is a new join) even though the server will use new_player_id.
-//             let event = create_game_event(
-//                 ClientMessage::JoinLobby {
-//                     join_code: join_code.to_string(),
-//                     admin_id: admin_id.copied(),
-//                     name: name.to_string(),
-//                     player_id: None,
-//                 },
-//                 lobby.id(),
-//                 new_player_id,
-//                 now,
-//             );
-//
-//             if let Ok(responses) = lobby.process_event(event) {
-//                 send_game_responses(responses, &lobby).await;
-//             }
-//         }
-//     }
-// }
-
-// async fn send_game_responses(responses: Vec<GameResponse>, lobby: &Arc<GameLobby>) {
-//     for response in responses {
-//         // Convert the response to a server message
-//         let server_msg = convert_to_server_message(&response.payload);
-//
-//         // Get active connections and send to appropriate recipients
-//         if let Ok(active_conns) = lobby.get_active_connections() {
-//             let recipient_ids = match response.recipients {
-//                 Recipients::Single(id) => vec![id],
-//                 Recipients::Multiple(ids) => ids,
-//                 Recipients::AllExcept(exclude_ids) => active_conns
-//                     .iter()
-//                     .filter(|(id, _)| !exclude_ids.contains(id))
-//                     .map(|(id, _)| *id)
-//                     .collect(),
-//                 Recipients::All => active_conns.iter().map(|(id, _)| *id).collect(),
-//             };
-//
-//             for id in recipient_ids {
-//                 if let Some(sender) = active_conns.iter().find(|(conn_id, _)| *conn_id == id) {
-//                     let _ = sender.1.send(server_msg.clone());
-//                 }
-//             }
-//         }
-//     }
-// }
-//
-// /// Handles game-specific messages
-// async fn handle_game_message(
-//     msg: ClientMessage,
-//     conn_state: &Arc<RwLock<WSConnectionState>>,
-//     now: Instant,
-// ) {
-//     let state = conn_state.read().await;
-//     if let (Some(lobby), Some(player_id)) = (&state.lobby_ref, state.player_id) {
-//         let event = create_game_event(msg, lobby.id(), player_id, now);
-//         if let Ok(responses) = lobby.process_event(event) {
-//             send_game_responses(responses, lobby).await;
-//         }
-//     }
-// }
-//
-// /// Creates a game event from a client message
-// fn create_game_event(
-//     msg: ClientMessage,
-//     lobby_id: Uuid,
-//     player_id: Uuid,
-//     now: Instant,
-// ) -> GameEvent {
-//     let context = EventContext {
-//         sender_id: player_id,
-//         timestamp: now,
-//     };
-//
-//     GameEvent {
-//         context,
-//         action: match msg {
-//             ClientMessage::JoinLobby { name, .. } => GameAction::Join { name },
-//             ClientMessage::Leave { .. } => GameAction::Leave,
-//             ClientMessage::Answer { answer, .. } => GameAction::Answer { answer },
-//             ClientMessage::AdminAction { action, .. } => convert_admin_action(action),
-//             _ => GameAction::Leave, // Default case
-//         },
-//     }
-// }
-//
-// /// Converts an admin action to a game action
-// fn convert_admin_action(action: AdminAction) -> GameAction {
-//     match action {
-//         AdminAction::StartGame => GameAction::StartGame,
-//         AdminAction::StartRound {
-//             specified_alternatives,
-//         } => GameAction::StartRound {
-//             specified_alternatives,
-//         },
-//         AdminAction::EndRound => GameAction::EndRound,
-//         AdminAction::SkipQuestion => GameAction::SkipQuestion,
-//         AdminAction::EndGame { reason } => GameAction::EndGame { reason },
-//         AdminAction::CloseGame { reason } => GameAction::CloseGame { reason },
-//     }
-// }
-//
-
 // /// Sends a server message through the WebSocket
 async fn send_server_message(
     ws_tx: &mut SplitSink<WebSocket, Message>,
@@ -972,16 +666,39 @@ async fn handle_disconnect(conn_state: Arc<RwLock<WSConnectionState>>, state: &A
     }
 }
 
-async fn cleanup_lobbies(lobby_map: Arc<DashMap<Uuid, GameEngine>>) {
-    let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
+async fn cleanup_lobbies(
+    lobbies: Arc<DashMap<Uuid, GameEngine>>,
+    connections: Arc<DashMap<Uuid, Connection>>,
+    join_codes: Arc<DashMap<String, Uuid>>,
+) {
+    let mut tick = tokio::time::interval(Duration::from_secs(60));
     loop {
         tick.tick().await;
-        for entry in lobby_map.iter() {
-            let lobby = entry.value();
-            if lobby.is_finished() {
-                let lobby_id = *entry.key();
-                info!("Removing finished lobby {}", lobby_id);
-                lobby_map.remove(&lobby_id);
+
+        // Collect finished lobby IDs
+        let finished_lobby_ids: Vec<Uuid> = lobbies
+            .iter()
+            .filter(|entry| entry.value().is_finished())
+            .map(|entry| *entry.key())
+            .collect();
+
+        // Remove finished lobbies
+        for lobby_id in finished_lobby_ids.iter() {
+            info!("Removing finished lobby {}", lobby_id);
+            lobbies.remove(lobby_id);
+
+            // Remove associated join codes
+            for pair in join_codes.iter() {
+                if pair.value() == lobby_id {
+                    join_codes.remove(pair.key());
+                }
+            }
+        }
+
+        // Remove stale connections
+        for conn in connections.iter() {
+            if finished_lobby_ids.contains(&conn.value().lobby_id) {
+                connections.remove(conn.key());
             }
         }
     }

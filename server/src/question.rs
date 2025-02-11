@@ -89,9 +89,6 @@ pub enum QuestionError {
     #[error("No questions found")]
     NoQuestions,
 
-    #[error("Question set not found: {0}")]
-    QuestionSetNotFound(i64),
-
     #[error("Database error: {0}")]
     DbError(#[from] crate::db::DbError),
 }
@@ -219,27 +216,6 @@ impl GameQuestion {
         alternatives.shuffle(&mut rand::thread_rng());
         alternatives.iter().map(|y| y.to_string()).collect()
     }
-
-    pub fn validate_answer(&self, answer: &str) -> bool {
-        match self.question_type {
-            QuestionType::Year => {
-                if let (Some(correct_year), Ok(answered_year)) = (
-                    self.get_correct_answer()
-                        .first()
-                        .and_then(|y| y.parse::<i32>().ok()),
-                    answer.parse::<i32>(),
-                ) {
-                    correct_year == answered_year
-                } else {
-                    false
-                }
-            }
-            QuestionType::Color | QuestionType::Character | QuestionType::Text => self
-                .get_correct_options()
-                .iter()
-                .any(|opt| opt.option == answer),
-        }
-    }
 }
 
 pub struct QuestionStore {
@@ -296,34 +272,5 @@ impl QuestionStore {
         data: &[u8],
     ) -> Result<String, DbError> {
         self.db.store_character_image(character_name, data).await
-    }
-
-    pub async fn get_questions(&self) -> Result<Arc<Vec<GameQuestion>>, QuestionError> {
-        let questions = self.questions.read().await;
-        if Arc::strong_count(&questions) == 0 {
-            return Err(QuestionError::NoQuestions);
-        }
-        Ok(Arc::clone(&questions))
-    }
-
-    pub async fn get_question_set(
-        &self,
-        set_id: i64,
-    ) -> Result<Arc<Vec<GameQuestion>>, QuestionError> {
-        let sets = self.sets.read().await;
-        let questions = self.questions.read().await;
-        let set = sets
-            .iter()
-            .find(|s| s.id == set_id)
-            .ok_or(QuestionError::QuestionSetNotFound(set_id))?;
-        let set_questions: Vec<GameQuestion> = questions
-            .iter()
-            .filter(|q| set.question_ids.contains(&i64::from(q.id)))
-            .cloned()
-            .collect();
-        if set_questions.is_empty() {
-            return Err(QuestionError::NoQuestions);
-        }
-        Ok(Arc::new(set_questions))
     }
 }

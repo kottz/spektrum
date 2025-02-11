@@ -10,16 +10,16 @@ use std::time::{Duration, Instant};
 use tracing::warn;
 use uuid::Uuid;
 
-#[derive(Clone, Debug)]
-pub enum ErrorCode {
-    NotAuthorized,
-    InvalidPhase,
-    InvalidAction,
-    PlayerNotFound,
-    AlreadyAnswered,
-    TimeExpired,
-    InvalidName,
-}
+// #[derive(Clone, Debug)]
+// pub enum ErrorCode {
+//     NotAuthorized,
+//     InvalidPhase,
+//     InvalidAction,
+//     PlayerNotFound,
+//     AlreadyAnswered,
+//     TimeExpired,
+//     InvalidName,
+// }
 
 #[derive(Debug)]
 pub enum NameValidationError {
@@ -76,10 +76,6 @@ fn validate_player_name<'a>(
 
     Ok(())
 }
-
-//
-// New unified update types and packet wrapper
-//
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -144,8 +140,8 @@ pub enum GameUpdate {
 #[derive(Clone, Debug, Serialize)]
 pub enum Recipients {
     Single(Uuid),
-    Multiple(Vec<Uuid>),
-    AllExcept(Vec<Uuid>),
+    _Multiple(Vec<Uuid>),
+    _AllExcept(Vec<Uuid>),
     All,
 }
 
@@ -155,11 +151,6 @@ pub struct GameUpdatePacket {
     pub update: GameUpdate,
 }
 
-//
-// Original types for events, actions, and context remain largely unchanged,
-// except that the Join event is now renamed to Connect (and carries no name).
-//
-
 #[derive(Clone, Debug)]
 pub struct EventContext {
     pub sender_id: Uuid,
@@ -168,7 +159,6 @@ pub struct EventContext {
 
 #[derive(Clone, Debug)]
 pub enum GameAction {
-    /// Renamed from Join. We now assume that the player is already added.
     Connect,
     Leave,
     Answer { answer: String },
@@ -186,10 +176,6 @@ pub struct GameEvent {
     pub context: EventContext,
     pub action: GameAction,
 }
-
-//
-// The engine now directly pushes GameUpdatePackets.
-//
 
 #[derive(Clone, Debug)]
 pub struct GameState {
@@ -228,13 +214,9 @@ impl PlayerState {
     }
 }
 
-//
-// The new GameEngine – it holds the game state and a sender for updates.
-// Notice that we no longer “add” players upon connection, but instead through a separate function.
-//
 pub struct GameEngine {
     state: GameState,
-    connections: Arc<DashMap<Uuid, Connection>>, //UnboundedSender<GameUpdate>>>,
+    connections: Arc<DashMap<Uuid, Connection>>,
 }
 
 impl GameEngine {
@@ -287,8 +269,6 @@ impl GameEngine {
         }
     }
 
-    /// New method: add a player to the game.
-    /// Returns an error if the name is invalid or already taken.
     pub fn add_player(&mut self, player_id: Uuid, name: String) -> Result<(), NameValidationError> {
         let trimmed = name.trim();
         let existing_names = self.state.players.values().map(|p| &p.name);
@@ -314,8 +294,9 @@ impl GameEngine {
     fn get_scoreboard(&self) -> Vec<(String, i32)> {
         self.state
             .players
-            .values()
-            .map(|p| (p.name.clone(), p.score))
+            .iter()
+            .filter(|(id, _)| **id != self.state.admin_id)
+            .map(|(_, p)| (p.name.clone(), p.score))
             .collect()
     }
 
@@ -330,7 +311,7 @@ impl GameEngine {
                     }
                 }
             }
-            Recipients::Multiple(targets) => {
+            Recipients::_Multiple(targets) => {
                 for target in targets {
                     if self.state.players.contains_key(&target) {
                         if let Some(conn) = self.connections.get(&target) {
@@ -341,7 +322,7 @@ impl GameEngine {
                     }
                 }
             }
-            Recipients::AllExcept(exclusions) => {
+            Recipients::_AllExcept(exclusions) => {
                 for player_id in self.state.players.keys() {
                     if !exclusions.contains(player_id) {
                         if let Some(conn) = self.connections.get(player_id) {
@@ -364,7 +345,6 @@ impl GameEngine {
         }
     }
 
-    /// Convenience: push a state delta update to a single recipient.
     fn push_state(&self, recipient: Uuid) {
         let update = GameUpdate::StateDelta {
             phase: Some(self.state.phase),
@@ -381,7 +361,6 @@ impl GameEngine {
         self.push_update(Recipients::Single(recipient), update);
     }
 
-    /// Process an event from a client and push one or more updates.
     pub fn process_event(&mut self, event: GameEvent) {
         // Check admin-only actions:
         match &event.action {
@@ -404,7 +383,6 @@ impl GameEngine {
         }
 
         match event.action {
-            // Instead of adding the player here, we assume the player has already been added.
             GameAction::Connect => self.handle_connect(event.context),
             GameAction::Leave => self.handle_leave(event.context),
             GameAction::Answer { answer } => self.handle_answer(event.context, answer),
@@ -418,8 +396,6 @@ impl GameEngine {
         }
     }
 
-    /// New handler for the Connect event.
-    /// It checks that the player is already registered; if not, it sends an error update.
     fn handle_connect(&self, ctx: EventContext) {
         if let Some(player) = self.state.players.get(&ctx.sender_id) {
             self.push_update(
@@ -733,14 +709,6 @@ impl GameEngine {
 
     fn handle_close_game(&mut self, _ctx: EventContext, reason: String) {
         self.push_update(Recipients::All, GameUpdate::GameClosed { reason });
-    }
-
-    pub fn get_phase(&self) -> GamePhase {
-        self.state.phase
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.state.players.is_empty()
     }
 
     fn setup_round(&mut self) -> Result<(), String> {
