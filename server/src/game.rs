@@ -409,7 +409,23 @@ impl GameEngine {
                     None
                 },
             };
+
             self.push_update(Recipients::Single(ctx.sender_id), state_update);
+
+            // In lobby phase, broadcast scoreboard to all players
+            if self.state.phase == GamePhase::Lobby {
+                self.push_update(
+                    Recipients::_AllExcept(vec![ctx.sender_id]),
+                    GameUpdate::StateDelta {
+                        phase: None,
+                        question_type: None,
+                        alternatives: None,
+                        scoreboard: Some(self.get_scoreboard()),
+                        round_scores: None,
+                        admin_extra: None,
+                    },
+                );
+            }
 
             // If this is the admin and we're in Question phase, send the current question
             if ctx.sender_id == self.state.admin_id
