@@ -518,12 +518,11 @@ impl GameEngine {
                 return;
             }
 
-            let answer_clone = answer.clone();
             let correct = self
                 .state
                 .correct_answers
                 .as_ref()
-                .is_some_and(|answers| answers.contains(&answer_clone));
+                .is_some_and(|answers| answers.contains(&answer));
             let score_delta = if correct {
                 ((self.state.round_duration as f64 * 100.0 - (elapsed.as_secs_f64() * 100.0))
                     .max(0.0)) as i32
@@ -536,7 +535,7 @@ impl GameEngine {
             }
             player.round_score = score_delta;
             player.has_answered = true;
-            player.answer = Some(answer_clone.clone());
+            player.answer = Some(answer);
 
             (
                 player.name.clone(),
