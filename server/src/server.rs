@@ -121,7 +121,14 @@ impl AppState {
             store: Arc::new(question_manager),
             admin_passwords,
         };
-        // TODO spawn cleanup task
+
+        {
+            let lobbies = state.lobbies.clone();
+            tokio::spawn(async move {
+                cleanup_lobbies(lobbies).await;
+            });
+        }
+
         state
     }
 
@@ -223,7 +230,7 @@ pub async fn create_lobby_handler(
     // Generate new IDs and a join code.
     let lobby_id = Uuid::new_v4();
     let admin_id = Uuid::new_v4();
-    let join_code = format!("{:06}", fastrand::u32(0..1_000_000));
+    let join_code = state.generate_join_code(lobby_id)?;
 
     // Create a new game engine.
     let engine = GameEngine::new(
@@ -277,7 +284,9 @@ pub async fn join_lobby_handler(
     // Create a new player id for the joining player.
     let new_player_id = Uuid::new_v4();
 
-    engine.add_player(new_player_id, req.name).map_err(|e| ApiError::Lobby(e.to_string()))?;
+    engine
+        .add_player(new_player_id, req.name)
+        .map_err(|e| ApiError::Lobby(e.to_string()))?;
 
     // Return the new player's id.
     Ok(Json(JoinLobbyResponse {
@@ -949,8 +958,8 @@ async fn handle_disconnect(conn_state: Arc<RwLock<WSConnectionState>>, state: &A
     }
 }
 
-async fn cleanup_lobbies(lobby_map: Arc<DashMap<Uuid, Arc<GameEngine>>>) {
-    let mut tick = interval(Duration::from_secs(60));
+async fn cleanup_lobbies(lobby_map: Arc<DashMap<Uuid, GameEngine>>) {
+    let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
     loop {
         tick.tick().await;
         for entry in lobby_map.iter() {
