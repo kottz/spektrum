@@ -2,7 +2,9 @@ use crate::db::QuestionSet;
 use crate::question::GameQuestion;
 use crate::server::Connection;
 use dashmap::DashMap;
+use lazy_static::lazy_static;
 use rand::seq::SliceRandom;
+use regex::Regex;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -10,16 +12,10 @@ use std::time::{Duration, Instant};
 use tracing::warn;
 use uuid::Uuid;
 
-// #[derive(Clone, Debug)]
-// pub enum ErrorCode {
-//     NotAuthorized,
-//     InvalidPhase,
-//     InvalidAction,
-//     PlayerNotFound,
-//     AlreadyAnswered,
-//     TimeExpired,
-//     InvalidName,
-// }
+lazy_static! {
+    pub(crate) static ref NAME_VALIDATION_REGEX: Regex =
+        Regex::new(r"^[a-zA-Z0-9_\-\. ]+$").expect("Failed to compile player name regex");
+}
 
 #[derive(Debug)]
 pub enum NameValidationError {
@@ -61,12 +57,7 @@ fn validate_player_name<'a>(
         return Err(NameValidationError::TooLong);
     }
 
-    let name_regex = regex::Regex::new(r"^[a-zA-Z0-9_\-\. ]+$").map_err(|_| {
-        warn!("Failed to compile name regex");
-        NameValidationError::InvalidCharacters
-    })?;
-
-    if !name_regex.is_match(name) {
+    if !NAME_VALIDATION_REGEX.is_match(name) {
         return Err(NameValidationError::InvalidCharacters);
     }
 
@@ -532,7 +523,7 @@ impl GameEngine {
                 .state
                 .correct_answers
                 .as_ref()
-                .map_or(false, |answers| answers.contains(&answer_clone));
+                .is_some_and(|answers| answers.contains(&answer_clone));
             let score_delta = if correct {
                 ((self.state.round_duration as f64 * 100.0 - (elapsed.as_secs_f64() * 100.0))
                     .max(0.0)) as i32

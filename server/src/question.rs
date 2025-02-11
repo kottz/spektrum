@@ -1,18 +1,17 @@
 use crate::db::{DbError, StoredData};
 use crate::db::{QuestionDatabase, QuestionSet};
 use crate::StorageConfig;
+use dashmap::DashMap;
 use lazy_static::lazy_static;
 use rand::seq::SliceRandom;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::Mutex;
 use thiserror::Error;
 use tokio::sync::RwLock;
 
 lazy_static! {
-    pub(crate) static ref COLOR_WEIGHTS: Mutex<HashMap<Color, f64>> = Mutex::new(HashMap::new());
+    pub(crate) static ref COLOR_WEIGHTS: DashMap<Color, f64> = DashMap::new();
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -50,14 +49,28 @@ impl Color {
     }
 
     fn get_weight(&self) -> f64 {
-        COLOR_WEIGHTS
-            .lock()
-            .map(|weights| weights.get(self).copied().unwrap_or(0.15))
-            .unwrap_or(0.15) // Fallback weight if lock fails
+        COLOR_WEIGHTS.get(self).map(|v| *v).unwrap_or(0.15)
     }
+}
 
-    pub fn to_string(&self) -> String {
-        format!("{:?}", self)
+impl std::fmt::Display for Color {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let s = match self {
+            Color::Red => "Red",
+            Color::Green => "Green",
+            Color::Blue => "Blue",
+            Color::Yellow => "Yellow",
+            Color::Purple => "Purple",
+            Color::Gold => "Gold",
+            Color::Silver => "Silver",
+            Color::Pink => "Pink",
+            Color::Black => "Black",
+            Color::White => "White",
+            Color::Brown => "Brown",
+            Color::Orange => "Orange",
+            Color::Gray => "Gray",
+        };
+        write!(f, "{}", s)
     }
 }
 
