@@ -23,7 +23,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
-use tracing::*;
+use tracing::{error, info, trace};
 use uuid::Uuid;
 
 #[derive(Error, Debug)]

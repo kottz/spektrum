@@ -42,7 +42,9 @@ pub enum Color {
 
 impl Color {
     pub fn all() -> &'static [Color] {
-        use Color::*;
+        use Color::{
+            Black, Blue, Brown, Gold, Gray, Green, Orange, Pink, Purple, Red, Silver, White, Yellow,
+        };
         &[
             Red, Green, Blue, Yellow, Purple, Gold, Silver, Pink, Black, White, Brown, Orange, Gray,
         ]
