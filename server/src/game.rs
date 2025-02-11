@@ -1,12 +1,12 @@
 use crate::db::QuestionSet;
 use crate::question::GameQuestion;
+use crate::server::Connection;
 use dashmap::DashMap;
 use rand::seq::SliceRandom;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::mpsc::UnboundedSender;
 use tracing::warn;
 use uuid::Uuid;
 
@@ -94,7 +94,6 @@ pub enum GameUpdate {
     /// A lightweight acknowledgement of connection.
     Connected {
         player_id: Uuid,
-        lobby_id: Uuid,
         name: String,
         round_duration: u64,
     },
@@ -155,33 +154,22 @@ pub struct GameUpdatePacket {
 
 #[derive(Clone, Debug)]
 pub struct EventContext {
-    pub lobby_id: Uuid,
     pub sender_id: Uuid,
     pub timestamp: Instant,
 }
 
 #[derive(Clone, Debug)]
 pub enum GameAction {
-    Join {
-        name: String,
-    },
+    Join { name: String },
     Leave,
-    Answer {
-        answer: String,
-    },
+    Answer { answer: String },
     StartGame,
-    StartRound {
-        specified_alternatives: Option<Vec<String>>,
-    },
+    StartRound,
     GetState,
     EndRound,
     SkipQuestion,
-    EndGame {
-        reason: String,
-    },
-    CloseGame {
-        reason: String,
-    },
+    EndGame { reason: String },
+    CloseGame { reason: String },
 }
 
 #[derive(Clone, Debug)]
@@ -208,6 +196,7 @@ pub struct GameState {
     pub all_questions: Arc<Vec<GameQuestion>>,
     pub shuffled_question_indices: Vec<usize>,
     pub current_question_index: usize,
+    pub game_finished: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -237,7 +226,7 @@ impl PlayerState {
 //
 pub struct GameEngine {
     state: GameState,
-    connections: Arc<DashMap<Uuid, UnboundedSender<GameUpdate>>>,
+    connections: Arc<DashMap<Uuid, Connection>>, //UnboundedSender<GameUpdate>>>,
 }
 
 impl GameEngine {
@@ -246,7 +235,7 @@ impl GameEngine {
         questions: Arc<Vec<GameQuestion>>,
         set: Option<&QuestionSet>,
         round_duration: u64,
-        connections: Arc<DashMap<Uuid, UnboundedSender<GameUpdate>>>,
+        connections: Arc<DashMap<Uuid, Connection>>,
     ) -> Self {
         let mut rng = rand::thread_rng();
         let indices = match set {
@@ -284,6 +273,7 @@ impl GameEngine {
                 all_questions: questions,
                 shuffled_question_indices: indices,
                 current_question_index: 0,
+                game_finished: false,
             },
             connections,
         }
@@ -309,16 +299,20 @@ impl GameEngine {
         match recipients {
             Recipients::Single(target) => {
                 if self.state.players.contains_key(&target) {
-                    if let Some(sender) = self.connections.get(&target) {
-                        let _ = sender.send(update);
+                    if let Some(conn) = self.connections.get(&target) {
+                        if let Some(ref tx) = conn.tx {
+                            let _ = tx.send(update);
+                        }
                     }
                 }
             }
             Recipients::Multiple(targets) => {
                 for target in targets {
                     if self.state.players.contains_key(&target) {
-                        if let Some(sender) = self.connections.get(&target) {
-                            let _ = sender.send(update.clone());
+                        if let Some(conn) = self.connections.get(&target) {
+                            if let Some(ref tx) = conn.tx {
+                                let _ = tx.send(update.clone());
+                            }
                         }
                     }
                 }
@@ -326,16 +320,20 @@ impl GameEngine {
             Recipients::AllExcept(exclusions) => {
                 for player_id in self.state.players.keys() {
                     if !exclusions.contains(player_id) {
-                        if let Some(sender) = self.connections.get(player_id) {
-                            let _ = sender.send(update.clone());
+                        if let Some(conn) = self.connections.get(player_id) {
+                            if let Some(ref tx) = conn.tx {
+                                let _ = tx.send(update.clone());
+                            }
                         }
                     }
                 }
             }
             Recipients::All => {
                 for player_id in self.state.players.keys() {
-                    if let Some(sender) = self.connections.get(player_id) {
-                        let _ = sender.send(update.clone());
+                    if let Some(conn) = self.connections.get(player_id) {
+                        if let Some(ref tx) = conn.tx {
+                            let _ = tx.send(update.clone());
+                        }
                     }
                 }
             }
@@ -364,7 +362,7 @@ impl GameEngine {
         // Check admin-only actions:
         match &event.action {
             GameAction::StartGame
-            | GameAction::StartRound { .. }
+            | GameAction::StartRound
             | GameAction::EndRound
             | GameAction::EndGame { .. }
             | GameAction::CloseGame { .. } => {
@@ -387,9 +385,7 @@ impl GameEngine {
             GameAction::Leave => self.handle_leave(event.context),
             GameAction::Answer { answer } => self.handle_answer(event.context, answer),
             GameAction::StartGame => self.handle_start_game(event.context),
-            GameAction::StartRound {
-                specified_alternatives,
-            } => self.handle_start_round(event.context, specified_alternatives),
+            GameAction::StartRound => self.handle_start_round(event.context),
             GameAction::GetState => self.push_state(event.context.sender_id),
             GameAction::EndRound => self.handle_end_round(event.context),
             GameAction::SkipQuestion => self.handle_skip_question(event.context),
@@ -398,7 +394,7 @@ impl GameEngine {
         }
     }
 
-    fn handle_join(&mut self, ctx: EventContext, name: String) {
+    pub fn handle_join(&mut self, ctx: EventContext, name: String) {
         if self.state.admin_id == ctx.sender_id {
             // Assume admin is already connected.
             return;
@@ -415,15 +411,17 @@ impl GameEngine {
             );
             return;
         }
-        if self.state.phase != GamePhase::Lobby {
-            self.push_update(
-                Recipients::Single(ctx.sender_id),
-                GameUpdate::Error {
-                    message: "You can't join a game that has already started.".into(),
-                },
-            );
-            return;
-        }
+
+        // if self.state.phase != GamePhase::Lobby {
+        //     self.push_update(
+        //         Recipients::Single(ctx.sender_id),
+        //         GameUpdate::Error {
+        //             message: "You can't join a game that has already started.".into(),
+        //         },
+        //     );
+        //     return;
+        // }
+
         self.state
             .players
             .insert(ctx.sender_id, PlayerState::new(name.clone()));
@@ -433,7 +431,6 @@ impl GameEngine {
             Recipients::Single(ctx.sender_id),
             GameUpdate::Connected {
                 player_id: ctx.sender_id,
-                lobby_id: ctx.lobby_id,
                 name: name.clone(),
                 round_duration: self.state.round_duration,
             },
@@ -603,11 +600,7 @@ impl GameEngine {
         }
     }
 
-    fn handle_start_round(
-        &mut self,
-        ctx: EventContext,
-        specified_alternatives: Option<Vec<String>>,
-    ) {
+    fn handle_start_round(&mut self, ctx: EventContext) {
         if self.state.phase != GamePhase::Score {
             self.push_update(
                 Recipients::Single(ctx.sender_id),
@@ -632,7 +625,7 @@ impl GameEngine {
             player.answer = None;
             player.round_score = 0;
         }
-        match self.setup_round(specified_alternatives) {
+        match self.setup_round() {
             Ok(()) => {
                 let question = match &self.state.current_question {
                     Some(q) => q,
@@ -756,7 +749,11 @@ impl GameEngine {
         self.state.phase
     }
 
-    fn setup_round(&mut self, specified_alternatives: Option<Vec<String>>) -> Result<(), String> {
+    pub fn is_empty(&self) -> bool {
+        self.state.players.is_empty()
+    }
+
+    fn setup_round(&mut self) -> Result<(), String> {
         if self.state.current_question_index >= self.state.shuffled_question_indices.len() {
             return Err("No more questions available".to_string());
         }
@@ -764,21 +761,17 @@ impl GameEngine {
         let next_question = &self.state.all_questions[shuffled_idx];
         self.state.current_question = Some(next_question.clone());
         self.state.correct_answers = Some(next_question.get_correct_answer());
-        if let Some(alts) = specified_alternatives {
-            self.state.current_alternatives = alts;
-        } else {
-            self.state.current_alternatives = next_question.generate_round_alternatives();
-            if let Some(correct_answers) = self.state.correct_answers.clone() {
-                for answer in correct_answers {
-                    if !self.state.current_alternatives.contains(&answer) {
-                        self.state.current_alternatives.push(answer);
-                    }
+        self.state.current_alternatives = next_question.generate_round_alternatives();
+        if let Some(correct_answers) = self.state.correct_answers.clone() {
+            for answer in correct_answers {
+                if !self.state.current_alternatives.contains(&answer) {
+                    self.state.current_alternatives.push(answer);
                 }
             }
-            self.state.current_alternatives.dedup();
-            let mut rng = rand::thread_rng();
-            self.state.current_alternatives.shuffle(&mut rng);
         }
+        self.state.current_alternatives.dedup();
+        let mut rng = rand::thread_rng();
+        self.state.current_alternatives.shuffle(&mut rng);
         Ok(())
     }
 

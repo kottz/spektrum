@@ -1,48 +1,35 @@
-// use crate::game::{GamePhase, ResponsePayload};
-// use crate::question::{GameQuestion, QuestionType};
-// use serde::{Deserialize, Serialize};
-// use uuid::Uuid;
-//
-// #[derive(Debug, Deserialize)]
-// #[serde(tag = "type")]
-// pub enum ClientMessage {
-//     JoinLobby {
-//         join_code: String,
-//         admin_id: Option<Uuid>,
-//         name: String,
-//         // Optional player UUID provided from client storage:
-//         #[serde(default)]
-//         player_id: Option<Uuid>,
-//     },
-//     Leave {
-//         lobby_id: Uuid,
-//     },
-//     Answer {
-//         lobby_id: Uuid,
-//         answer: String,
-//     },
-//     AdminAction {
-//         lobby_id: Uuid,
-//         action: AdminAction,
-//     },
-// }
-//
-// #[derive(Debug, Deserialize)]
-// #[serde(tag = "type")]
-// pub enum AdminAction {
-//     StartGame,
-//     StartRound {
-//         specified_alternatives: Option<Vec<String>>,
-//     },
-//     EndRound,
-//     SkipQuestion,
-//     EndGame {
-//         reason: String,
-//     },
-//     CloseGame {
-//         reason: String,
-//     },
-// }
+use serde::Deserialize;
+use uuid::Uuid;
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type")]
+pub enum ClientMessage {
+    JoinLobby {
+        player_id: Uuid,
+    },
+    Leave, 
+    Answer {
+        answer: String,
+    },
+    AdminAction {
+        action: AdminAction,
+    },
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type")]
+pub enum AdminAction {
+    StartGame,
+    StartRound,
+    EndRound,
+    SkipQuestion,
+    EndGame {
+        reason: String,
+    },
+    CloseGame {
+        reason: String,
+    },
+}
 //
 // #[derive(Clone, Debug, Serialize)]
 // #[serde(tag = "type")]
