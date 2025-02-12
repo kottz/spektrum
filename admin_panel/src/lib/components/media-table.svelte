@@ -76,9 +76,43 @@
 		return adminStore.getState().questions.filter((q) => q.media_id === mediaId).length;
 	}
 
-	function formatSpotifyUri(uri: string | null): string {
-		if (!uri) return '';
-		return uri.includes('spotify:') ? uri.split(':').pop() || '' : uri;
+	function parseSpotifyLink(link: string): string {
+		// Check for full URL format (e.g., https://open.spotify.com/track/xyz)
+		const spotifyUrlRegex = /(?:https?:\/\/)?(?:open\.)?spotify\.com\/track\/([a-zA-Z0-9]+)/;
+		const urlMatch = link.match(spotifyUrlRegex);
+		if (urlMatch && urlMatch[1]) {
+			return urlMatch[1];
+		}
+		// Check for spotify URI format (e.g., spotify:track:xyz)
+		const spotifyUriRegex = /spotify:track:([a-zA-Z0-9]+)/;
+		const uriMatch = link.match(spotifyUriRegex);
+		if (uriMatch && uriMatch[1]) {
+			return uriMatch[1];
+		}
+		// Otherwise, if not a recognizable full link, return original
+		return link;
+	}
+
+	function parseYoutubeLink(link: string): string {
+		// Format: Share link or mobile share link, e.g.,
+		//   https://youtu.be/VIDEOID?si=...
+		//   https://m.youtu.be/VIDEOID?si=...
+		let match = link.match(/(?:https?:\/\/)?(?:www\.)?(?:m\.)?youtu\.be\/([^?&]+)/);
+		if (match && match[1]) {
+			return match[1];
+		}
+		// Format: Standard URL, e.g., https://www.youtube.com/watch?v=VIDEOID
+		match = link.match(/(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([^&]+)/);
+		if (match && match[1]) {
+			return match[1];
+		}
+		// Format: Embed URL, e.g., https://www.youtube.com/embed/VIDEOID
+		match = link.match(/(?:https?:\/\/)?(?:www\.)?youtube\.com\/embed\/([^?&]+)/);
+		if (match && match[1]) {
+			return match[1];
+		}
+		// Otherwise, return the original input.
+		return link;
 	}
 
 	function getEditKey(id: number, field: string): string {
@@ -101,9 +135,17 @@
 
 	function commitChanges(id: number, field: keyof Media) {
 		const editKey = getEditKey(id, field);
-		const newValue = state.editingValues.get(editKey);
+		let newValue = state.editingValues.get(editKey);
 
 		if (newValue !== undefined) {
+			if (field === 'spotify_uri' && typeof newValue === 'string') {
+				// If a full link is detected, extract the track ID.
+				newValue = parseSpotifyLink(newValue);
+			}
+			if (field === 'youtube_id' && typeof newValue === 'string') {
+				// If a full link is detected, extract the video ID.
+				newValue = parseYoutubeLink(newValue);
+			}
 			adminStore.modifyEntity('media', id, { [field]: newValue });
 			state.editingValues.delete(editKey);
 		}
@@ -293,7 +335,7 @@
 							value={state.newMediaData.spotify_uri || ''}
 							placeholder="Spotify URI"
 							onChange={(value) => (state.newMediaData.spotify_uri = value)}
-							onCommit={(value) => (state.newMediaData.spotify_uri = value)}
+							onCommit={(value) => (state.newMediaData.spotify_uri = parseSpotifyLink(value))}
 						/>
 					</Table.Cell>
 					<Table.Cell>
@@ -301,7 +343,7 @@
 							value={state.newMediaData.youtube_id || ''}
 							placeholder="YouTube ID"
 							onChange={(value) => (state.newMediaData.youtube_id = value)}
-							onCommit={(value) => (state.newMediaData.youtube_id = value)}
+							onCommit={(value) => (state.newMediaData.youtube_id = parseYoutubeLink(value))}
 						/>
 					</Table.Cell>
 					<Table.Cell class="text-right">
@@ -367,7 +409,7 @@
 						/>
 						{#if media.spotify_uri}
 							<a
-								href={`https://open.spotify.com/track/${formatSpotifyUri(media.spotify_uri)}`}
+								href={`https://open.spotify.com/track/${parseSpotifyLink(media.spotify_uri)}`}
 								target="_blank"
 								class="mt-1 block text-xs text-blue-600 hover:underline"
 							>
@@ -386,7 +428,7 @@
 								/>
 								{#if media.youtube_id}
 									<a
-										href={`https://youtube.com/watch?v=${media.youtube_id}`}
+										href={`https://youtube.com/watch?v=${parseYoutubeLink(media.youtube_id)}`}
 										target="_blank"
 										class="mt-1 block text-xs text-blue-600 hover:underline"
 									>
@@ -397,7 +439,7 @@
 							{#if media.youtube_id}
 								<img
 									class="mb-5 h-9 w-16"
-									src={`https://i.ytimg.com/vi_webp/${media.youtube_id}/default.webp`}
+									src={`https://i.ytimg.com/vi_webp/${parseYoutubeLink(media.youtube_id)}/default.webp`}
 									alt={`YouTube thumbnail for ${media.title}`}
 								/>
 							{/if}
