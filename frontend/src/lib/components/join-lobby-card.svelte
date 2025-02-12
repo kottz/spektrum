@@ -8,30 +8,62 @@
 	import { gameStore } from '$lib/stores/game.svelte';
 	import { PUBLIC_SPEKTRUM_SERVER_URL } from '$env/static/public';
 
-	// Local reactive variables.
-	let lobbyCode: string = '';
-	let playerName: string = '';
-	let isJoining = false;
+	let lobbyCode = $state('');
+	let playerName = $state('');
+	let isJoining = $state(false);
+	let hasAttemptedSubmit = $state(false);
+
+	const NAME_VALIDATION_REGEX = /^[a-zA-Z0-9\s._-]+$/;
+	const LOBBY_CODE_REGEX = /^\d+$/;
+
+	const isValidLobbyCode = $derived(LOBBY_CODE_REGEX.test(lobbyCode));
+	const hasNameValidationError = $derived(
+		playerName.length > 0 && (playerName.length > 16 || !NAME_VALIDATION_REGEX.test(playerName))
+	);
+	const isNameTooShort = $derived(playerName.length > 0 && playerName.length < 2);
+
+	function handleNameInput(e: Event) {
+		if ((e.target as HTMLInputElement).value.length === 0) {
+			hasAttemptedSubmit = false;
+		}
+	}
 
 	async function handleJoinGame() {
-		if (!lobbyCode || !playerName) {
-			notifications.add('Please enter both lobby code and player name', 'destructive');
+		hasAttemptedSubmit = true;
+
+		if (!isValidLobbyCode) {
+			notifications.add('Lobby code must contain only numbers', 'destructive');
 			return;
 		}
+
+		if (isNameTooShort) {
+			notifications.add('Name must be at least 2 characters', 'destructive');
+			return;
+		}
+
+		if (hasNameValidationError) {
+			notifications.add('Invalid name format', 'destructive');
+			return;
+		}
+
 		try {
 			isJoining = true;
-			// Call the join-lobby HTTP endpoint.
+
 			const response = await fetch(`${PUBLIC_SPEKTRUM_SERVER_URL}/api/join-lobby`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ join_code: lobbyCode, name: playerName })
+				body: JSON.stringify({
+					join_code: lobbyCode.trim(),
+					name: playerName.trim()
+				})
 			});
+
 			if (!response.ok) {
 				throw new Error('Failed to join lobby');
 			}
-			gameStore.setPlayerName(playerName);
+
+			gameStore.setPlayerName(playerName.trim());
 			const data = await response.json();
-			// Then, initiate the websocket connection.
 			await gameActions.joinGame(data.player_id);
 		} catch (error) {
 			warn('Error joining game:', error);
@@ -47,18 +79,43 @@
 		<CardTitle>Join Existing Lobby</CardTitle>
 	</CardHeader>
 	<CardContent class="grid gap-4">
-		<Input
-			name="lobbyCode"
-			placeholder="Enter lobby code"
-			bind:value={lobbyCode}
-			disabled={isJoining}
-		/>
-		<Input
-			name="playerName"
-			placeholder="Enter your name"
-			bind:value={playerName}
-			disabled={isJoining}
-		/>
+		<div>
+			<Input
+				name="lobbyCode"
+				type="text"
+				inputmode="numeric"
+				pattern="\d*"
+				placeholder="Enter lobby code"
+				bind:value={lobbyCode}
+				disabled={isJoining}
+				class={!isValidLobbyCode && lobbyCode ? 'border-red-500' : ''}
+			/>
+			{#if !isValidLobbyCode && lobbyCode}
+				<p class="mt-1 text-sm text-red-500">Lobby code must contain only numbers</p>
+			{/if}
+		</div>
+
+		<div>
+			<Input
+				name="playerName"
+				placeholder="Enter your name"
+				bind:value={playerName}
+				oninput={handleNameInput}
+				maxlength="16"
+				disabled={isJoining}
+				class={hasNameValidationError || (isNameTooShort && hasAttemptedSubmit)
+					? 'border-red-500'
+					: ''}
+			/>
+			{#if hasNameValidationError}
+				<p class="mt-1 text-sm text-red-500">
+					Name can only contain letters, numbers, spaces, and the symbols: _ - .
+				</p>
+			{:else if isNameTooShort && hasAttemptedSubmit}
+				<p class="mt-1 text-sm text-red-500">Name must be at least 2 characters</p>
+			{/if}
+		</div>
+
 		<Button on:click={handleJoinGame} disabled={isJoining || !lobbyCode || !playerName}>
 			{isJoining ? 'Joining...' : 'Join Game'}
 		</Button>
