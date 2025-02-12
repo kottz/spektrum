@@ -1,6 +1,9 @@
 test-results
 node_modules
 
+# pnpm
+pnpm-lock.yaml
+
 # Images
 static/img
 
