@@ -18,7 +18,7 @@ use thiserror::Error;
 use tracing::{info, warn};
 
 #[derive(Error, Debug)]
-pub(crate) enum DbError {
+pub enum DbError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
     #[error("JSON error: {0}")]
@@ -88,10 +88,10 @@ impl StoredData {
     /// - Duplicate character names or image URLs
     /// - Questions referencing non-existent media IDs
     /// - Options referencing non-existent questions
-    /// - Options referencing non-existent character names (via option_text)
+    /// - Options referencing non-existent character names (via `option_text`)
     /// - Sets referencing non-existent questions
     ///
-    /// Returns Ok(()) if all validations pass, or a DbError::Validation with detailed error message.
+    /// Returns `Ok(())` if all validations pass, or a `DbError::Validation` with detailed error message.
     pub fn validate_stored_data(&self) -> Result<(), DbError> {
         let mut seen_media_ids = HashSet::new();
         for media in &self.media {
@@ -159,7 +159,7 @@ impl StoredData {
         let question_ids = seen_question_ids;
 
         // Create a HashSet of valid color names
-        let valid_colors: HashSet<String> = Color::all().iter().map(|c| c.to_string()).collect();
+        let valid_colors: HashSet<String> = Color::all().iter().map(ToString::to_string).collect();
 
         for question in &self.questions {
             if !media_ids.contains(&question.media_id) {
@@ -231,22 +231,22 @@ pub enum Storage {
 impl Storage {
     async fn read_file(&self, path: &str) -> Result<String, DbError> {
         match self {
-            Storage::Filesystem(fs) => fs.read_file(path).await,
-            Storage::S3(s3) => s3.read_file(path).await,
+            Self::Filesystem(fs) => fs.read_file(path).await,
+            Self::S3(s3) => s3.read_file(path).await,
         }
     }
 
     async fn write_file(&self, path: &str, data: &[u8]) -> Result<(), DbError> {
         match self {
-            Storage::Filesystem(fs) => fs.write_file(path, data).await,
-            Storage::S3(s3) => s3.write_file(path, data).await,
+            Self::Filesystem(fs) => fs.write_file(path, data).await,
+            Self::S3(s3) => s3.write_file(path, data).await,
         }
     }
 
     async fn create_backup(&self, content: &str, file_stem: &str) -> Result<(), DbError> {
         match self {
-            Storage::Filesystem(fs) => fs.create_backup(content, file_stem).await,
-            Storage::S3(s3) => s3.create_backup(content, file_stem).await,
+            Self::Filesystem(fs) => fs.create_backup(content, file_stem).await,
+            Self::S3(s3) => s3.create_backup(content, file_stem).await,
         }
     }
 
@@ -255,10 +255,10 @@ impl Storage {
         character_name: &str,
         data: &[u8],
     ) -> Result<String, DbError> {
-        let filename = format!("{}.avif", character_name);
-        let path = format!("img/{}", filename);
+        let filename = format!("{character_name}.avif");
+        let path = format!("img/{filename}");
         self.write_file(&path, data).await?;
-        Ok(format!("/img/{}", filename))
+        Ok(format!("/img/{filename}"))
     }
 }
 
@@ -303,7 +303,7 @@ impl FilesystemBackend {
             std::fs::create_dir_all(&backup_dir)?;
             let now = Utc::now();
             let timestamp = now.format("%y%m%d_%H%M%S").to_string();
-            let filename = format!("{}_{}.json.gz", file_stem, timestamp);
+            let filename = format!("{file_stem}_{timestamp}.json.gz");
             let full_path = backup_dir.join(filename);
             let file = std::fs::File::create(&full_path)?;
             let mut encoder = GzEncoder::new(file, Compression::default());
@@ -328,7 +328,9 @@ impl S3Backend {
     async fn read_file(&self, path: &str) -> Result<String, DbError> {
         let mut key = format!("{}/{}", self.prefix, path);
 
-        let is_json = path.ends_with(".json");
+        let is_json = std::path::Path::new(path)
+            .extension()
+            .map_or(false, |ext| ext.eq_ignore_ascii_case("json"));
 
         // Read json question data from hidden folder
         if is_json {
@@ -350,7 +352,7 @@ impl S3Backend {
                     .body
                     .collect()
                     .await
-                    .map_err(|e| DbError::S3(format!("Failed to collect bytes: {}", e)))?;
+                    .map_err(|e| DbError::S3(format!("Failed to collect bytes: {e}")))?;
 
                 // If it's a JSON file, decompress it
                 if is_json {
@@ -359,11 +361,11 @@ impl S3Backend {
                     let mut decompressed = String::new();
                     decoder
                         .read_to_string(&mut decompressed)
-                        .map_err(|e| DbError::S3(format!("Failed to decompress: {}", e)))?;
+                        .map_err(|e| DbError::S3(format!("Failed to decompress: {e}")))?;
                     Ok(decompressed)
                 } else {
                     String::from_utf8(bytes.to_vec())
-                        .map_err(|e| DbError::S3(format!("Invalid UTF-8: {}", e)))
+                        .map_err(|e| DbError::S3(format!("Invalid UTF-8: {e}")))
                 }
             }
             Err(err) => {
@@ -382,7 +384,9 @@ impl S3Backend {
         let mut key = format!("{}/{}", self.prefix, path);
 
         // Determine if we're writing a JSON file
-        let is_json = path.ends_with(".json");
+        let is_json = std::path::Path::new(path)
+            .extension()
+            .map_or(false, |ext| ext.eq_ignore_ascii_case("json"));
 
         // Store question data in hidden folder and append .gz for JSON files
         if is_json {
@@ -390,9 +394,15 @@ impl S3Backend {
         }
 
         // Determine content type based on file extension
-        let content_type = if path.ends_with(".avif") {
+        let content_type = if std::path::Path::new(path)
+            .extension()
+            .map_or(false, |ext| ext.eq_ignore_ascii_case("avif"))
+        {
             "image/avif"
-        } else if path.ends_with(".webm") {
+        } else if std::path::Path::new(path)
+            .extension()
+            .map_or(false, |ext| ext.eq_ignore_ascii_case("webm"))
+        {
             "video/webm"
         } else if is_json {
             "application/gzip" // Store JSON data as compressed
@@ -407,10 +417,10 @@ impl S3Backend {
             let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
             encoder
                 .write_all(data)
-                .map_err(|e| DbError::S3(format!("Failed to compress: {}", e)))?;
+                .map_err(|e| DbError::S3(format!("Failed to compress: {e}")))?;
             encoder
                 .finish()
-                .map_err(|e| DbError::S3(format!("Failed to finish compression: {}", e)))?
+                .map_err(|e| DbError::S3(format!("Failed to finish compression: {e}")))?
         } else {
             data.to_vec()
         };
@@ -437,8 +447,8 @@ impl S3Backend {
         let now = Utc::now();
         let timestamp = now.format("%y%m%d_%H%M%S").to_string();
         let key = format!(
-            "{}/{}/backup/{}_{}.json.gz",
-            self.prefix, self.question_folder, file_stem, timestamp
+            "{}/{}/backup/{file_stem}_{timestamp}.json.gz",
+            self.prefix, self.question_folder
         );
         info!("Create backup S3: {}", key);
 
@@ -466,7 +476,7 @@ pub struct QuestionDatabase {
 }
 
 impl QuestionDatabase {
-    pub async fn new(config: &StorageConfig) -> Result<Self, DbError> {
+    pub fn new(config: &StorageConfig) -> Result<Self, DbError> {
         let (storage, file_path) = match config {
             StorageConfig::Filesystem {
                 base_path,
@@ -492,7 +502,7 @@ impl QuestionDatabase {
             } => {
                 let config = aws_sdk_s3::Config::builder()
                     .region(Region::new(region.clone()))
-                    .endpoint_url(format!("https://s3.{}.backblazeb2.com", region))
+                    .endpoint_url(format!("https://s3.{region}.backblazeb2.com"))
                     .force_path_style(true)
                     .behavior_version(aws_sdk_s3::config::BehaviorVersion::latest())
                     .use_fips(false)
@@ -604,7 +614,7 @@ impl QuestionDatabase {
                     .collect();
 
                 Some(GameQuestion {
-                    id: question.id as u16,
+                    id: question.id.try_into().ok()?,
                     question_type: question.question_type,
                     title: media.title.clone(),
                     artist: Some(media.artist.clone()),

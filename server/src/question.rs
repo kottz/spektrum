@@ -241,9 +241,7 @@ pub struct QuestionStore {
 
 impl QuestionStore {
     pub async fn new(config: &StorageConfig) -> Result<Self, QuestionError> {
-        let db = QuestionDatabase::new(config)
-            .await
-            .map_err(QuestionError::DbError)?;
+        let db = QuestionDatabase::new(config).map_err(QuestionError::DbError)?;
 
         let store = Self {
             questions: RwLock::new(Arc::new(Vec::new())),
