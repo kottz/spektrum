@@ -94,12 +94,14 @@
 	</div>
 
 	<!-- Mobile-only bottom controls -->
-	<div class="fixed bottom-0 left-0 right-0 z-10 mt-4 flex bg-white p-3 lg:hidden">
+	<div class="fixed bottom-0 left-0 right-0 z-10 mt-4 flex bg-background p-3 lg:hidden">
 		{#if phase === GamePhase.Lobby}
 			<StartButton />
 		{:else}
-			<SkipButton />
-			<RoundButton />
+			<div class="flex w-full gap-2">
+				<SkipButton />
+				<RoundButton />
+			</div>
 		{/if}
 	</div>
 </div>

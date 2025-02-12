@@ -5,57 +5,105 @@
 
 @layer base {
 	:root {
-		--background: 0 0% 100%;
-		--foreground: 0 0% 3.9%;
-		--card: 0 0% 100%;
-		--card-foreground: 0 0% 3.9%;
-		--popover: 0 0% 100%;
-		--popover-foreground: 0 0% 3.9%;
-		--primary: 0 0% 9%;
-		--primary-foreground: 0 0% 98%;
-		--secondary: 0 0% 96.1%;
-		--secondary-foreground: 0 0% 9%;
-		--muted: 0 0% 96.1%;
-		--muted-foreground: 0 0% 45.1%;
-		--accent: 0 0% 96.1%;
-		--accent-foreground: 0 0% 9%;
-		--destructive: 0 72.22% 50.59%;
-		--destructive-foreground: 0 0% 98%;
-		--border: 0 0% 89.8%;
-		--input: 0 0% 89.8%;
-		--ring: 0 0% 3.9%;
+		--background: 256 62% 99%;
+		--foreground: 256 79% 5%;
+		--muted: 256 6% 76%;
+		--muted-foreground: 256 10% 36%;
+		--popover: 256 62% 98%;
+		--popover-foreground: 256 79% 4%;
+		--card: 256 62% 98%;
+		--card-foreground: 256 79% 4%;
+		--border: 220 13% 91%;
+		--input: 220 13% 91%;
+		--primary: 256 30% 43%;
+		--primary-foreground: 0 0% 100%;
+		--secondary: 256 18% 90%;
+		--secondary-foreground: 256 18% 20%;
+		--accent: 256 25% 90%;
+		--accent-foreground: 256 25% 15%;
+		--destructive: 14 85% 26%;
+		--destructive-foreground: 14 85% 86%;
+		--ring: 256 30% 43%;
 		--radius: 0.5rem;
+
+		/* Additional chart colors they're using */
+		--chart-1: 12 76% 61%;
+		--chart-2: 173 58% 39%;
+		--chart-3: 197 37% 24%;
+		--chart-4: 43 74% 66%;
+		--chart-5: 27 87% 67%;
+
+		/* Sidebar specific colors */
+		--sidebar-background: 256 30% 98%;
+		--sidebar-foreground: 256 30% 30%;
+		--sidebar-primary: 256 30% 43%;
+		--sidebar-primary-foreground: 0 0% 100%;
+		--sidebar-accent: 256 25% 95%;
+		--sidebar-accent-foreground: 256 30% 30%;
+		--sidebar-border: 256 20% 90%;
+		--sidebar-ring: 256 30% 43%;
 	}
+
 	.dark {
-		--background: 0 0% 3.9%;
-		--foreground: 0 0% 98%;
-		--card: 0 0% 3.9%;
-		--card-foreground: 0 0% 98%;
-		--popover: 0 0% 3.9%;
-		--popover-foreground: 0 0% 98%;
-		--primary: 0 0% 98%;
-		--primary-foreground: 0 0% 9%;
-		--secondary: 0 0% 14.9%;
-		--secondary-foreground: 0 0% 98%;
-		--muted: 0 0% 14.9%;
-		--muted-foreground: 0 0% 63.9%;
-		--accent: 0 0% 14.9%;
-		--accent-foreground: 0 0% 98%;
-		--destructive: 0 62.8% 30.6%;
-		--destructive-foreground: 0 0% 98%;
-		--border: 0 0% 14.9%;
-		--input: 0 0% 14.9%;
-		--ring: 0 0% 83.1%;
+		--background: 0 0% 9%;
+		--foreground: 0 0% 95%;
+		--muted: 0 0% 13%;
+		--muted-foreground: 0 0% 63%;
+		--popover: 0 0% 7%;
+		--popover-foreground: 0 0% 95%;
+		--card: 0 0% 7%;
+		--card-foreground: 0 0% 95%;
+		--border: 0 0% 14.5%;
+		--input: 0 0% 14.5%;
+		--primary: 256 35% 45%;
+		--primary-foreground: 0 0% 100%;
+		--secondary: 0 0% 13%;
+		--secondary-foreground: 0 0% 80%;
+		--accent: 256 30% 20%;
+		--accent-foreground: 256 30% 80%;
+		--destructive: 0 70% 45%;
+		--destructive-foreground: 0 0% 100%;
+		--ring: 256 35% 45%;
+
+		/* Chart colors in dark mode */
+		--chart-1: 256 45% 60%;
+		--chart-2: 220 40% 55%;
+		--chart-3: 280 35% 50%;
+		--chart-4: 300 40% 55%;
+		--chart-5: 320 35% 50%;
+
+		/* Sidebar colors in dark mode */
+		--sidebar-background: 0 0% 11%;
+		--sidebar-foreground: 0 0% 80%;
+		--sidebar-primary: 256 35% 45%;
+		--sidebar-primary-foreground: 0 0% 100%;
+		--sidebar-accent: 0 0% 13%;
+		--sidebar-accent-foreground: 0 0% 90%;
+		--sidebar-border: 0 0% 14.5%;
+		--sidebar-ring: 256 35% 45%;
 	}
 }
 
-@layer base {
-	:root {
-		@apply border-border;
-	}
-	body {
-		@apply bg-background text-foreground;
-	}
+/* Their scrollbar styling */
+::-webkit-scrollbar {
+	width: 0.5rem;
+	scrollbar-width: thin;
+}
+
+::-webkit-scrollbar-thumb {
+	background-color: hsl(var(--accent)) !important;
+	border-radius: 9999px;
+}
+
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+::selection,
+mark {
+	background: hsl(var(--accent));
+	color: hsl(var(--accent-foreground));
+	width: max-content;
 }
 
 .metallic-gold {

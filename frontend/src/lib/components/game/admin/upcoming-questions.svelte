@@ -6,7 +6,7 @@
 <div class="space-y-2">
 	<div class="space-y-1">
 		{#each upcomingQuestions as question, i}
-			<div class="space-y-1 rounded bg-muted p-2">
+			<div class="space-y-1 rounded bg-secondary p-2">
 				<div class="flex justify-between text-sm">
 					<span class="flex-1 truncate font-medium">{question.title}</span>
 					<span class="ml-2 text-muted-foreground">#{i + 1}</span>

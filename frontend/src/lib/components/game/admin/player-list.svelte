@@ -8,7 +8,7 @@
 
 <div class="flex h-full w-full flex-col">
 	<h3 class="mb-2 font-semibold">Connected Players ({playerCount})</h3>
-	<ScrollArea type="always" class="flex-1 rounded-md border">
+	<ScrollArea class="flex-1 rounded-md">
 		<div class="flex flex-wrap gap-2">
 			{#each players as player}
 				<div class="flex items-center rounded bg-muted p-2">

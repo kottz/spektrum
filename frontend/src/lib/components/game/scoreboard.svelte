@@ -16,18 +16,18 @@
 
 	function getRoundScoreClass(roundScore: number): string {
 		if (roundScore === 0) return 'text-muted-foreground';
-		if (roundScore === maxRoundScore) return 'text-green-500 font-bold';
-		return 'text-primary';
+		if (roundScore === maxRoundScore) return 'text-emerald-700 dark:text-emerald-400 font-bold';
+		return 'text-muted-white';
 	}
 </script>
 
 <div class="flex h-full min-h-0 w-full">
-	<ScrollArea type="always" class="min-h-0 w-1 flex-1 rounded-md border">
+	<ScrollArea class="min-h-0 w-1 flex-1 rounded-md">
 		<div class="space-y-3 p-4">
 			{#each players as player, i}
 				<div class="relative">
 					<!-- Background for full width context -->
-					<div class="absolute inset-0 rounded-lg bg-muted"></div>
+					<div class="absolute inset-0 rounded-lg"></div>
 					<!-- Score bar -->
 					<div
 						class="absolute inset-0 rounded-lg bg-primary/20 transition-all duration-500 ease-out"

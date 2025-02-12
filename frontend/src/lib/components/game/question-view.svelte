@@ -59,7 +59,7 @@
 		if (questionType === 'character') {
 			styles.push('p-0', 'overflow-hidden');
 			if (!(alternative === clickedAnswer && myAnswer)) {
-				styles.push('bg-gray-200');
+				styles.push('bg-gray-200', 'dark:bg-gray-800');
 			}
 		} else if (questionType !== 'color') {
 			styles.push('bg-muted');
@@ -90,6 +90,9 @@
 			const lower = alternative.toLowerCase();
 			if (lower === 'white') {
 				styles.push('border-2', 'border-black');
+			}
+			if (lower === 'black') {
+				styles.push('border-2', 'dark:border-white');
 			}
 			if (lower === 'gold') {
 				styles.push('metallic-gold');
