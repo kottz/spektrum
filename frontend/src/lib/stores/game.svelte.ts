@@ -163,7 +163,7 @@ function createGameStore() {
 
 			case 'StateDelta': {
 				// Update phase if provided.
-				if (message.phase !== undefined) {
+				if (message.phase !== undefined && message.phase !== null) {
 					state.phase = message.phase;
 				}
 
