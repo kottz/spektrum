@@ -4,6 +4,7 @@ import { browser } from '$app/environment';
 import { youtubeStore } from '$lib/stores/youtube-store.svelte';
 import { timerStore } from '$lib/stores/timer-store.svelte';
 import { info, warn } from '$lib/utils/logger';
+import { notifications } from '$lib/stores/notification-store';
 
 import type { GameState, GameUpdate } from '../types/game';
 import { GamePhase } from '../types/game';
@@ -272,6 +273,7 @@ function createGameStore() {
 
 			case 'Error': {
 				state.error = message.message;
+				notifications.add(`Error: ${message.message}`, 'destructive');
 				break;
 			}
 

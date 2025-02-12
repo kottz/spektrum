@@ -2,7 +2,6 @@
 	// Import UI components and stores.
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
-	import NotificationList from '$lib/components/NotificationList.svelte';
 	import SetSelector from '$lib/components/set-selector.svelte';
 	import LightSwitch from '$lib/components/ui/light-switch.svelte';
 	import JoinLobbyCard from '$lib/components/join-lobby-card.svelte';
@@ -25,9 +24,6 @@
 		gameActions.reconnectGame(session.playerId);
 	}
 </script>
-
-<!-- Notifications -->
-<NotificationList />
 
 <!-- Main container -->
 <div class="container flex min-h-screen flex-col items-center justify-center gap-8 py-8">

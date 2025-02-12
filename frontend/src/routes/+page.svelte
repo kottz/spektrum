@@ -2,9 +2,11 @@
 	import HomeScreen from '$lib/components/game/home-screen.svelte';
 	import PlayerGameScreen from '$lib/components/game/player-game-screen.svelte';
 	import AdminGameScreen from '$lib/components/game/admin/admin-game-screen.svelte';
+	import NotificationList from '$lib/components/NotificationList.svelte';
 	import { gameStore } from '$lib/stores/game.svelte';
 </script>
 
+<NotificationList />
 {#if gameStore.state.playerId}
 	{#if gameStore.state.isAdmin}
 		<AdminGameScreen />
