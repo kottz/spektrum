@@ -25,6 +25,7 @@ mod db;
 mod game;
 mod question;
 mod server;
+mod uuid;
 
 #[derive(Debug, Deserialize)]
 struct ServerConfig {

@@ -1,6 +1,7 @@
 use crate::db::QuestionSet;
 use crate::question::GameQuestion;
 use crate::server::Connection;
+use crate::uuid::Uuid;
 use dashmap::DashMap;
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -9,7 +10,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tracing::warn;
-use uuid::Uuid;
 
 lazy_static! {
     pub(crate) static ref NAME_VALIDATION_REGEX: Regex =
