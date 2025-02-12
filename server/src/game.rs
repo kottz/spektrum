@@ -107,8 +107,6 @@ pub enum GameUpdate {
     Answered {
         name: String,
         correct: bool,
-        new_score: i32,
-        round_score: i32,
     },
     GameOver {
         final_scores: Vec<(String, i32)>,
@@ -475,8 +473,7 @@ impl GameEngine {
             );
             return;
         }
-
-        let (player_name, new_score, round_score, correct) = {
+        let (player_name, correct) = {
             let player = match self.state.players.get_mut(&ctx.sender_id) {
                 Some(p) => p,
                 None => {
@@ -489,7 +486,6 @@ impl GameEngine {
                     return;
                 }
             };
-
             if player.has_answered {
                 self.push_update(
                     Recipients::Single(ctx.sender_id),
@@ -499,7 +495,6 @@ impl GameEngine {
                 );
                 return;
             }
-
             let elapsed = match self.state.round_start_time {
                 Some(start_time) => ctx.timestamp.duration_since(start_time),
                 None => {
@@ -507,7 +502,6 @@ impl GameEngine {
                     Duration::from_secs(self.state.round_duration / 2)
                 }
             };
-
             if elapsed.as_secs() > self.state.round_duration {
                 self.push_update(
                     Recipients::Single(ctx.sender_id),
@@ -517,7 +511,6 @@ impl GameEngine {
                 );
                 return;
             }
-
             let correct = self
                 .state
                 .correct_answers
@@ -529,29 +522,19 @@ impl GameEngine {
             } else {
                 0
             };
-
             if correct {
                 player.score += score_delta;
             }
             player.round_score = score_delta;
             player.has_answered = true;
             player.answer = Some(answer);
-
-            (
-                player.name.clone(),
-                player.score,
-                player.round_score,
-                correct,
-            )
+            (player.name.clone(), correct)
         };
-
         self.push_update(
             Recipients::All,
             GameUpdate::Answered {
                 name: player_name,
                 correct,
-                new_score,
-                round_score,
             },
         );
     }

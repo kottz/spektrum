@@ -123,8 +123,6 @@ export type GameUpdate =
 			type: 'Answered';
 			name: string;
 			correct: boolean;
-			new_score: number;
-			round_score: number;
 	  }
 	| {
 			type: 'GameOver';
