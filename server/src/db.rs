@@ -463,7 +463,8 @@ impl S3Backend {
             .body(ByteStream::from(compressed))
             .content_type("application/gzip")
             .send()
-            .await.map_err(|e| DbError::S3(e.to_string()))?;
+            .await
+            .map_err(|e| DbError::S3(e.to_string()))?;
 
         Ok(())
     }
