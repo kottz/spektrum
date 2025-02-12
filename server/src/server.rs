@@ -642,7 +642,7 @@ async fn process_incoming_messages(
                 Message::Close(_) => {
                     let state_read = conn_state.read().await;
                     if let Some(pid) = state_read.player_id {
-                        info!("Client initiated close for player {}", pid);
+                        trace!("Client initiated close for player {}", pid);
                     }
                     break;
                 }
