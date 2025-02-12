@@ -2802,7 +2802,6 @@ dependencies = [
  "futures-util",
  "http 1.2.0",
  "lazy_static",
- "rand",
  "regex",
  "reqwest",
  "serde",

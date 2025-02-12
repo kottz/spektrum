@@ -3,7 +3,6 @@ use crate::question::GameQuestion;
 use crate::server::Connection;
 use dashmap::DashMap;
 use lazy_static::lazy_static;
-use rand::seq::SliceRandom;
 use regex::Regex;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -215,11 +214,10 @@ impl GameEngine {
         round_duration: u64,
         connections: Arc<DashMap<Uuid, Connection>>,
     ) -> Self {
-        let mut rng = rand::thread_rng();
         let indices = match set {
             None => {
                 let mut all_indices: Vec<usize> = (0..questions.len()).collect();
-                all_indices.shuffle(&mut rng);
+                fastrand::shuffle(&mut all_indices);
                 all_indices
             }
             Some(question_set) => {
@@ -233,7 +231,7 @@ impl GameEngine {
                     .iter()
                     .filter_map(|id| id_to_index.get(id).copied())
                     .collect();
-                set_indices.shuffle(&mut rng);
+                fastrand::shuffle(&mut set_indices);
                 set_indices
             }
         };
@@ -421,12 +419,14 @@ impl GameEngine {
                 && self.state.phase == GamePhase::Question
                 && self.state.current_question.is_some()
             {
-                self.push_update(
-                    Recipients::Single(self.state.admin_id),
-                    GameUpdate::AdminInfo {
-                        current_question: self.state.current_question.clone().unwrap(),
-                    },
-                );
+                if let Some(question) = &self.state.current_question {
+                    self.push_update(
+                        Recipients::Single(self.state.admin_id),
+                        GameUpdate::AdminInfo {
+                            current_question: question.clone(),
+                        },
+                    );
+                }
             }
         } else {
             self.push_update(
@@ -734,8 +734,7 @@ impl GameEngine {
             }
         }
         self.state.current_alternatives.dedup();
-        let mut rng = rand::thread_rng();
-        self.state.current_alternatives.shuffle(&mut rng);
+        fastrand::shuffle(&mut self.state.current_alternatives);
         Ok(())
     }
 

@@ -3,8 +3,6 @@ use crate::db::{QuestionDatabase, QuestionSet};
 use crate::StorageConfig;
 use dashmap::DashMap;
 use lazy_static::lazy_static;
-use rand::seq::SliceRandom;
-use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
@@ -146,14 +144,12 @@ impl GameQuestion {
     }
 
     pub fn generate_round_alternatives(&self) -> Vec<String> {
-        let mut rng = rand::thread_rng();
-
         match self.question_type {
             QuestionType::Color => self.generate_color_alternatives(),
             QuestionType::Character | QuestionType::Text => {
                 let mut alternatives: Vec<String> =
                     self.options.iter().map(|opt| opt.option.clone()).collect();
-                alternatives.shuffle(&mut rng);
+                fastrand::shuffle(&mut alternatives);
                 alternatives
             }
             QuestionType::Year => {
@@ -172,7 +168,6 @@ impl GameQuestion {
 
     fn generate_color_alternatives(&self) -> Vec<String> {
         const TARGET_SIZE: usize = 6;
-        let mut rng = rand::thread_rng();
 
         // Get initial colors from correct options
         let mut round_colors: Vec<Color> = self
@@ -195,13 +190,13 @@ impl GameQuestion {
 
             if total_weight <= 0.0 {
                 // Fallback to random selection if weights are invalid
-                let idx = rng.gen_range(0..available_colors.len());
+                let idx = fastrand::usize(..available_colors.len());
                 let (color, _) = available_colors.remove(idx);
                 round_colors.push(color);
                 continue;
             }
 
-            let mut selection = rng.gen_range(0.0..total_weight);
+            let mut selection = fastrand::f64() * total_weight;
             let mut selected_idx = 0;
 
             for (idx, (_, weight)) in available_colors.iter().enumerate() {
@@ -216,7 +211,7 @@ impl GameQuestion {
             round_colors.push(color);
         }
 
-        round_colors.shuffle(&mut rng);
+        fastrand::shuffle(&mut round_colors);
         round_colors.into_iter().map(|c| c.to_string()).collect()
     }
 
@@ -228,7 +223,7 @@ impl GameQuestion {
             correct_year + 1,
             correct_year + 2,
         ];
-        alternatives.shuffle(&mut rand::thread_rng());
+        fastrand::shuffle(&mut alternatives);
         alternatives.iter().map(|y| y.to_string()).collect()
     }
 }
