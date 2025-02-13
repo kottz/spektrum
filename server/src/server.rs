@@ -26,7 +26,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
-use tracing::{error, info, trace, warn};
+use tracing::{error, trace, warn};
 
 const HEARTBEAT_BYTE: u8 = 0x42;
 
@@ -250,6 +250,8 @@ pub async fn create_lobby_handler(
     engine
         .add_player(admin_id, "Admin".to_string())
         .map_err(|e| ApiError::Lobby(e.to_string()))?;
+
+    trace!("Creating new lobby {}", lobby_id);
 
     state
         .connections
@@ -758,7 +760,7 @@ async fn cleanup_lobbies(
             .collect();
 
         for lobby_id in &finished_lobby_ids {
-            info!("Removing finished lobby {}", lobby_id);
+            trace!("Removing finished lobby {}", lobby_id);
             lobbies.remove(lobby_id);
         }
 
@@ -767,7 +769,9 @@ async fn cleanup_lobbies(
             .filter(|pair| finished_lobby_ids.contains(pair.value()))
             .map(|pair| pair.key().clone())
             .collect();
+
         for key in join_codes_to_remove {
+            trace!("Removing join code {}", key);
             join_codes.remove(&key);
         }
 
@@ -776,7 +780,9 @@ async fn cleanup_lobbies(
             .filter(|conn| finished_lobby_ids.contains(&conn.value().lobby_id))
             .map(|conn| *conn.key())
             .collect();
+
         for key in connections_to_remove {
+            trace!("Removing connection for player {}", key);
             connections.remove(&key);
         }
     }
