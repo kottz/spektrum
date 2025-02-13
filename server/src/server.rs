@@ -24,7 +24,9 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
-use tracing::{error, info, trace};
+use tracing::{error, info, trace, warn};
+
+const HEARTBEAT_BYTE: u8 = 0x42;
 
 #[derive(Error, Debug)]
 pub enum ApiError {
@@ -474,14 +476,23 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
     let (ws_tx, mut ws_rx) = socket.split();
     let (tx, rx) = unbounded_channel::<GameUpdate>();
     let (pong_tx, pong_rx) = unbounded_channel::<Bytes>();
+    let (heartbeat_tx, heartbeat_rx) = unbounded_channel::<Bytes>();
 
     let conn_state = Arc::new(RwLock::new(WSConnectionState::new()));
 
     // Spawn the sender task
-    let send_task = spawn_sender_task(ws_tx, rx, pong_rx);
+    let send_task = spawn_sender_task(ws_tx, rx, pong_rx, heartbeat_rx);
 
     // Process incoming messages
-    process_incoming_messages(&mut ws_rx, conn_state.clone(), &state, tx.clone(), pong_tx).await;
+    process_incoming_messages(
+        &mut ws_rx,
+        conn_state.clone(),
+        &state,
+        tx.clone(),
+        pong_tx,
+        heartbeat_tx,
+    )
+    .await;
 
     // Cleanup
     handle_disconnect(conn_state, &state).await;
@@ -493,6 +504,7 @@ fn spawn_sender_task(
     mut ws_tx: SplitSink<WebSocket, Message>,
     mut rx: UnboundedReceiver<GameUpdate>,
     mut pong_rx: UnboundedReceiver<Bytes>,
+    mut heartbeat_rx: UnboundedReceiver<Bytes>,
 ) -> JoinHandle<()> {
     let mut ping_interval = tokio::time::interval(Duration::from_secs(30));
 
@@ -518,6 +530,12 @@ fn spawn_sender_task(
                         break;
                     }
                 }
+                Some(payload) = heartbeat_rx.recv() => {
+                    if let Err(e) = ws_tx.send(Message::Binary(payload)).await {
+                        error!("Failed to send heartbeat: {}", e);
+                        break;
+                    }
+                }
                 else => break,
             }
         }
@@ -530,6 +548,7 @@ async fn process_incoming_messages(
     state: &AppState,
     tx: UnboundedSender<GameUpdate>,
     pong_tx: UnboundedSender<Bytes>,
+    hb_tx: UnboundedSender<Bytes>,
 ) {
     while let Some(result) = ws_rx.next().await {
         match result {
@@ -630,6 +649,18 @@ async fn process_incoming_messages(
                         }
                     }
                 }
+                Message::Binary(payload) => {
+                    // Only respond if the payload exactly matches our heartbeat value.
+                    if payload == Bytes::from_static(&[HEARTBEAT_BYTE]) {
+                        if let Err(e) = hb_tx.send(Bytes::from_static(&[HEARTBEAT_BYTE])) {
+                            error!("Failed to send heartbeat response: {}", e);
+                            break;
+                        }
+                    } else {
+                        // Handle other binary messages or log unexpected payloads.
+                        warn!("Received unexpected binary payload: {:?}", payload);
+                    }
+                }
                 Message::Ping(payload) => {
                     if let Err(e) = pong_tx.send(payload) {
                         error!("Failed to send pong: {}", e);
@@ -646,7 +677,6 @@ async fn process_incoming_messages(
                     }
                     break;
                 }
-                _ => {}
             },
             Err(e) => {
                 error!("WebSocket error: {}", e);
