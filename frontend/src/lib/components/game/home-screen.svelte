@@ -1,40 +1,56 @@
 <script lang="ts">
-	// Import UI components and stores.
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import SetSelector from '$lib/components/set-selector.svelte';
 	import LightSwitch from '$lib/components/ui/light-switch.svelte';
 	import JoinLobbyCard from '$lib/components/join-lobby-card.svelte';
+	import ReconnectCard from '$lib/components/reconnect-card.svelte';
 	import { gameActions } from '$lib/stores/game-actions';
 	import { gameStore } from '$lib/stores/game.svelte';
 	import type { SessionInfo } from '$lib/stores/game.svelte';
 
 	let showSetSelector = $state(false);
-	let storedSessions = $state<SessionInfo[]>([]);
+	let showJoinCard = $state(false);
+	let currentSession = $state<(SessionInfo & { last_update: string }) | null>(null);
 
-	// On component initialization, check for saved sessions.
-	//$effect(() => {
-	//	storedSessions = gameStore.checkSessions();
-	//});
+	$effect(() => {
+		(async () => {
+			try {
+				console.log('Checking sessions');
+				const session = await gameStore.checkSessions();
+				// Now TypeScript knows both types match exactly
+				currentSession = session;
+			} catch (error) {
+				console.error('Failed to check sessions:', error);
+				currentSession = null;
+			}
+		})();
+	});
 
-	// Function to reconnect using a saved session.
-	function reconnectToSession(session: SessionInfo) {
-		gameStore.setPlayerId(session.playerId);
-		gameStore.setPlayerName(session.playerName);
-		gameActions.reconnectGame(session.playerId);
+	function reconnectToSession() {
+		if (!currentSession) return;
+
+		gameStore.setPlayerId(currentSession.playerId);
+		gameStore.setAdminTo(currentSession.isAdmin);
+		gameStore.setPlayerName(currentSession.playerName);
+		gameStore.setJoinCode(currentSession.joinCode);
+		gameActions.joinGame(currentSession.playerId);
+	}
+
+	function handleNewLobby() {
+		gameStore.cleanup();
+		showJoinCard = true;
+		currentSession = null;
 	}
 </script>
 
-<!-- Main container -->
 <div class="container flex min-h-screen flex-col items-center justify-center gap-8 py-8">
 	<div class="flex items-center gap-3">
 		<span class="text-2xl">🎵</span>
 		<h1 class="text-3xl font-bold">Music Quiz</h1>
 		<LightSwitch />
 	</div>
-
 	<div class="grid w-full max-w-lg gap-6">
-		<!-- Create Lobby / Set Selection Card -->
 		<Card>
 			<CardHeader class="mb-2">
 				<div class="flex items-center gap-4">
@@ -57,9 +73,20 @@
 			</CardContent>
 		</Card>
 
+		{#if currentSession}
+			<h1>Current Session: {currentSession.playerName}</h1>
+		{/if}
+
 		{#if !showSetSelector}
-			<!-- Use the new JoinLobbyCard component for joining an existing lobby -->
-			<JoinLobbyCard />
+			{#if currentSession && !showJoinCard}
+				<ReconnectCard
+					session={currentSession}
+					onReconnect={reconnectToSession}
+					onNewLobby={handleNewLobby}
+				/>
+			{:else}
+				<JoinLobbyCard />
+			{/if}
 		{/if}
 	</div>
 </div>

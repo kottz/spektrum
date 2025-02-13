@@ -16,78 +16,28 @@ import { PUBLIC_SPEKTRUM_SERVER_URL } from '$env/static/public';
 export interface SessionInfo {
 	playerId: string;
 	playerName: string;
+	isAdmin: boolean;
 	joinCode: string;
-	createdAt: string;
 }
 
-export function loadSessions(): SessionInfo[] {
-	if (!browser) return [];
+export function loadSession(): SessionInfo | null {
+	if (!browser) return null;
 	try {
-		const data = localStorage.getItem('spektrumSessions');
-		return data ? JSON.parse(data) : [];
+		const data = localStorage.getItem('spektrumSession');
+		return data ? JSON.parse(data) : null;
 	} catch {
-		return [];
+		return null;
 	}
 }
 
 export function saveSession(session: SessionInfo) {
 	if (!browser) return;
-	const sessions = loadSessions().filter((s) => !(s.playerId === session.playerId));
-	sessions.push(session);
-	localStorage.setItem('spektrumSessions', JSON.stringify(sessions));
+	localStorage.setItem('spektrumSession', JSON.stringify(session));
 }
 
-function saveSessions(sessions: SessionInfo[]) {
-	localStorage.setItem('spektrumSessions', JSON.stringify(sessions));
-}
-
-export function removeSession(playerId: string) {
+export function removeSession() {
 	if (!browser) return;
-	const sessions = loadSessions().filter((s) => !(s.playerId === playerId));
-	localStorage.setItem('spektrumSessions', JSON.stringify(sessions));
-}
-
-/**
- * Optional helper to remove any invalid sessions by asking the server.
- */
-async function checkSessionsFromServer(): Promise<SessionInfo[]> {
-	if (!browser) return [];
-
-	const sessions = loadSessions();
-	if (sessions.length === 0) return [];
-
-	try {
-		const res = await fetch(`${PUBLIC_SPEKTRUM_SERVER_URL}/api/check-sessions`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				sessions: sessions.map((sess) => ({
-					player_id: sess.playerId
-				}))
-			})
-		});
-		if (!res.ok) {
-			warn('Failed to check sessions:', res.status, res.statusText);
-			return sessions; // Return unfiltered on error
-		}
-
-		const data = (await res.json()) as {
-			valid_sessions: Array<{ lobby_id: string; player_id: string }>;
-		};
-		info('Valid sessions:', data.valid_sessions);
-
-		// Build a set of valid combos
-		const validSet = new Set(data.valid_sessions.map((v) => v.player_id));
-
-		// Filter out invalid sessions
-		const validSessions = sessions.filter((sess) => validSet.has(sess.playerId));
-
-		saveSessions(validSessions);
-		return validSessions;
-	} catch (err) {
-		warn('Error checking sessions:', err);
-		return sessions; // Return unfiltered on fetch error
-	}
+	localStorage.removeItem('spektrumSession');
 }
 
 /* ------------------------------------------------------------------
@@ -110,9 +60,7 @@ function createGameStore() {
 	 */
 	function cleanup() {
 		info('Running cleanup...');
-		if (state.playerId) {
-			removeSession(state.playerId);
-		}
+		removeSession();
 		state.playerId = undefined;
 		state.playerName = undefined;
 		state.isAdmin = false;
@@ -121,8 +69,54 @@ function createGameStore() {
 		Object.assign(state, initialState);
 	}
 
-	async function checkSessions() {
-		return await checkSessionsFromServer();
+	/**
+	 * Optional helper to validate the current session with the server.
+	 */
+	async function checkSessions(): Promise<(SessionInfo & { last_update: string }) | null> {
+		if (!browser) return null;
+		const session = loadSession();
+		if (!session) return null;
+
+		try {
+			const res = await fetch(`${PUBLIC_SPEKTRUM_SERVER_URL}/api/check-sessions`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					sessions: [
+						{
+							player_id: session.playerId
+						}
+					]
+				})
+			});
+
+			if (!res.ok) {
+				warn('Failed to check session:', res.status, res.statusText);
+				return null; // Return null instead of session on error
+			}
+
+			const data = (await res.json()) as {
+				valid_sessions: Array<{ player_id: string; last_update: string }>;
+			};
+
+			info('Session check response:', data.valid_sessions);
+
+			const validSession = data.valid_sessions.find((v) => v.player_id === session.playerId);
+
+			if (validSession) {
+				// Explicitly return the combined type
+				return {
+					...session,
+					last_update: validSession.last_update
+				} as SessionInfo & { last_update: string };
+			}
+
+			removeSession();
+			return null;
+		} catch (err) {
+			warn('Error checking session:', err);
+			return null; // Return null instead of session on error
+		}
 	}
 
 	/**
@@ -140,22 +134,14 @@ function createGameStore() {
 
 		switch (message.type) {
 			case 'Connected': {
-				// The Connected message is sent after a successful join.
-				const time = new Date();
-				const timeString = time.toLocaleTimeString('en-US', {
-					hour12: false,
-					hour: '2-digit',
-					minute: '2-digit'
-				});
-				// Create a session using stored joinCode and lobbyId.
+				// Save the session to localStorage for reconnection.
 				const session: SessionInfo = {
 					playerId: message.player_id,
 					playerName: message.name,
-					joinCode: state.joinCode || '',
-					createdAt: timeString
+					isAdmin: state.isAdmin,
+					joinCode: state.joinCode || ''
 				};
 				saveSession(session);
-
 				state.playerId = message.player_id;
 				state.playerName = message.name;
 				state.roundDuration = message.round_duration;
@@ -286,6 +272,10 @@ function createGameStore() {
 		state.isAdmin = true;
 	}
 
+	function setAdminTo(value: boolean) {
+		state.isAdmin = value;
+	}
+
 	function setJoinCode(joinCode: string) {
 		state.joinCode = joinCode;
 	}
@@ -305,8 +295,10 @@ function createGameStore() {
 	return {
 		state,
 		checkSessions,
+		loadSession,
 		processServerMessage,
 		setAdmin,
+		setAdminTo,
 		setJoinCode,
 		setPlayerId,
 		setPlayerName,
