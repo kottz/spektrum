@@ -37,7 +37,7 @@
 		return '';
 	});
 
-	let showManualReconnect = $derived(connectionState === ConnectionState.ERROR && !canReconnect);
+	let showManualReconnect = $derived(connectionState === ConnectionState.ERROR && !canReconnect());
 
 	async function handleManualReconnect() {
 		const playerId = gameStore.state.playerId;
@@ -65,9 +65,9 @@
 			{#if showManualReconnect}
 				<div class="flex flex-col items-center gap-2 pt-2">
 					<p class="text-sm text-muted-foreground">
-						Automatic reconnection failed. Would you like to try manually?
+						Automatic reconnection failed. Try to reconnect manually.
 					</p>
-					<Button variant="default" on:click={handleManualReconnect}>Try Reconnecting</Button>
+					<Button variant="default" on:click={handleManualReconnect}>Reconnect</Button>
 				</div>
 			{/if}
 		</div>
