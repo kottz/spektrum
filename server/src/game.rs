@@ -177,7 +177,7 @@ pub struct GameState {
     pub all_questions: Arc<Vec<GameQuestion>>,
     pub shuffled_question_indices: Vec<usize>,
     pub current_question_index: usize,
-    pub game_finished: bool,
+    pub last_lobby_message: Option<Instant>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -249,7 +249,7 @@ impl GameEngine {
                 all_questions: questions,
                 shuffled_question_indices: indices,
                 current_question_index: 0,
-                game_finished: false,
+                last_lobby_message: Some(Instant::now()),
             },
             connections,
         }
@@ -266,7 +266,21 @@ impl GameEngine {
     }
 
     pub fn is_finished(&self) -> bool {
-        self.state.game_finished
+        if self.state.phase == GamePhase::GameOver {
+            return true;
+        }
+        if let Some(last_msg) = self.state.last_lobby_message {
+            if Instant::now().duration_since(last_msg) > Duration::from_secs(3600) {
+                self.push_update(
+                    Recipients::All,
+                    GameUpdate::GameClosed {
+                        reason: "Lobby closed due to inactivity".into(),
+                    },
+                );
+                return true;
+            }
+        }
+        false
     }
 
     pub fn get_round_scores(&self) -> Vec<(String, i32)> {
@@ -332,6 +346,7 @@ impl GameEngine {
     }
 
     pub fn process_event(&mut self, event: GameEvent) {
+        self.state.last_lobby_message = Some(Instant::now());
         // Check admin-only actions:
         match &event.action {
             GameAction::StartGame
