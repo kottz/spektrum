@@ -265,6 +265,10 @@ impl GameEngine {
         Ok(())
     }
 
+    pub fn last_update(&self) -> Option<Instant> {
+        self.state.last_lobby_message
+    }
+
     pub fn is_finished(&self) -> bool {
         if self.state.phase == GamePhase::GameOver {
             return true;

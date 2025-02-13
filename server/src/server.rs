@@ -13,10 +13,12 @@ use axum::{
     Json,
 };
 use bytes::Bytes;
+use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
+use std::time::SystemTime;
 use std::{sync::Arc, time::Instant};
 use thiserror::Error;
 use tokio::sync::mpsc::unbounded_channel;
@@ -433,9 +435,15 @@ pub struct CheckSessionsRequest {
     pub sessions: Vec<SessionInfo>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct ValidSessionInfo {
+    pub player_id: Uuid,
+    pub last_update: String, // ISO formatted timestamp
+}
+
 #[derive(Debug, Serialize)]
 pub struct CheckSessionsResponse {
-    pub valid_sessions: Vec<SessionInfo>,
+    pub valid_sessions: Vec<ValidSessionInfo>,
 }
 
 pub async fn check_sessions_handler(
@@ -443,17 +451,40 @@ pub async fn check_sessions_handler(
     Json(req): Json<CheckSessionsRequest>,
 ) -> Result<Json<CheckSessionsResponse>, ApiError> {
     let mut valid_sessions = Vec::new();
+    let now = std::time::Instant::now();
 
-    // Iterate over each session provided by the client.
     for session in req.sessions.iter() {
         if let Some(conn) = state.connections.get(&session.player_id) {
             if let Some(lobby) = state.lobbies.get(&conn.lobby_id) {
                 if !lobby.is_finished() {
-                    valid_sessions.push(session.clone());
+                    if let Some(last_update) = lobby.last_update() {
+                        let duration = now.duration_since(last_update);
+
+                        if let Some(system_time) = SystemTime::now().checked_sub(duration) {
+                            let timestamp = system_time
+                                .duration_since(SystemTime::UNIX_EPOCH)
+                                .ok()
+                                .and_then(|d| {
+                                    DateTime::<Utc>::from_timestamp(
+                                        d.as_secs() as i64,
+                                        d.subsec_nanos(),
+                                    )
+                                })
+                                .map(|dt| dt.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string());
+
+                            if let Some(timestamp) = timestamp {
+                                valid_sessions.push(ValidSessionInfo {
+                                    player_id: session.player_id,
+                                    last_update: timestamp,
+                                });
+                            }
+                        }
+                    }
                 }
             }
         }
     }
+
     Ok(Json(CheckSessionsResponse { valid_sessions }))
 }
 
@@ -720,31 +751,33 @@ async fn cleanup_lobbies(
     loop {
         tick.tick().await;
 
-        // Collect finished lobby IDs
         let finished_lobby_ids: Vec<Uuid> = lobbies
             .iter()
             .filter(|entry| entry.value().is_finished())
             .map(|entry| *entry.key())
             .collect();
 
-        // Remove finished lobbies
-        for lobby_id in finished_lobby_ids.iter() {
+        for lobby_id in &finished_lobby_ids {
             info!("Removing finished lobby {}", lobby_id);
             lobbies.remove(lobby_id);
-
-            // Remove associated join codes
-            for pair in join_codes.iter() {
-                if pair.value() == lobby_id {
-                    join_codes.remove(pair.key());
-                }
-            }
         }
 
-        // Remove stale connections
-        for conn in connections.iter() {
-            if finished_lobby_ids.contains(&conn.value().lobby_id) {
-                connections.remove(conn.key());
-            }
+        let join_codes_to_remove: Vec<String> = join_codes
+            .iter()
+            .filter(|pair| finished_lobby_ids.contains(pair.value()))
+            .map(|pair| pair.key().clone())
+            .collect();
+        for key in join_codes_to_remove {
+            join_codes.remove(&key);
+        }
+
+        let connections_to_remove: Vec<Uuid> = connections
+            .iter()
+            .filter(|conn| finished_lobby_ids.contains(&conn.value().lobby_id))
+            .map(|conn| *conn.key())
+            .collect();
+        for key in connections_to_remove {
+            connections.remove(&key);
         }
     }
 }
