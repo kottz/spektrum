@@ -8,6 +8,7 @@
 	import { gameActions } from '$lib/stores/game-actions';
 	import { gameStore } from '$lib/stores/game.svelte';
 	import type { SessionInfo } from '$lib/stores/game.svelte';
+	import { info, warn } from '$lib/utils/logger';
 
 	let showSetSelector = $state(false);
 	let showJoinCard = $state(false);
@@ -16,12 +17,12 @@
 	$effect(() => {
 		(async () => {
 			try {
-				console.log('Checking sessions');
 				const session = await gameStore.checkSessions();
+				info('Checking sessions on home load:', session);
 				// Now TypeScript knows both types match exactly
 				currentSession = session;
 			} catch (error) {
-				console.error('Failed to check sessions:', error);
+				warn('Failed to check sessions:', error);
 				currentSession = null;
 			}
 		})();
