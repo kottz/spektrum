@@ -2,7 +2,7 @@
 
 An interactive multiplayer music quiz where players compete to identify songs through colors and characters.
 
-https://github.com/user-attachments/assets/d50f094a-d155-4ae6-9604-a3b4732e76a4
+https://github.com/user-attachments/assets/4d27e01c-d5c3-4465-83c7-8fcd82cc5a73
 
 (*sound on* ↑)
 
