@@ -22,7 +22,7 @@
 	<div class="flex min-h-0 flex-1 flex-col space-y-4 lg:grid lg:grid-cols-12 lg:gap-4 lg:space-y-0">
 		<!-- Left column -->
 		<div class="lg:col-span-4">
-			<div class="grid grid-cols-2 gap-4 space-y-4 lg:block">
+			<div class="grid grid-cols-2 gap-4 lg:block lg:space-y-4">
 				<div class="space-y-4">
 					<EndLeaveButton />
 					<JoinCodeCard />
