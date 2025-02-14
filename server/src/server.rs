@@ -54,24 +54,44 @@ pub enum ApiError {
     BadRequest(String),
 }
 
+#[derive(Serialize)]
+struct ErrorResponse {
+    error: String,
+    details: Option<String>,
+}
+
 impl IntoResponse for ApiError {
     fn into_response(self) -> axum::response::Response {
-        let (status, error_message) = match &self {
-            ApiError::Validation(_) => (StatusCode::BAD_REQUEST, self.to_string()),
-            ApiError::Unauthorized => (StatusCode::UNAUTHORIZED, self.to_string()),
-            ApiError::Database(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
-            ApiError::Lobby(_) => (StatusCode::BAD_REQUEST, self.to_string()),
-            ApiError::OutOfJoinCodes => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
-            ApiError::UnsupportedMediaType => {
-                (StatusCode::UNSUPPORTED_MEDIA_TYPE, self.to_string())
+        let (status, error, details) = match self {
+            ApiError::Validation(message) => {
+                (StatusCode::BAD_REQUEST, "Validation error", Some(message))
             }
-            ApiError::BadRequest(_) => (StatusCode::BAD_REQUEST, self.to_string()),
+            ApiError::Unauthorized => (StatusCode::UNAUTHORIZED, "Unauthorized", None),
+            ApiError::Database(message) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Database error",
+                Some(message),
+            ),
+            ApiError::Lobby(message) => (StatusCode::BAD_REQUEST, "Lobby error", Some(message)),
+            ApiError::OutOfJoinCodes => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "No more join codes error",
+                None,
+            ),
+            ApiError::UnsupportedMediaType => (
+                StatusCode::UNSUPPORTED_MEDIA_TYPE,
+                "Unsupported media type",
+                None,
+            ),
+            ApiError::BadRequest(message) => {
+                (StatusCode::BAD_REQUEST, "Bad request", Some(message))
+            }
         };
 
-        let body = Json(serde_json::json!({
-            "error": error_message
-        }));
-
+        let body = Json(ErrorResponse {
+            error: error.into(),
+            details,
+        });
         (status, body).into_response()
     }
 }
@@ -297,12 +317,11 @@ pub async fn join_lobby_handler(
         .get_mut(lobby_id.value())
         .ok_or_else(|| ApiError::Lobby("Lobby engine not found".into()))?;
 
-    // Create a new player id for the joining player.
     let new_player_id = Uuid::new_v4();
 
     engine
         .add_player(new_player_id, req.name)
-        .map_err(|e| ApiError::Lobby(e.to_string()))?;
+        .map_err(|e| ApiError::Validation(e.to_string()))?;
 
     state.connections.insert(
         new_player_id,

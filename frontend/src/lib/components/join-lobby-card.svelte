@@ -59,15 +59,23 @@
 			});
 
 			if (!response.ok) {
-				throw new Error('Failed to join lobby');
+				const errorData = await response.json();
+				const errorMessage = errorData.details || errorData.error || 'Failed to join lobby';
+				throw new Error(errorMessage);
 			}
 
 			gameStore.setPlayerName(playerName.trim());
 			const data = await response.json();
 			await gameActions.joinGame(data.player_id);
 		} catch (error) {
+			let errorMessage = 'Failed to join lobby';
+			if (error instanceof Error) {
+				errorMessage = error.message;
+			} else {
+				errorMessage = String(error);
+			}
 			warn('Error joining game:', error);
-			notifications.add('Failed to join game', 'destructive');
+			notifications.add(errorMessage, 'destructive');
 		} finally {
 			isJoining = false;
 		}

@@ -35,13 +35,11 @@ class GameActions {
 			}
 			const data = await response.json();
 
-			// IMPORTANT: Remove any previously saved session for this lobby/player.
-			removeSession(data.player_id);
+			// IMPORTANT: Remove the previously saved session for this lobby/player.
+			removeSession();
 
-			// Connect via websockets. The admin_id becomes the player_id for the Connect message.
 			await websocketStore.connect(data.player_id);
 
-			// Set admin flag and update game store state.
 			gameStore.state.isAdmin = true;
 			gameStore.state.joinCode = data.join_code;
 
