@@ -259,7 +259,7 @@ function createGameStore() {
 
 			case 'Error': {
 				state.error = message.message;
-				notifications.add(`Error: ${message.message}`, 'destructive');
+				notifications.add(`${message.message}`, 'destructive');
 				break;
 			}
 
