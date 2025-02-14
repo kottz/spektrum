@@ -134,16 +134,12 @@ function createWebSocketStore() {
 	function startHeartbeat() {
 		stopHeartbeat();
 		heartbeatInterval = window.setInterval(() => {
-			// Don't send heartbeats during reconnection attempts
-			if (state.connectionState === ConnectionState.RECONNECTING) {
-				return;
-			}
-
 			if (socket?.readyState === WebSocket.OPEN) {
 				socket.send(new Uint8Array([0x42]));
 				heartbeatTimeout = window.setTimeout(() => {
-					// Double check we're not in reconnection state when timeout fires
+					// If already reconnecting, don't update error message but still trigger reconnect.
 					if (state.connectionState === ConnectionState.RECONNECTING) {
+						attemptReconnect();
 						return;
 					}
 					warn('Heartbeat timeout');
