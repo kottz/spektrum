@@ -1,0 +1,125 @@
+{
+  "media": [
+    {
+      "id": 1,
+      "title": "Dina färger var blå",
+      "artist": "Tommy Nilsson",
+      "spotify_uri": "2eIe720mhOM77Gfa6I4Url",
+      "youtube_id": "2DWUpLh9AbQ",
+      "release_year": 1996,
+    },
+    {
+      "id": 2,
+      "title": "A Whole New World",
+      "artist": "",
+      "spotify_uri": "ed2cba9d69b84288",
+      "youtube_id": "uAcSiVeVXpI",
+      "release_year": 1992
+    }
+  ],
+  "characters": [
+    {
+      "id": 1,
+      "name": "abu",
+      "image_url": "img/abu.avif"
+    },
+    {
+      "id": 2,
+      "name": "meeko",
+      "image_url": "img/meeko.avif"
+    },
+    {
+      "id": 3,
+      "name": "mushu",
+      "image_url": "img/mushu.avif"
+    },
+    {
+      "id": 4,
+      "name": "donkey",
+      "image_url": "img/donkey.avif"
+    },
+    {
+      "id": 5,
+      "name": "rafiki",
+      "image_url": "img/rafiki.avif"
+    },
+    {
+      "id": 6,
+       "name": "philoctetes",
+      "image_url": "img/philoctetes.avif"
+    }
+  ],
+  "questions": [
+    {
+      "id": 1,
+      "media_id": 1,
+      "question_type": "color",
+      "question_text": null,
+      "image_url": null,
+      "is_active": true
+    },
+    {
+      "id": 2,
+      "media_id": 2,
+      "question_type": "character",
+      "question_text": null,
+      "image_url": null,
+      "is_active": true
+    }
+  ],
+  "options": [
+    {
+      "id": 1,
+      "question_id": 1,
+      "option_text": "Blue",
+      "is_correct": true
+    },
+    {
+      "id": 2,
+      "question_id": 2,
+      "option_text": "abu",
+      "is_correct": true
+    },
+    {
+      "id": 3,
+      "question_id": 2,
+      "option_text": "meeko",
+      "is_correct": false
+    },
+    {
+      "id": 4,
+      "question_id": 2,
+      "option_text": "mushu",
+      "is_correct": false
+    },
+    {
+      "id": 5,
+      "question_id": 2,
+      "option_text": "donkey",
+      "is_correct": false
+     },
+    {
+      "id": 6,
+      "question_id": 2,
+      "option_text": "rafiki",
+      "is_correct": false
+    },
+    {
+      "id": 7,
+      "question_id": 2,
+      "option_text": "philoctetes",
+      "is_correct": false
+    }
+
+  ],
+  "sets": [
+    {
+      "id": 1,
+      "name": "My Example Quiz",
+      "question_ids": [
+        1,
+        2
+      ]
+    }
+  ]
+}
