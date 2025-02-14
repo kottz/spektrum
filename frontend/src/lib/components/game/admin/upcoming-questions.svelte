@@ -11,7 +11,7 @@
 				<span class="ml-2 text-muted-foreground">#{i + 1}</span>
 			</div>
 			<div class="truncate text-sm text-muted-foreground">
-				{question.artist || 'N/A'}
+				{question.artist || 'n/a'}
 			</div>
 			<div class="flex items-center gap-2 text-xs text-muted-foreground/70">
 				<span class="rounded bg-muted-foreground/10 px-1.5 py-0.5">
