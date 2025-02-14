@@ -134,24 +134,23 @@ function createWebSocketStore() {
 	function startHeartbeat() {
 		stopHeartbeat();
 		heartbeatInterval = window.setInterval(() => {
-			// Don't just check readyState, actually try to send
-			try {
-				socket?.send(new Uint8Array([0x42]));
+			// Don't send heartbeats during reconnection attempts
+			if (state.connectionState === ConnectionState.RECONNECTING) {
+				return;
+			}
 
+			if (socket?.readyState === WebSocket.OPEN) {
+				socket.send(new Uint8Array([0x42]));
 				heartbeatTimeout = window.setTimeout(() => {
-					// IMPORTANT: Don't check connectionState here
-					// If we can't get a heartbeat response, force an error state
+					// Double check we're not in reconnection state when timeout fires
+					if (state.connectionState === ConnectionState.RECONNECTING) {
+						return;
+					}
 					warn('Heartbeat timeout');
 					state.error = 'Connection lost - heartbeat timeout';
 					state.connectionState = ConnectionState.ERROR;
 					attemptReconnect();
 				}, CONFIG.HEARTBEAT_TIMEOUT);
-			} catch (e) {
-				// If send fails, force error state
-				warn('Failed to send heartbeat:', e);
-				state.error = 'Connection lost - failed to send heartbeat';
-				state.connectionState = ConnectionState.ERROR;
-				attemptReconnect();
 			}
 		}, CONFIG.HEARTBEAT_INTERVAL);
 	}
@@ -183,14 +182,6 @@ function createWebSocketStore() {
 		if (!playerId) {
 			throw new Error('Player ID is required');
 		}
-
-		// Force cleanup of previous connection state
-		if (socket) {
-			socket.close();
-			socket = null;
-		}
-		stopHeartbeat();
-		clearTimeouts();
 
 		return new Promise((resolve, reject) => {
 			state.connectionState = ConnectionState.CONNECTING;
@@ -250,11 +241,9 @@ function createWebSocketStore() {
 	}
 
 	function handleClose(event: CloseEvent) {
-		stopHeartbeat();
 		state.lastDisconnectedAt = Date.now();
 
-		// Force state to ERROR if we were previously connected, regardless of close code
-		if (state.connectionState === ConnectionState.CONNECTED) {
+		if (state.connectionState === ConnectionState.CONNECTED && event.code !== 1000) {
 			state.connectionState = ConnectionState.ERROR;
 			state.error = 'Connection lost unexpectedly';
 			attemptReconnect();
