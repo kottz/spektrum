@@ -134,19 +134,24 @@ function createWebSocketStore() {
 	function startHeartbeat() {
 		stopHeartbeat();
 		heartbeatInterval = window.setInterval(() => {
-			if (socket?.readyState === WebSocket.OPEN) {
-				socket.send(new Uint8Array([0x42]));
+			// Don't just check readyState, actually try to send
+			try {
+				socket?.send(new Uint8Array([0x42]));
+
 				heartbeatTimeout = window.setTimeout(() => {
-					// If already reconnecting, don't update error message but still trigger reconnect.
-					if (state.connectionState === ConnectionState.RECONNECTING) {
-						attemptReconnect();
-						return;
-					}
+					// IMPORTANT: Don't check connectionState here
+					// If we can't get a heartbeat response, force an error state
 					warn('Heartbeat timeout');
 					state.error = 'Connection lost - heartbeat timeout';
 					state.connectionState = ConnectionState.ERROR;
 					attemptReconnect();
 				}, CONFIG.HEARTBEAT_TIMEOUT);
+			} catch (e) {
+				// If send fails, force error state
+				warn('Failed to send heartbeat:', e);
+				state.error = 'Connection lost - failed to send heartbeat';
+				state.connectionState = ConnectionState.ERROR;
+				attemptReconnect();
 			}
 		}, CONFIG.HEARTBEAT_INTERVAL);
 	}
@@ -178,6 +183,14 @@ function createWebSocketStore() {
 		if (!playerId) {
 			throw new Error('Player ID is required');
 		}
+
+		// Force cleanup of previous connection state
+		if (socket) {
+			socket.close();
+			socket = null;
+		}
+		stopHeartbeat();
+		clearTimeouts();
 
 		return new Promise((resolve, reject) => {
 			state.connectionState = ConnectionState.CONNECTING;
@@ -237,9 +250,11 @@ function createWebSocketStore() {
 	}
 
 	function handleClose(event: CloseEvent) {
+		stopHeartbeat();
 		state.lastDisconnectedAt = Date.now();
 
-		if (state.connectionState === ConnectionState.CONNECTED && event.code !== 1000) {
+		// Force state to ERROR if we were previously connected, regardless of close code
+		if (state.connectionState === ConnectionState.CONNECTED) {
 			state.connectionState = ConnectionState.ERROR;
 			state.error = 'Connection lost unexpectedly';
 			attemptReconnect();
