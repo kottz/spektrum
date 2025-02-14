@@ -74,12 +74,9 @@
 			</CardContent>
 		</Card>
 
-		{#if currentSession}
-			<h1>Current Session: {currentSession.playerName}</h1>
-		{/if}
-
 		{#if !showSetSelector}
 			{#if currentSession && !showJoinCard}
+				<h1>Current Session: {currentSession.playerName}</h1>
 				<ReconnectCard
 					session={currentSession}
 					onReconnect={reconnectToSession}
