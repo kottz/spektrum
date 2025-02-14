@@ -106,13 +106,13 @@ pub enum QuestionError {
     DbError(#[from] crate::db::DbError),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct GameQuestionOption {
     pub option: String,
     pub is_correct: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct GameQuestion {
     pub id: u16,
     pub question_type: QuestionType,

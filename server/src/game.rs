@@ -76,12 +76,12 @@ pub enum GamePhase {
     GameOver,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, PartialEq)]
 pub struct AdminExtraInfo {
     pub upcoming_questions: Vec<GameQuestion>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, PartialEq)]
 #[serde(tag = "type")]
 pub enum GameUpdate {
     /// A lightweight acknowledgement of connection.
@@ -281,6 +281,7 @@ impl GameEngine {
                         reason: "Lobby closed due to inactivity".into(),
                     },
                 );
+                self.connections.clear();
                 return true;
             }
         }
@@ -466,6 +467,7 @@ impl GameEngine {
                         reason: "Host left the game".into(),
                     },
                 );
+                self.connections.clear();
             } else {
                 self.push_update(
                     Recipients::All,
@@ -773,28 +775,1588 @@ impl GameEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::question::{Color, GameQuestion, GameQuestionOption, QuestionType};
+    use std::time::Duration;
+
+    fn create_test_questions() -> Vec<GameQuestion> {
+        vec![
+            // Color question
+            GameQuestion {
+                id: 1,
+                question_type: QuestionType::Color,
+                title: "What color is predominantly used in this video?".to_string(),
+                artist: Some("Test Artist".to_string()),
+                youtube_id: "test123".to_string(),
+                options: vec![
+                    GameQuestionOption {
+                        option: "Red".to_string(),
+                        is_correct: true,
+                    },
+                    GameQuestionOption {
+                        option: "Blue".to_string(),
+                        is_correct: false,
+                    },
+                ],
+            },
+            // Text question
+            GameQuestion {
+                id: 2,
+                question_type: QuestionType::Text,
+                title: "What is the main theme of this video?".to_string(),
+                artist: Some("Test Artist".to_string()),
+                youtube_id: "test456".to_string(),
+                options: vec![
+                    GameQuestionOption {
+                        option: "Love".to_string(),
+                        is_correct: true,
+                    },
+                    GameQuestionOption {
+                        option: "War".to_string(),
+                        is_correct: false,
+                    },
+                    GameQuestionOption {
+                        option: "Peace".to_string(),
+                        is_correct: false,
+                    },
+                ],
+            },
+            // Year question
+            GameQuestion {
+                id: 3,
+                question_type: QuestionType::Year,
+                title: "When was this video released?".to_string(),
+                artist: Some("Test Artist".to_string()),
+                youtube_id: "test789".to_string(),
+                options: vec![GameQuestionOption {
+                    option: "2020".to_string(),
+                    is_correct: true,
+                }],
+            },
+        ]
+    }
+
+    fn setup_test_game() -> (GameEngine, Uuid) {
+        let admin_id = Uuid::new_v4();
+        let questions = Arc::new(create_test_questions());
+        let connections = Arc::new(DashMap::new());
+
+        // Create a connection for admin
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        connections.insert(
+            admin_id,
+            Connection {
+                lobby_id: Uuid::new_v4(),
+                tx: Some(tx),
+            },
+        );
+
+        (
+            GameEngine::new(admin_id, questions, None, 30, connections),
+            admin_id,
+        )
+    }
+
+    fn add_test_player(engine: &mut GameEngine, name: &str) -> Uuid {
+        let player_id = Uuid::new_v4();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        engine.connections.insert(
+            player_id,
+            Connection {
+                lobby_id: engine
+                    .connections
+                    .get(&engine.state.admin_id)
+                    .unwrap()
+                    .lobby_id,
+                tx: Some(tx),
+            },
+        );
+        engine.add_player(player_id, name.to_string()).unwrap();
+        player_id
+    }
+
     #[test]
-    fn test_name_validation() {
+    fn test_full_game_flow() {
+        let (mut engine, admin_id) = setup_test_game();
+        let player1_id = add_test_player(&mut engine, "Player1");
+        let player2_id = add_test_player(&mut engine, "Player2");
+
+        let now = Instant::now();
+
+        // Start game
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: now,
+            },
+            action: GameAction::StartGame,
+        });
+        assert_eq!(engine.state.phase, GamePhase::Score);
+
+        // Play through all questions
+        for _ in 0..create_test_questions().len() {
+            // Start round
+            engine.process_event(GameEvent {
+                context: EventContext {
+                    sender_id: admin_id,
+                    timestamp: now,
+                },
+                action: GameAction::StartRound,
+            });
+            assert_eq!(engine.state.phase, GamePhase::Question);
+
+            // Players answer
+            let correct_answer = engine.state.correct_answers.as_ref().unwrap()[0].clone();
+
+            // Player 1 answers correctly quickly
+            engine.process_event(GameEvent {
+                context: EventContext {
+                    sender_id: player1_id,
+                    timestamp: now + Duration::from_secs(1),
+                },
+                action: GameAction::Answer {
+                    answer: correct_answer.clone(),
+                },
+            });
+
+            // Player 2 answers correctly but slower
+            engine.process_event(GameEvent {
+                context: EventContext {
+                    sender_id: player2_id,
+                    timestamp: now + Duration::from_secs(5),
+                },
+                action: GameAction::Answer {
+                    answer: correct_answer,
+                },
+            });
+
+            // Verify both players answered
+            assert!(engine.state.players[&player1_id].has_answered);
+            assert!(engine.state.players[&player2_id].has_answered);
+
+            // Verify Player 1 got more points (answered faster)
+            assert!(
+                engine.state.players[&player1_id].round_score
+                    > engine.state.players[&player2_id].round_score
+            );
+
+            // End round
+            engine.process_event(GameEvent {
+                context: EventContext {
+                    sender_id: admin_id,
+                    timestamp: now,
+                },
+                action: GameAction::EndRound,
+            });
+            assert_eq!(engine.state.phase, GamePhase::Score);
+        }
+
+        // End game
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: now,
+            },
+            action: GameAction::EndGame {
+                reason: "Game completed".to_string(),
+            },
+        });
+        assert_eq!(engine.state.phase, GamePhase::GameOver);
+        engine.connections.clear();
+    }
+
+    #[test]
+    fn test_question_types() {
+        let (mut engine, admin_id) = setup_test_game();
+        add_test_player(&mut engine, "Player1");
+
+        // Start game
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::StartGame,
+        });
+
+        // Test each question type
+        for _ in 0..create_test_questions().len() {
+            engine.process_event(GameEvent {
+                context: EventContext {
+                    sender_id: admin_id,
+                    timestamp: Instant::now(),
+                },
+                action: GameAction::StartRound,
+            });
+
+            // Verify alternatives are generated correctly
+            match engine
+                .state
+                .current_question
+                .as_ref()
+                .unwrap()
+                .question_type
+            {
+                QuestionType::Color => {
+                    assert_eq!(engine.state.current_alternatives.len(), 6);
+                    assert!(engine
+                        .state
+                        .current_alternatives
+                        .iter()
+                        .all(|c| c.parse::<Color>().is_ok()));
+                }
+                QuestionType::Year => {
+                    assert_eq!(engine.state.current_alternatives.len(), 5);
+                    assert!(engine
+                        .state
+                        .current_alternatives
+                        .iter()
+                        .all(|y| y.parse::<i32>().is_ok()));
+                }
+                _ => {
+                    assert!(!engine.state.current_alternatives.is_empty());
+                }
+            }
+
+            engine.process_event(GameEvent {
+                context: EventContext {
+                    sender_id: admin_id,
+                    timestamp: Instant::now(),
+                },
+                action: GameAction::EndRound,
+            });
+        }
+        engine.connections.clear();
+    }
+
+    #[test]
+    fn test_error_conditions() {
+        let (mut engine, admin_id) = setup_test_game();
+        let player_id = add_test_player(&mut engine, "Player1");
+
+        // Test answering before game starts
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: player_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::Answer {
+                answer: "test".to_string(),
+            },
+        });
+        assert!(!engine.state.players[&player_id].has_answered);
+
+        // Start game properly
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::StartGame,
+        });
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::StartRound,
+        });
+
+        // Test double answer
+        let answer = engine.state.current_alternatives[0].clone();
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: player_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::Answer {
+                answer: answer.clone(),
+            },
+        });
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: player_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::Answer { answer },
+        });
+
+        // Test late answer
+        let late_player_id = add_test_player(&mut engine, "LatePlayer");
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: late_player_id,
+                timestamp: Instant::now() + Duration::from_secs(31),
+            },
+            action: GameAction::Answer {
+                answer: "test".to_string(),
+            },
+        });
+        assert!(!engine.state.players[&late_player_id].has_answered);
+        engine.connections.clear();
+    }
+
+    #[test]
+    fn test_admin_features() {
+        let (mut engine, admin_id) = setup_test_game();
+        let player_id = add_test_player(&mut engine, "Player1");
+
+        // Test player can't start game
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: player_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::StartGame,
+        });
+        assert_eq!(engine.state.phase, GamePhase::Lobby);
+
+        // Test admin can start game
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::StartGame,
+        });
+        assert_eq!(engine.state.phase, GamePhase::Score);
+
+        // Verify upcoming questions are available
+        let upcoming = engine.get_upcoming_questions(3);
+        assert!(!upcoming.is_empty());
+        assert!(upcoming.len() <= 3);
+        engine.connections.clear();
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::CloseGame {
+                reason: "Test close".to_string(),
+            },
+        });
+        engine.connections.clear();
+    }
+
+    #[tokio::test]
+    async fn test_player_reconnect_lobby() {
+        let (mut engine, _admin_id) = setup_test_game();
+        let player_id = add_test_player(&mut engine, "Player1");
+
+        //do not start the game, stay in lobby
+        let player_initial_state = engine.state.players.get(&player_id).unwrap().clone();
+
+        // Simulate disconnection (remove the connection)
+        engine.connections.remove(&player_id);
+
+        // Re-add the player with a new connection
+        let (player_tx, mut player_rx) = tokio::sync::mpsc::unbounded_channel();
+        engine.connections.insert(
+            player_id,
+            Connection {
+                lobby_id: engine
+                    .connections
+                    .get(&engine.state.admin_id)
+                    .unwrap()
+                    .lobby_id,
+                tx: Some(player_tx),
+            },
+        );
+
+        // Reconnect
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: player_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::Connect,
+        });
+
+        // Verify Connected message
+        match player_rx.recv().await.unwrap() {
+            GameUpdate::Connected { player_id: pid, .. } => {
+                assert_eq!(pid, player_id, "Correct player ID in Connected");
+            }
+            other => panic!("Expected Connected, got {:?}", other),
+        }
+
+        // Verify StateDelta message
+        match player_rx.recv().await.unwrap() {
+            GameUpdate::StateDelta {
+                phase,
+                scoreboard,
+                admin_extra,
+                ..
+            } => {
+                assert_eq!(phase, Some(GamePhase::Lobby), "Correct phase");
+                assert!(scoreboard.is_some(), "Scoreboard should be present");
+                assert!(admin_extra.is_none(), "Admin extra should not be present");
+
+                // Additional checks for player state (important!)
+                let player_state = engine.state.players.get(&player_id).unwrap();
+                assert_eq!(
+                    player_state.has_answered, player_initial_state.has_answered,
+                    "has_answered should be preserved"
+                );
+                assert_eq!(
+                    player_state.score, player_initial_state.score,
+                    "Score should be preserved"
+                );
+                assert_eq!(
+                    player_state.round_score, player_initial_state.round_score,
+                    "Round score should be preserved"
+                );
+                assert_eq!(
+                    player_state.answer, player_initial_state.answer,
+                    "Answer should be preserved"
+                );
+
+                //also expect a rebroadcast from the other players:
+                match player_rx.try_recv() {
+                    //use try_recv since we dont *know* if it will be there
+                    Ok(GameUpdate::StateDelta { scoreboard: sb, .. }) => {
+                        assert!(sb.is_some(), "Scoreboard should be present in rebroadcast");
+                    }
+                    _ => {} //ignore, could be nothing
+                }
+            }
+            other => panic!("Expected StateDelta, got {:?}", other),
+        }
+
+        engine.connections.clear();
+        player_rx.close();
+    }
+
+    #[tokio::test]
+    async fn test_player_reconnect_score() {
+        let (mut engine, admin_id) = setup_test_game();
+        let player_id = add_test_player(&mut engine, "Player1");
+
+        // Start the game and a round
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::StartGame,
+        });
+
+        let player_initial_state = engine.state.players.get(&player_id).unwrap().clone();
+
+        // Simulate disconnection (remove the connection)
+        engine.connections.remove(&player_id);
+
+        // Re-add the player with a new connection
+        let (player_tx, mut player_rx) = tokio::sync::mpsc::unbounded_channel();
+        engine.connections.insert(
+            player_id,
+            Connection {
+                lobby_id: engine
+                    .connections
+                    .get(&engine.state.admin_id)
+                    .unwrap()
+                    .lobby_id,
+                tx: Some(player_tx),
+            },
+        );
+
+        // Reconnect
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: player_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::Connect,
+        });
+
+        // Verify Connected message
+        match player_rx.recv().await.unwrap() {
+            GameUpdate::Connected { player_id: pid, .. } => {
+                assert_eq!(pid, player_id, "Correct player ID in Connected");
+            }
+            other => panic!("Expected Connected, got {:?}", other),
+        }
+
+        // Verify StateDelta message
+        match player_rx.recv().await.unwrap() {
+            GameUpdate::StateDelta {
+                phase,
+                scoreboard,
+                admin_extra,
+                ..
+            } => {
+                assert_eq!(phase, Some(GamePhase::Score), "Correct phase");
+                assert!(scoreboard.is_some(), "Scoreboard should be present");
+                assert!(admin_extra.is_none(), "Admin extra should not be present");
+
+                // Additional checks for player state (important!)
+                let player_state = engine.state.players.get(&player_id).unwrap();
+                assert_eq!(
+                    player_state.has_answered, player_initial_state.has_answered,
+                    "has_answered should be preserved"
+                );
+                assert_eq!(
+                    player_state.score, player_initial_state.score,
+                    "Score should be preserved"
+                );
+                assert_eq!(
+                    player_state.round_score, player_initial_state.round_score,
+                    "Round score should be preserved"
+                );
+                assert_eq!(
+                    player_state.answer, player_initial_state.answer,
+                    "Answer should be preserved"
+                );
+            }
+            other => panic!("Expected StateDelta, got {:?}", other),
+        }
+
+        engine.connections.clear();
+        player_rx.close();
+    }
+
+    #[test]
+    fn test_name_validation_errors() {
         let empty_names = std::iter::empty();
-        assert!(validate_player_name("John", empty_names.clone()).is_ok());
-        assert!(validate_player_name("Player_1", empty_names.clone()).is_ok());
-        assert!(validate_player_name("Cool-Name.123", empty_names.clone()).is_ok());
+
+        // Test too short name
         assert!(matches!(
             validate_player_name("a", empty_names.clone()),
             Err(NameValidationError::TooShort)
         ));
+
+        // Test too long name
         assert!(matches!(
-            validate_player_name("a".repeat(17).as_str(), empty_names.clone()),
+            validate_player_name(&"a".repeat(17), empty_names.clone()),
             Err(NameValidationError::TooLong)
         ));
+
+        // Test invalid characters
         assert!(matches!(
             validate_player_name("Invalid@Name", empty_names.clone()),
             Err(NameValidationError::InvalidCharacters)
         ));
-        let existing_names = ["John".to_string()];
+
+        // Test duplicate name
+        let existing_names = vec!["TestName".to_string()];
         assert!(matches!(
-            validate_player_name("John", existing_names.iter()),
+            validate_player_name("TestName", existing_names.iter()),
             Err(NameValidationError::AlreadyTaken)
         ));
+    }
+
+    #[test]
+    fn test_name_validation_error_messages() {
+        // Test all variants of NameValidationError and their messages
+        let errors = vec![
+            (
+                NameValidationError::TooShort,
+                "Name must be at least 2 characters long.",
+            ),
+            (
+                NameValidationError::TooLong,
+                "Name cannot be longer than 16 characters.",
+            ),
+            (
+                NameValidationError::InvalidCharacters,
+                "Name can only contain letters, numbers, spaces, and the symbols: _ - .",
+            ),
+            (
+                NameValidationError::AlreadyTaken,
+                "This name is already taken.",
+            ),
+        ];
+
+        // Test to_message() method
+        for (error, expected_message) in errors.iter() {
+            assert_eq!(error.to_message(), *expected_message);
+        }
+
+        // Test Display implementation
+        for (error, expected_message) in errors {
+            assert_eq!(format!("{}", error), expected_message);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_connection_handling() {
+        let (mut engine, _admin_id) = setup_test_game();
+        let player_id = add_test_player(&mut engine, "Player1");
+
+        // Test leave for regular player
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: player_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::Leave,
+        });
+        assert!(!engine.state.players.contains_key(&player_id));
+
+        // Test leave for non-existent player
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: Uuid::new_v4(),
+                timestamp: Instant::now(),
+            },
+            action: GameAction::Leave,
+        });
+        engine.connections.clear();
+    }
+
+    #[test]
+    fn test_game_state_transitions() {
+        let (mut engine, admin_id) = setup_test_game();
+        add_test_player(&mut engine, "Player1");
+
+        // Test skip question
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::StartGame,
+        });
+
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::SkipQuestion,
+        });
+
+        // Test close game
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::CloseGame {
+                reason: "Test close".to_string(),
+            },
+        });
+        engine.connections.clear();
+    }
+
+    #[test]
+    fn test_game_timeout() {
+        let (mut engine, _) = setup_test_game();
+        assert!(!engine.is_finished());
+
+        // Set last message to more than an hour ago
+        engine.state.last_lobby_message = Some(Instant::now() - Duration::from_secs(3601));
+        assert!(engine.is_finished());
+
+        // Test GameOver phase
+        engine.state.phase = GamePhase::GameOver;
+        assert!(engine.is_finished());
+
+        // Test last_update
+        assert_eq!(engine.last_update(), engine.state.last_lobby_message);
+        engine.connections.clear();
+    }
+
+    #[test]
+    fn test_question_set_handling() {
+        let admin_id = Uuid::new_v4();
+        let questions = Arc::new(create_test_questions());
+        let connections = Arc::new(DashMap::new());
+
+        let question_set = QuestionSet {
+            id: 1,
+            question_ids: vec![1, 2], // Only include first two questions
+            name: "Test Set".to_string(),
+        };
+
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        connections.insert(
+            admin_id,
+            Connection {
+                lobby_id: Uuid::new_v4(),
+                tx: Some(tx),
+            },
+        );
+
+        let engine = GameEngine::new(admin_id, questions, Some(&question_set), 30, connections);
+
+        assert_eq!(engine.state.shuffled_question_indices.len(), 2);
+        engine.connections.clear();
+    }
+
+    #[tokio::test]
+    async fn test_admin_reconnect() {
+        let (mut engine, admin_id) = setup_test_game();
+
+        // Add the admin to players
+        engine.add_player(admin_id, "Admin".to_string()).unwrap();
+
+        // Create channel to capture admin messages
+        let (admin_tx, mut admin_rx) = tokio::sync::mpsc::unbounded_channel();
+        engine.connections.insert(
+            admin_id,
+            Connection {
+                lobby_id: Uuid::new_v4(),
+                tx: Some(admin_tx),
+            },
+        );
+
+        // First test: admin reconnects in lobby, should get upcoming questions
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::Connect,
+        });
+
+        // Should receive Connected message first
+        match admin_rx
+            .try_recv()
+            .expect("Should receive Connected message")
+        {
+            GameUpdate::Connected { player_id, .. } => {
+                assert_eq!(player_id, admin_id);
+            }
+            other => panic!("Expected Connected message, got {:?}", other),
+        }
+
+        // Should receive StateDelta with admin_extra next
+        match admin_rx
+            .try_recv()
+            .expect("Should receive StateDelta message")
+        {
+            GameUpdate::StateDelta { admin_extra, .. } => {
+                assert!(admin_extra.is_some(), "Admin should receive admin_extra");
+            }
+            other => panic!("Expected StateDelta message, got {:?}", other),
+        }
+
+        // Second test: admin reconnects during Question phase
+        engine.state.phase = GamePhase::Question;
+        let test_question = engine.state.all_questions[0].clone();
+        engine.state.current_question = Some(test_question.clone());
+
+        // Create new channel for clean message capture
+        let (admin_tx2, mut admin_rx2) = tokio::sync::mpsc::unbounded_channel();
+        engine.connections.insert(
+            admin_id,
+            Connection {
+                lobby_id: Uuid::new_v4(),
+                tx: Some(admin_tx2),
+            },
+        );
+
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::Connect,
+        });
+
+        // Should receive Connected message first
+        match admin_rx2
+            .try_recv()
+            .expect("Should receive Connected message")
+        {
+            GameUpdate::Connected { player_id, .. } => {
+                assert_eq!(player_id, admin_id);
+            }
+            other => panic!("Expected Connected message, got {:?}", other),
+        }
+
+        // Should receive StateDelta next
+        match admin_rx2
+            .try_recv()
+            .expect("Should receive StateDelta message")
+        {
+            GameUpdate::StateDelta { admin_extra, .. } => {
+                assert!(admin_extra.is_some(), "Admin should receive admin_extra");
+            }
+            other => panic!("Expected StateDelta message, got {:?}", other),
+        }
+
+        // Should receive current question info
+        match admin_rx2
+            .try_recv()
+            .expect("Should receive AdminInfo message")
+        {
+            GameUpdate::AdminInfo { current_question } => {
+                assert_eq!(current_question.id, test_question.id);
+            }
+            other => panic!("Expected AdminInfo message, got {:?}", other),
+        }
+        engine.connections.clear();
+        admin_rx2.close();
+        admin_rx.close();
+    }
+
+    #[tokio::test]
+    async fn test_admin_leave_message() {
+        // Setup game with initial admin
+        let admin_id = Uuid::new_v4();
+        let admin_lobby_id = Uuid::new_v4();
+        let connections = Arc::new(DashMap::new());
+        let (admin_tx, _admin_rx) = tokio::sync::mpsc::unbounded_channel();
+
+        // Add admin connection
+        connections.insert(
+            admin_id,
+            Connection {
+                lobby_id: admin_lobby_id,
+                tx: Some(admin_tx),
+            },
+        );
+
+        // Create game engine
+        let mut engine = GameEngine::new(
+            admin_id,
+            Arc::new(create_test_questions()),
+            None,
+            30,
+            connections,
+        );
+
+        // IMPORTANT: Add admin to players first
+        engine.add_player(admin_id, "Admin".to_string()).unwrap();
+
+        // Add a player
+        let player_id = Uuid::new_v4();
+        let (player_tx, mut player_rx) = tokio::sync::mpsc::unbounded_channel();
+
+        // Add player connection with same lobby id as admin
+        engine.connections.insert(
+            player_id,
+            Connection {
+                lobby_id: admin_lobby_id,
+                tx: Some(player_tx),
+            },
+        );
+
+        // Add player to game
+        engine
+            .add_player(player_id, "TestPlayer".to_string())
+            .unwrap();
+
+        // Admin leaves
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::Leave,
+        });
+
+        // Use tokio::spawn to handle message receiving in parallel
+        let message = tokio::spawn(async move { player_rx.recv().await })
+            .await
+            .unwrap()
+            .expect("Channel shouldn't be closed");
+
+        // Verify the message
+        match message {
+            GameUpdate::GameClosed { reason } => {
+                assert_eq!(reason, "Host left the game");
+            }
+            other => panic!("Expected GameClosed message, got {:?}", other),
+        }
+
+        // State verifications
+        assert!(!engine.state.players.contains_key(&admin_id));
+        engine.connections.clear();
+    }
+
+    #[test]
+    fn test_error_paths() {
+        let (mut engine, admin_id) = setup_test_game();
+
+        // Test starting round in wrong phase
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::StartRound,
+        });
+        assert_eq!(engine.state.phase, GamePhase::Lobby);
+
+        // Start game and test ending round in wrong phase
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::StartGame,
+        });
+
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::EndRound,
+        });
+        assert_eq!(engine.state.phase, GamePhase::Score);
+
+        // Test answer with no round_start_time
+        let player_id = add_test_player(&mut engine, "Player1");
+        engine.state.round_start_time = None;
+        engine.state.phase = GamePhase::Question;
+
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: player_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::Answer {
+                answer: "test".to_string(),
+            },
+        });
+        engine.connections.clear();
+    }
+
+    #[tokio::test]
+    async fn test_round_start_errors() {
+        let (mut engine, admin_id) = setup_test_game();
+
+        // First get into Score phase properly
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::StartGame,
+        });
+        assert_eq!(
+            engine.state.phase,
+            GamePhase::Score,
+            "Should be in Score phase before test"
+        );
+
+        // Set current_question_index past the end to trigger "no more questions" error
+        engine.state.current_question_index = engine.state.shuffled_question_indices.len();
+
+        // Store the current index to verify it doesn't change
+        let initial_index = engine.state.current_question_index;
+
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::StartRound,
+        });
+
+        // Verify error conditions:
+        // 1. Phase should not have changed
+        assert_eq!(engine.state.phase, GamePhase::Score);
+        // 2. Question index should not have changed
+        assert_eq!(engine.state.current_question_index, initial_index);
+        // 3. No current question should be set
+        assert!(engine.state.current_question.is_none());
+        // 4. No alternatives should be set
+        assert!(engine.state.current_alternatives.is_empty());
+        engine.connections.clear();
+    }
+
+    #[tokio::test]
+    async fn test_skip_question() {
+        let (mut engine, admin_id) = setup_test_game();
+
+        // Start game to get into Score phase
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::StartGame,
+        });
+        assert_eq!(
+            engine.state.phase,
+            GamePhase::Score,
+            "Game should start in Score phase"
+        );
+
+        // Store initial state
+        let initial_index = engine.state.current_question_index;
+
+        // Skip question in correct phase
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::SkipQuestion,
+        });
+
+        // Verify skip worked:
+        assert_eq!(
+            engine.state.phase,
+            GamePhase::Score,
+            "Phase should remain Score"
+        );
+        assert_eq!(
+            engine.state.current_question_index,
+            initial_index + 1,
+            "Question index should increment"
+        );
+        assert!(
+            engine.state.current_question.is_none(),
+            "Current question should be cleared"
+        );
+        assert!(
+            engine.state.current_alternatives.is_empty(),
+            "Alternatives should be cleared"
+        );
+        engine.connections.clear();
+    }
+
+    #[tokio::test]
+    async fn test_skip_question_errors() {
+        let (mut engine, admin_id) = setup_test_game();
+
+        // Start game to get into proper state
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::StartGame,
+        });
+        assert_eq!(
+            engine.state.phase,
+            GamePhase::Score,
+            "Game should start in Score phase"
+        );
+
+        // Move to Question phase (wrong phase for skip)
+        engine.state.phase = GamePhase::Question;
+
+        // Store state before attempting skip
+        let initial_index = engine.state.current_question_index;
+        let initial_question = engine.state.current_question.clone();
+        let initial_alternatives = engine.state.current_alternatives.clone();
+
+        // Try to skip in wrong phase
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::SkipQuestion,
+        });
+
+        // Verify nothing changed due to error:
+        assert_eq!(
+            engine.state.phase,
+            GamePhase::Question,
+            "Phase should not change"
+        );
+        assert_eq!(
+            engine.state.current_question_index, initial_index,
+            "Question index should not change"
+        );
+        assert_eq!(
+            engine.state.current_question, initial_question,
+            "Current question should not change"
+        );
+        assert_eq!(
+            engine.state.current_alternatives, initial_alternatives,
+            "Alternatives should not change"
+        );
+        engine.connections.clear();
+    }
+
+    #[test]
+    fn test_setup_round_errors() {
+        let (mut engine, _) = setup_test_game();
+
+        // Test setup_round error path
+        engine.state.current_question_index = engine.state.shuffled_question_indices.len();
+        let result = engine.setup_round();
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_error_handling_branches() {
+        let (mut engine, admin_id) = setup_test_game();
+        let player_id = add_test_player(&mut engine, "Player1");
+
+        // Test admin leave
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::Leave,
+        });
+
+        // Assert admin was removed
+        assert!(
+            !engine.state.players.contains_key(&admin_id),
+            "Admin should be removed after leaving"
+        );
+
+        // Test answer with non-existent player
+        let invalid_id = Uuid::new_v4();
+        engine.state.phase = GamePhase::Question;
+        engine.state.round_start_time = Some(Instant::now());
+
+        // Store state before invalid player attempts to answer
+        let initial_scoreboard = engine.get_scoreboard();
+
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: invalid_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::Answer {
+                answer: "test".to_string(),
+            },
+        });
+
+        // Assert nothing changed after invalid player's answer
+        assert_eq!(
+            engine.get_scoreboard(),
+            initial_scoreboard,
+            "Scoreboard should not change from invalid player's answer"
+        );
+        assert!(
+            !engine.state.players.contains_key(&invalid_id),
+            "Invalid player should not be added"
+        );
+
+        // Test connection removal cases
+        let initial_connection_count = engine.connections.len();
+        engine.connections.remove(&player_id);
+        assert_eq!(
+            engine.connections.len(),
+            initial_connection_count - 1,
+            "Connection count should decrease"
+        );
+
+        // Test message sending to removed connection
+        // Note: Since we can't directly observe message sending, we at least verify the system doesn't crash
+        let pre_update_state = engine.state.clone();
+
+        // Test Single recipient
+        engine.push_update(
+            Recipients::Single(player_id),
+            GameUpdate::Error {
+                message: "Test error".into(),
+            },
+        );
+        assert_eq!(
+            engine.state.phase, pre_update_state.phase,
+            "Game state should not change after failed message"
+        );
+
+        // Test Multiple recipients
+        engine.push_update(
+            Recipients::_Multiple(vec![player_id]),
+            GameUpdate::Error {
+                message: "Test error".into(),
+            },
+        );
+        assert_eq!(
+            engine.state.phase, pre_update_state.phase,
+            "Game state should not change after failed multiple message"
+        );
+
+        // Test AllExcept
+        engine.push_update(
+            Recipients::_AllExcept(vec![admin_id]),
+            GameUpdate::Error {
+                message: "Test error".into(),
+            },
+        );
+        assert_eq!(
+            engine.state.phase, pre_update_state.phase,
+            "Game state should not change after failed except message"
+        );
+
+        // Test All
+        engine.push_update(
+            Recipients::All,
+            GameUpdate::Error {
+                message: "Test error".into(),
+            },
+        );
+        assert_eq!(
+            engine.state.phase, pre_update_state.phase,
+            "Game state should not change after failed broadcast"
+        );
+
+        let final_connection_count = engine.connections.len();
+        engine.connections.clear();
+        assert_eq!(
+            engine.connections.len(),
+            0,
+            "All connections should be cleared"
+        );
+        assert!(
+            final_connection_count > 0,
+            "Should have had connections before clearing"
+        );
+        engine.connections.clear();
+    }
+
+    #[tokio::test]
+    async fn test_regular_player_connect() {
+        // Setup
+        let admin_id = Uuid::new_v4();
+        let admin_lobby_id = Uuid::new_v4();
+        let connections = Arc::new(DashMap::new());
+
+        // Create game engine with admin
+        let mut engine = GameEngine::new(
+            admin_id,
+            Arc::new(create_test_questions()),
+            None,
+            30,
+            connections,
+        );
+
+        // Add a player with message capture
+        let player_id = Uuid::new_v4();
+        let (player_tx, mut player_rx) = tokio::sync::mpsc::unbounded_channel();
+        engine.connections.insert(
+            player_id,
+            Connection {
+                lobby_id: admin_lobby_id,
+                tx: Some(player_tx),
+            },
+        );
+        engine.add_player(player_id, "Player1".to_string()).unwrap();
+
+        // Test connect
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: player_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::Connect,
+        });
+
+        // Verify player receives correct messages
+        match player_rx
+            .recv()
+            .await
+            .expect("Should receive Connected message")
+        {
+            GameUpdate::Connected {
+                player_id: pid,
+                name,
+                ..
+            } => {
+                assert_eq!(pid, player_id);
+                assert_eq!(name, "Player1");
+            }
+            other => panic!("Expected Connected message, got {:?}", other),
+        }
+
+        match player_rx.recv().await.expect("Should receive StateDelta") {
+            GameUpdate::StateDelta {
+                phase, admin_extra, ..
+            } => {
+                assert_eq!(phase, Some(GamePhase::Lobby));
+                assert!(
+                    admin_extra.is_none(),
+                    "Regular player should not get admin_extra"
+                );
+            }
+            other => panic!("Expected StateDelta, got {:?}", other),
+        }
+        engine.connections.clear();
+        player_rx.close();
+    }
+
+    #[tokio::test]
+    async fn test_admin_connect_during_question() {
+        // Setup
+        let admin_id = Uuid::new_v4();
+        let admin_lobby_id = Uuid::new_v4();
+        let connections = Arc::new(DashMap::new());
+        let (admin_tx, mut admin_rx) = tokio::sync::mpsc::unbounded_channel();
+
+        // Create game engine with admin
+        let mut engine = GameEngine::new(
+            admin_id,
+            Arc::new(create_test_questions()),
+            None,
+            30,
+            connections.clone(),
+        );
+        engine.add_player(admin_id, "Admin".to_string()).unwrap();
+
+        // Set up question phase
+        engine.state.phase = GamePhase::Question;
+        let question = engine.state.all_questions[0].clone();
+        engine.state.current_question = Some(question.clone());
+
+        // Add admin connection and test connect
+        connections.insert(
+            admin_id,
+            Connection {
+                lobby_id: admin_lobby_id,
+                tx: Some(admin_tx),
+            },
+        );
+
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::Connect,
+        });
+
+        // Verify admin receives all expected messages
+        match admin_rx
+            .recv()
+            .await
+            .expect("Should receive Connected message")
+        {
+            GameUpdate::Connected {
+                player_id: pid,
+                name,
+                ..
+            } => {
+                assert_eq!(pid, admin_id);
+                assert_eq!(name, "Admin");
+            }
+            other => panic!("Expected Connected message, got {:?}", other),
+        }
+
+        match admin_rx.recv().await.expect("Should receive StateDelta") {
+            GameUpdate::StateDelta {
+                phase, admin_extra, ..
+            } => {
+                assert_eq!(phase, Some(GamePhase::Question));
+                assert!(admin_extra.is_some(), "Admin should get admin_extra");
+            }
+            other => panic!("Expected StateDelta, got {:?}", other),
+        }
+
+        match admin_rx.recv().await.expect("Should receive AdminInfo") {
+            GameUpdate::AdminInfo {
+                current_question: q,
+            } => {
+                assert_eq!(q.id, question.id);
+            }
+            other => panic!("Expected AdminInfo, got {:?}", other),
+        }
+        engine.connections.clear();
+        admin_rx.close();
+    }
+
+    // #[tokio::test]
+    // async fn test_connect_unregistered_player() {
+    //     // Setup
+    //     let admin_id = Uuid::new_v4();
+    //     let admin_lobby_id = Uuid::new_v4();
+    //     let connections = Arc::new(DashMap::new());
+    //
+    //     // Create game engine
+    //     let mut engine = GameEngine::new(
+    //         admin_id,
+    //         Arc::new(create_test_questions()),
+    //         None,
+    //         30,
+    //         connections.clone(),
+    //     );
+    //
+    //     // Test unregistered player connect
+    //     let invalid_id = Uuid::new_v4();
+    //     let (invalid_tx, mut invalid_rx) = tokio::sync::mpsc::unbounded_channel();
+    //     connections.insert(
+    //         invalid_id,
+    //         Connection {
+    //             lobby_id: admin_lobby_id,
+    //             tx: Some(invalid_tx),
+    //         },
+    //     );
+    //
+    //     engine.process_event(GameEvent {
+    //         context: EventContext {
+    //             sender_id: invalid_id,
+    //             timestamp: Instant::now(),
+    //         },
+    //         action: GameAction::Connect,
+    //     });
+    //
+    //     // Verify error message
+    //     match invalid_rx
+    //         .recv()
+    //         .await
+    //         .expect("Should receive Error message")
+    //     {
+    //         GameUpdate::Error { message } => {
+    //             assert_eq!(
+    //                 message,
+    //                 "Player not found. Please register before connecting."
+    //             );
+    //         }
+    //         other => panic!("Expected Error message, got {:?}", other),
+    //     }
+    //     engine.connections.clear();
+    // }
+
+    #[tokio::test]
+    async fn test_admin_leave() {
+        // Setup game with channels
+        let admin_id = Uuid::new_v4();
+        let admin_lobby_id = Uuid::new_v4();
+        let connections = Arc::new(DashMap::new());
+        let (admin_tx, _admin_rx) = tokio::sync::mpsc::unbounded_channel();
+
+        connections.insert(
+            admin_id,
+            Connection {
+                lobby_id: admin_lobby_id,
+                tx: Some(admin_tx),
+            },
+        );
+
+        let mut engine = GameEngine::new(
+            admin_id,
+            Arc::new(create_test_questions()),
+            None,
+            30,
+            connections,
+        );
+
+        // Add admin to players
+        engine.add_player(admin_id, "Admin".to_string()).unwrap();
+
+        // Add a player and capture their messages
+        let player_id = Uuid::new_v4();
+        let (player_tx, mut player_rx) = tokio::sync::mpsc::unbounded_channel();
+        engine.connections.insert(
+            player_id,
+            Connection {
+                lobby_id: admin_lobby_id,
+                tx: Some(player_tx),
+            },
+        );
+        engine.add_player(player_id, "Player1".to_string()).unwrap();
+
+        // Test admin disconnect
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::Leave,
+        });
+
+        // Verify admin was removed
+        assert!(
+            !engine.state.players.contains_key(&admin_id),
+            "Admin should be removed from players"
+        );
+
+        // Verify player received game closed message
+        match player_rx
+            .recv()
+            .await
+            .expect("Should receive GameClosed message")
+        {
+            GameUpdate::GameClosed { reason } => {
+                assert_eq!(reason, "Host left the game");
+            }
+            other => panic!("Expected GameClosed message, got {:?}", other),
+        }
+        engine.connections.clear();
+        player_rx.close();
+    }
+
+    #[tokio::test]
+    async fn test_start_game_twice() {
+        // Create admin information
+        let admin_id = Uuid::new_v4();
+        let admin_lobby_id = Uuid::new_v4();
+        let connections = Arc::new(DashMap::new());
+
+        // Create channel to capture admin messages
+        let (admin_tx, mut admin_rx) = tokio::sync::mpsc::unbounded_channel();
+
+        // Add admin connection
+        connections.insert(
+            admin_id,
+            Connection {
+                lobby_id: admin_lobby_id,
+                tx: Some(admin_tx),
+            },
+        );
+
+        // Create game engine directly
+        let mut engine = GameEngine::new(
+            admin_id,
+            Arc::new(create_test_questions()),
+            None,
+            30,
+            connections,
+        );
+
+        // Add admin to players
+        engine.add_player(admin_id, "Admin".to_string()).unwrap();
+
+        // First start - should succeed
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::StartGame,
+        });
+
+        // Drain the success messages from first start
+        while let Ok(msg) = admin_rx.try_recv() {
+            match msg {
+                GameUpdate::StateDelta { phase, .. } => {
+                    assert_eq!(
+                        phase,
+                        Some(GamePhase::Score),
+                        "First start should move to Score phase"
+                    );
+                }
+                GameUpdate::AdminNextQuestions { .. } => {
+                    // Expected message
+                }
+                other => panic!("Unexpected message during first start: {:?}", other),
+            }
+        }
+
+        // Second start - should fail
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::StartGame,
+        });
+
+        // Should receive error message
+        match admin_rx.recv().await.expect("Should receive Error message") {
+            GameUpdate::Error { message } => {
+                assert_eq!(message, "Can only start game from lobby");
+            }
+            other => panic!("Expected Error message, got {:?}", other),
+        }
+
+        // Verify game is still in Score phase
+        assert_eq!(engine.state.phase, GamePhase::Score);
+        engine.connections.clear();
+    }
+
+    #[test]
+    fn test_inactivity_timeout() {
+        let (mut engine, _) = setup_test_game();
+
+        // Test case where last_lobby_message is None
+        engine.state.last_lobby_message = None;
+        assert!(!engine.is_finished());
+        engine.connections.clear();
     }
 }

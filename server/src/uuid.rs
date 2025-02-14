@@ -276,4 +276,77 @@ mod tests {
         let parsed: Uuid = serde_json::from_str(&json).expect("Deserialization should succeed");
         assert_eq!(uuid, parsed);
     }
+    #[test]
+    fn test_uuid_error_display() {
+        // Test display formatting for each variant of UuidError
+        assert_eq!(
+            UuidError::InvalidLength.to_string(),
+            "invalid length for a UUID"
+        );
+        assert_eq!(
+            UuidError::InvalidCharacter.to_string(),
+            "invalid character in UUID"
+        );
+        assert_eq!(
+            UuidError::InvalidVersion.to_string(),
+            "invalid UUID version (expected v4)"
+        );
+        assert_eq!(
+            UuidError::InvalidVariant.to_string(),
+            "invalid UUID variant (expected RFC4122)"
+        );
+    }
+
+    #[test]
+    fn test_uuid_debug_format() {
+        let uuid = Uuid::new_v4();
+        let debug_str = format!("{:?}", uuid);
+        let display_str = uuid.to_string();
+        assert_eq!(debug_str, format!("Uuid({})", display_str));
+    }
+
+    #[test]
+    fn test_uuid_from_bytes() {
+        let bytes = [
+            0x67, 0xe5, 0x50, 0x44, 0x10, 0xb1, 0x42, 0x6f, 0x92, 0x47, 0xbb, 0x68, 0xe5, 0xfe,
+            0x0c, 0x8a,
+        ];
+        let uuid = Uuid::from(bytes);
+        assert_eq!(uuid.as_bytes(), &bytes);
+    }
+
+    #[test]
+    fn test_serde_deserialization_errors() {
+        // Test various invalid inputs that should trigger the visitor
+
+        // Test with a number instead of string
+        let result: Result<Uuid, _> = serde_json::from_str("42");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("invalid")); // Should contain error about invalid format
+
+        // Test with null instead of string
+        let result: Result<Uuid, _> = serde_json::from_str("null");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("invalid"));
+
+        // Test with malformed UUID string
+        let result: Result<Uuid, _> = serde_json::from_str("\"not-a-uuid\"");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("length")); // Should mention invalid length
+
+        // Test with empty string
+        let result: Result<Uuid, _> = serde_json::from_str("\"\"");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("length"));
+
+        // Test with array instead of string
+        let result: Result<Uuid, _> = serde_json::from_str("[1,2,3]");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("invalid"));
+    }
 }
