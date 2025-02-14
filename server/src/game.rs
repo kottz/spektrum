@@ -281,7 +281,6 @@ impl GameEngine {
                         reason: "Lobby closed due to inactivity".into(),
                     },
                 );
-                self.connections.clear();
                 return true;
             }
         }
@@ -467,7 +466,6 @@ impl GameEngine {
                         reason: "Host left the game".into(),
                     },
                 );
-                self.connections.clear();
             } else {
                 self.push_update(
                     Recipients::All,
