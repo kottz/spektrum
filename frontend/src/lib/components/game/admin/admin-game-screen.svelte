@@ -13,12 +13,12 @@
 	import EndLeaveButton from './controls/end-leave-button.svelte';
 	import RoundButton from './controls/round-control-button.svelte';
 	import SkipButton from './controls/skip-control-button.svelte';
-
 	const phase = $derived(gameStore.state.phase);
 	const showScoreboard = $derived(phase === GamePhase.Score || phase === GamePhase.GameOver);
 </script>
 
-<div class="container mx-auto flex h-screen flex-col overflow-hidden p-3">
+<!-- Main container with padding at the bottom for fixed controls -->
+<div class="container mx-auto flex min-h-screen flex-col p-3 pb-24 lg:pb-3">
 	<div class="flex min-h-0 flex-1 flex-col space-y-4 lg:grid lg:grid-cols-12 lg:gap-4 lg:space-y-0">
 		<!-- Left column -->
 		<div class="lg:col-span-4">
@@ -30,11 +30,9 @@
 						<GameVideo />
 					</div>
 				</div>
-
 				<div class="lg:mt-4">
 					<UpcomingQuestions />
 				</div>
-
 				<div class="hidden space-y-4 lg:block">
 					{#if phase === GamePhase.Lobby}
 						<StartButton />
@@ -51,7 +49,6 @@
 				</div>
 			</div>
 		</div>
-
 		<!-- Right column -->
 		<div class="flex min-h-0 flex-1 flex-col lg:col-span-8">
 			<!-- Mobile Layout -->
@@ -74,7 +71,6 @@
 					</div>
 				{/if}
 			</div>
-
 			<!-- Desktop Layout -->
 			<div class="hidden min-h-0 flex-1 flex-col lg:flex">
 				{#if phase === GamePhase.Lobby}
@@ -92,9 +88,8 @@
 			</div>
 		</div>
 	</div>
-
-	<!-- Mobile-only bottom controls -->
-	<div class="fixed bottom-0 left-0 right-0 z-10 mt-4 flex bg-background p-3 lg:hidden">
+	<!-- Mobile-only bottom controls with semi-transparent background -->
+	<div class="fixed bottom-0 left-0 right-0 z-10 bg-background/95 p-3 backdrop-blur-sm lg:hidden">
 		{#if phase === GamePhase.Lobby}
 			<StartButton />
 		{:else}
