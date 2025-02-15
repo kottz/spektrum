@@ -303,7 +303,7 @@
 		</Table.Header>
 		<Table.Body>
 			{#if state.isAddingMedia}
-				<Table.Row class="bg-blue-50">
+				<Table.Row class="bg-blue-50 dark:bg-gray-800">
 					<Table.Cell>{state.newMediaData.id}</Table.Cell>
 					<Table.Cell>
 						<EditableInput
@@ -352,7 +352,7 @@
 							<Button
 								variant="outline"
 								size="sm"
-								class="text-red-600 hover:bg-red-50"
+								class="text-red-600 hover:bg-red-50 hover:dark:bg-red-800"
 								on:click={handleCancelAdd}
 							>
 								Cancel
@@ -366,7 +366,9 @@
 				<Table.Row
 					class={cn(
 						'transition-colors',
-						isMediaUsed(media.id) ? 'bg-gray-50 hover:bg-gray-50' : 'hover:bg-gray-50'
+						isMediaUsed(media.id)
+							? 'hover:bg-gray-50 dark:hover:bg-gray-800'
+							: 'hover:bg-gray-50 dark:hover:bg-gray-800'
 					)}
 				>
 					<Table.Cell>{media.id}</Table.Cell>

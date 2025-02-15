@@ -172,7 +172,7 @@
 							<div
 								class={cn(
 									'rounded-lg border px-3 py-2 text-sm',
-									isCurrentStep && 'border-blue-200 bg-blue-50'
+									isCurrentStep && 'border-blue-200 bg-blue-50 dark:bg-gray-800'
 								)}
 							>
 								{snapshot.message}

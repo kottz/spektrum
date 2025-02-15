@@ -470,7 +470,7 @@
 			</Table.Header>
 			<Table.Body>
 				{#if state.isAddingSet}
-					<Table.Row class="bg-blue-50">
+					<Table.Row class="bg-blue-50 dark:bg-gray-800">
 						<Table.Cell>{state.newSetData.id}</Table.Cell>
 						<Table.Cell>
 							<EditableInput
@@ -487,7 +487,7 @@
 								<Button
 									variant="outline"
 									size="sm"
-									class="text-red-600 hover:bg-red-50"
+									class="text-red-600 hover:bg-red-50 hover:dark:bg-red-800"
 									on:click={handleCancelAdd}
 								>
 									Cancel
@@ -544,7 +544,7 @@
 								<Button
 									variant="outline"
 									size="sm"
-									class="text-red-600 hover:bg-red-50"
+									class="text-red-600 hover:bg-red-50 hover:dark:bg-red-800"
 									on:click={() => handleDeleteSet(set.id)}
 								>
 									Delete

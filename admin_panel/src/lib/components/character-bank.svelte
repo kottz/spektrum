@@ -84,7 +84,7 @@
 	});
 </script>
 
-<div class={`rounded-md border bg-white ${className} flex h-full flex-col`}>
+<div class={`rounded-md border ${className} flex h-full flex-col`}>
 	<!-- Header -->
 	<div class="flex-none border-b p-4">
 		<div class="flex items-center justify-between">

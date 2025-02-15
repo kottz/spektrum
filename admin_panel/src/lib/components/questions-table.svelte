@@ -371,7 +371,7 @@
 					</Table.Header>
 					<Table.Body>
 						{#if state.isAddingQuestion}
-							<Table.Row class="bg-blue-50">
+							<Table.Row class="bg-blue-50 dark:bg-gray-800">
 								<Table.Cell>{state.newQuestionData.id}</Table.Cell>
 								<Table.Cell>
 									<Popover.Root let:ids>
@@ -398,7 +398,7 @@
 											<div class="max-h-[200px] overflow-y-auto">
 												{#each filteredMediaOptions() as media}
 													<div
-														class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-gray-100"
+														class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800"
 														onclick={() => {
 															state.newQuestionData.media_id = media.id;
 															state.mediaSearchTerm = '';
@@ -565,7 +565,7 @@
 										<Button
 											variant="outline"
 											size="sm"
-											class="text-red-600 hover:bg-red-50"
+											class="text-red-600 hover:bg-red-50 hover:dark:bg-red-800"
 											on:click={handleCancelAdd}
 										>
 											Cancel
@@ -575,7 +575,7 @@
 							</Table.Row>
 						{/if}
 						{#each paginatedData() as question (question.id)}
-							<Table.Row class="hover:bg-gray-50">
+							<Table.Row class="hover:bg-gray-50 dark:hover:bg-gray-800">
 								<Table.Cell>{question.id}</Table.Cell>
 								<Table.Cell>
 									{#if getMediaInfo(question.media_id)?.youtube_id}
@@ -669,7 +669,7 @@
 									<button
 										class={`inline-flex w-16 justify-center rounded-full border px-2 py-1 text-xs font-semibold ${
 											question.is_active
-												? 'border-green-300 bg-green-100 text-green-800'
+												? 'border-green-300 bg-green-100 text-green-800 dark:bg-green-200'
 												: 'border-red-300 bg-red-100 text-red-800'
 										} hover:opacity-90 focus:ring-2 focus:ring-offset-1 ${
 											question.is_active ? 'focus:ring-green-400' : 'focus:ring-red-400'
@@ -683,7 +683,7 @@
 									<Button
 										variant="outline"
 										size="sm"
-										class="text-red-600 hover:bg-red-50"
+										class="text-red-600 hover:bg-red-50 dark:hover:bg-red-800"
 										on:click={() => handleDeleteQuestion(question.id)}
 									>
 										Delete
