@@ -536,8 +536,9 @@ impl GameEngine {
                 .as_ref()
                 .is_some_and(|answers| answers.contains(&answer));
             let score_delta = if correct {
-                ((self.state.round_duration as f64 * 100.0 - (elapsed.as_secs_f64() * 100.0))
-                    .max(0.0)) as i32
+                ((5000.0 * (self.state.round_duration as f64 - elapsed.as_secs_f64())
+                    / self.state.round_duration as f64)
+                    .clamp(0.0, 5000.0)) as i32
             } else {
                 0
             };
