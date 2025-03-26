@@ -10,22 +10,22 @@ pub struct Uuid([u8; 16]);
 #[derive(Debug, PartialEq, Eq)]
 pub enum UuidError {
     /// The input does not have the correct length.
-    InvalidLength,
+    Length,
     /// The input contains an invalid hexadecimal character.
-    InvalidCharacter,
+    Character,
     /// The version bits are not set correctly for a v4 UUID.
-    InvalidVersion,
+    Version,
     /// The variant bits are not set correctly (expected RFC4122 variant).
-    InvalidVariant,
+    Variant,
 }
 
 impl fmt::Display for UuidError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            UuidError::InvalidLength => write!(f, "invalid length for a UUID"),
-            UuidError::InvalidCharacter => write!(f, "invalid character in UUID"),
-            UuidError::InvalidVersion => write!(f, "invalid UUID version (expected v4)"),
-            UuidError::InvalidVariant => write!(f, "invalid UUID variant (expected RFC4122)"),
+            UuidError::Length => write!(f, "invalid length for a UUID"),
+            UuidError::Character => write!(f, "invalid character in UUID"),
+            UuidError::Version => write!(f, "invalid UUID version (expected v4)"),
+            UuidError::Variant => write!(f, "invalid UUID variant (expected RFC4122)"),
         }
     }
 }
@@ -115,23 +115,23 @@ impl FromStr for Uuid {
         let s: String = s.replace("-", "");
 
         if s.len() != 32 {
-            return Err(UuidError::InvalidLength);
+            return Err(UuidError::Length);
         }
 
         let mut bytes = [0u8; 16];
         for i in 0..16 {
             let hex_byte = &s[i * 2..i * 2 + 2];
-            bytes[i] = u8::from_str_radix(hex_byte, 16).map_err(|_| UuidError::InvalidCharacter)?;
+            bytes[i] = u8::from_str_radix(hex_byte, 16).map_err(|_| UuidError::Character)?;
         }
 
         // Validate that the version is 4.
         if (bytes[6] & 0xF0) != 0x40 {
-            return Err(UuidError::InvalidVersion);
+            return Err(UuidError::Version);
         }
 
         // Validate that the variant is RFC4122 (the two most significant bits of byte 8 must be 10).
         if (bytes[8] & 0xC0) != 0x80 {
-            return Err(UuidError::InvalidVariant);
+            return Err(UuidError::Variant);
         }
 
         Ok(Uuid(bytes))
@@ -232,7 +232,7 @@ mod tests {
     fn test_from_str_invalid_length() {
         let s = "12345678";
         let err = s.parse::<Uuid>().unwrap_err();
-        assert_eq!(err, UuidError::InvalidLength);
+        assert_eq!(err, UuidError::Length);
     }
 
     #[test]
@@ -241,7 +241,7 @@ mod tests {
         let valid = "67e55044-10b1-426f-9247-bb680e5fe0c8";
         let s = valid.replace("e", "G"); // 'G' is not a valid hex character.
         let err = s.parse::<Uuid>().unwrap_err();
-        assert_eq!(err, UuidError::InvalidCharacter);
+        assert_eq!(err, UuidError::Character);
     }
 
     #[test]
@@ -252,7 +252,7 @@ mod tests {
         bytes[6] = (bytes[6] & 0x0f) | 0x50;
         let s = Uuid(bytes).to_string();
         let err = s.parse::<Uuid>().unwrap_err();
-        assert_eq!(err, UuidError::InvalidVersion);
+        assert_eq!(err, UuidError::Version);
     }
 
     #[test]
@@ -263,7 +263,7 @@ mod tests {
         bytes[8] = bytes[8] & 0x3f;
         let s = Uuid(bytes).to_string();
         let err = s.parse::<Uuid>().unwrap_err();
-        assert_eq!(err, UuidError::InvalidVariant);
+        assert_eq!(err, UuidError::Variant);
     }
 
     #[test]
@@ -278,20 +278,17 @@ mod tests {
     #[test]
     fn test_uuid_error_display() {
         // Test display formatting for each variant of UuidError
+        assert_eq!(UuidError::Length.to_string(), "invalid length for a UUID");
         assert_eq!(
-            UuidError::InvalidLength.to_string(),
-            "invalid length for a UUID"
-        );
-        assert_eq!(
-            UuidError::InvalidCharacter.to_string(),
+            UuidError::Character.to_string(),
             "invalid character in UUID"
         );
         assert_eq!(
-            UuidError::InvalidVersion.to_string(),
+            UuidError::Version.to_string(),
             "invalid UUID version (expected v4)"
         );
         assert_eq!(
-            UuidError::InvalidVariant.to_string(),
+            UuidError::Variant.to_string(),
             "invalid UUID variant (expected RFC4122)"
         );
     }
