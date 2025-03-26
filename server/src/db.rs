@@ -330,7 +330,7 @@ impl S3Backend {
 
         let is_json = std::path::Path::new(path)
             .extension()
-            .map_or(false, |ext| ext.eq_ignore_ascii_case("json"));
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("json"));
 
         // Read json question data from hidden folder
         if is_json {
@@ -386,7 +386,7 @@ impl S3Backend {
         // Determine if we're writing a JSON file
         let is_json = std::path::Path::new(path)
             .extension()
-            .map_or(false, |ext| ext.eq_ignore_ascii_case("json"));
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("json"));
 
         // Store question data in hidden folder and append .gz for JSON files
         if is_json {
@@ -396,12 +396,12 @@ impl S3Backend {
         // Determine content type based on file extension
         let content_type = if std::path::Path::new(path)
             .extension()
-            .map_or(false, |ext| ext.eq_ignore_ascii_case("avif"))
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("avif"))
         {
             "image/avif"
         } else if std::path::Path::new(path)
             .extension()
-            .map_or(false, |ext| ext.eq_ignore_ascii_case("webm"))
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("webm"))
         {
             "video/webm"
         } else if is_json {
