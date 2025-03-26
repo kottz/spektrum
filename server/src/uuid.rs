@@ -159,7 +159,7 @@ impl<'de> Deserialize<'de> for Uuid {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct UuidVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for UuidVisitor {
+        impl serde::de::Visitor<'_> for UuidVisitor {
             type Value = Uuid;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
