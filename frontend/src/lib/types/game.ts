@@ -120,6 +120,10 @@ export type GameUpdate =
 			name: string;
 	  }
 	| {
+			type: 'PlayerKicked';
+			reason: string;
+	  }
+	| {
 			type: 'Answered';
 			name: string;
 			correct: boolean;
@@ -175,6 +179,7 @@ export type AdminAction =
 	| { type: 'StartRound' }
 	| { type: 'EndRound' }
 	| { type: 'SkipQuestion' }
+	| { type: 'KickPlayer'; player_name: string }
 	| { type: 'EndGame'; reason: string }
 	| { type: 'CloseGame'; reason: string };
 

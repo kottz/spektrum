@@ -109,6 +109,10 @@ class GameActions {
 		this.sendAdminAction({ type: 'SkipQuestion' });
 	}
 
+	public kickPlayer(playerName: string) {
+		this.sendAdminAction({ type: 'KickPlayer', player_name: playerName });
+	}
+
 	public endGame(reason: string = 'Game ended by admin') {
 		this.sendAdminAction({ type: 'EndGame', reason });
 	}

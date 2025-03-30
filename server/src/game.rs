@@ -103,6 +103,9 @@ pub enum GameUpdate {
     PlayerLeft {
         name: String,
     },
+    PlayerKicked {
+        reason: String,
+    },
     Answered {
         name: String,
         correct: bool,
@@ -154,6 +157,7 @@ pub enum GameAction {
     StartRound,
     EndRound,
     SkipQuestion,
+    KickPlayer { player_name: String },
     EndGame { reason: String },
     CloseGame { reason: String },
 }
@@ -356,6 +360,7 @@ impl GameEngine {
             GameAction::StartGame
             | GameAction::StartRound
             | GameAction::EndRound
+            | GameAction::KickPlayer { .. }
             | GameAction::EndGame { .. }
             | GameAction::CloseGame { .. } => {
                 if event.context.sender_id != self.state.admin_id {
@@ -379,6 +384,9 @@ impl GameEngine {
             GameAction::StartRound => self.handle_start_round(event.context),
             GameAction::EndRound => self.handle_end_round(event.context),
             GameAction::SkipQuestion => self.handle_skip_question(event.context),
+            GameAction::KickPlayer { player_name } => {
+                self.handle_kick_player(event.context, player_name)
+            }
             GameAction::EndGame { reason } => self.handle_end_game(event.context, reason),
             GameAction::CloseGame { reason } => self.handle_close_game(event.context, reason),
         }
@@ -717,6 +725,97 @@ impl GameEngine {
                 Recipients::Single(self.state.admin_id),
                 GameUpdate::AdminNextQuestions {
                     upcoming_questions: upcoming,
+                },
+            );
+        }
+    }
+
+    fn handle_kick_player(&mut self, ctx: EventContext, target_player_name: String) {
+        // Find the player ID based on the name
+        let target_player_id = self
+            .state
+            .players
+            .iter()
+            .find(|(_, p)| p.name == target_player_name)
+            .map(|(id, _)| *id);
+
+        let target_player_id = match target_player_id {
+            Some(id) => id,
+            None => {
+                self.push_update(
+                    Recipients::Single(ctx.sender_id), // Send error to admin
+                    GameUpdate::Error {
+                        message: format!("Player '{}' not found.", target_player_name),
+                    },
+                );
+                return;
+            }
+        };
+
+        // Admin cannot kick themselves
+        if target_player_id == self.state.admin_id {
+            self.push_update(
+                Recipients::Single(ctx.sender_id), // Send error to admin
+                GameUpdate::Error {
+                    message: "Admin cannot kick themselves.".into(),
+                },
+            );
+            return;
+        }
+
+        // Remove player from the game state
+        if let Some(kicked_player) = self.state.players.remove(&target_player_id) {
+            // info!(
+            //     "Admin {} kicked player {} ({})",
+            //     ctx.sender_id, kicked_player.name, target_player_id
+            // );
+
+            // Notify the kicked player specifically
+            self.push_update(
+                Recipients::Single(target_player_id),
+                GameUpdate::PlayerKicked {
+                    reason: "Kicked by admin".to_string(),
+                },
+            );
+
+            // Remove the connection entry (important for cleanup and preventing re-connect issues)
+            if self.connections.remove(&target_player_id).is_none() {
+                warn!(
+                    "Attempted to remove connection for kicked player {} but it was already gone.",
+                    target_player_id
+                );
+            }
+
+            // Notify remaining players
+            let remaining_players: Vec<Uuid> = self.state.players.keys().cloned().collect();
+            self.push_update(
+                Recipients::_Multiple(remaining_players.clone()), // Send to all *remaining* players
+                GameUpdate::PlayerLeft {
+                    name: kicked_player.name,
+                },
+            );
+
+            // Send updated scoreboard to remaining players
+            self.push_update(
+                Recipients::_Multiple(remaining_players),
+                GameUpdate::StateDelta {
+                    phase: None, // Phase doesn't change
+                    question_type: None,
+                    alternatives: None,
+                    scoreboard: Some(self.get_scoreboard()), // Update scoreboard
+                    round_scores: None, // Round scores might be irrelevant now, maybe send? Optional.
+                    admin_extra: None,  // Admin already knows
+                },
+            );
+        } else {
+            // This case should theoretically not happen if find worked, but handle defensively
+            self.push_update(
+                Recipients::Single(ctx.sender_id), // Send error to admin
+                GameUpdate::Error {
+                    message: format!(
+                        "Failed to remove player '{}' internally.",
+                        target_player_name
+                    ),
                 },
             );
         }
@@ -2358,4 +2457,146 @@ mod tests {
         assert!(!engine.is_finished());
         engine.connections.clear();
     }
+
+    // #[tokio::test]
+    // async fn test_admin_kick_player() {
+    //     let (mut engine, admin_id) = setup_test_game();
+    //     let player1_id = add_test_player(&mut engine, "Player1");
+    //     let player2_id = add_test_player(&mut engine, "Player2");
+    // 
+    //     // Capture messages for player 1
+    //     let (_player1_tx, mut player1_rx) = tokio::sync::mpsc::unbounded_channel();
+    //     engine
+    //         .connections
+    //         .entry(player1_id)
+    //         .and_modify(|c| c.tx = Some(_player1_tx));
+    // 
+    //     let now = Instant::now();
+    // 
+    //     // Admin kicks Player1
+    //     engine.process_event(GameEvent {
+    //         context: EventContext {
+    //             sender_id: admin_id,
+    //             timestamp: now,
+    //         },
+    //         action: GameAction::KickPlayer {
+    //             player_name: "Player1".to_string(),
+    //         },
+    //     });
+    // 
+    //     // Verify Player1 is removed from state
+    //     assert!(!engine.state.players.contains_key(&player1_id));
+    //     assert!(engine.state.players.contains_key(&player2_id)); // Player2 should remain
+    // 
+    //     // Verify Player1's connection is removed from the shared map
+    //     assert!(!engine.connections.contains_key(&player1_id));
+    // 
+    //     // Verify Player1 received the Kicked message
+    //     match player1_rx
+    //         .recv()
+    //         .await
+    //         .expect("Player1 should receive a message")
+    //     {
+    //         GameUpdate::PlayerKicked { reason } => {
+    //             assert_eq!(reason, "Kicked by admin");
+    //         }
+    //         other => panic!("Player1 expected PlayerKicked, got {:?}", other),
+    //     }
+    // 
+    //     // Verify scoreboard update sent to remaining players (Player2 and Admin)
+    //     // (Need to capture messages for Player2 and Admin to fully verify)
+    // 
+    //     engine.connections.clear(); // Cleanup
+    //     player1_rx.close();
+    // }
+    //
+    // #[tokio::test]
+    // async fn test_admin_kick_nonexistent_player() {
+    //     let (mut engine, admin_id) = setup_test_game();
+    //     add_test_player(&mut engine, "Player1");
+    // 
+    //     // Capture messages for admin
+    //     let (_admin_tx, mut admin_rx) = tokio::sync::mpsc::unbounded_channel();
+    //     engine
+    //         .connections
+    //         .entry(admin_id)
+    //         .and_modify(|c| c.tx = Some(_admin_tx));
+    // 
+    //     let initial_player_count = engine.state.players.len();
+    //     let now = Instant::now();
+    // 
+    //     // Admin tries to kick a player who doesn't exist
+    //     engine.process_event(GameEvent {
+    //         context: EventContext {
+    //             sender_id: admin_id,
+    //             timestamp: now,
+    //         },
+    //         action: GameAction::KickPlayer {
+    //             player_name: "Ghost".to_string(),
+    //         },
+    //     });
+    // 
+    //     // Verify no players were removed
+    //     assert_eq!(engine.state.players.len(), initial_player_count);
+    // 
+    //     // Verify admin received an error message
+    //     match admin_rx
+    //         .recv()
+    //         .await
+    //         .expect("Admin should receive a message")
+    //     {
+    //         GameUpdate::Error { message } => {
+    //             assert!(message.contains("Player 'Ghost' not found"));
+    //         }
+    //         other => panic!("Admin expected Error, got {:?}", other),
+    //     }
+    //     engine.connections.clear(); // Cleanup
+    //     admin_rx.close();
+    // }
+    // 
+    // #[tokio::test]
+    // async fn test_admin_kick_self() {
+    //     let (mut engine, admin_id) = setup_test_game();
+    //     engine.add_player(admin_id, "Admin".to_string()).unwrap(); // Ensure admin is in players map
+    // 
+    //     // Capture messages for admin
+    //     let (_admin_tx, mut admin_rx) = tokio::sync::mpsc::unbounded_channel();
+    //     engine
+    //         .connections
+    //         .entry(admin_id)
+    //         .and_modify(|c| c.tx = Some(_admin_tx));
+    // 
+    //     let initial_player_count = engine.state.players.len();
+    //     let now = Instant::now();
+    // 
+    //     // Admin tries to kick themselves
+    //     engine.process_event(GameEvent {
+    //         context: EventContext {
+    //             sender_id: admin_id,
+    //             timestamp: now,
+    //         },
+    //         action: GameAction::KickPlayer {
+    //             player_name: "Admin".to_string(),
+    //         },
+    //     });
+    // 
+    //     // Verify admin was not removed
+    //     assert!(engine.state.players.contains_key(&admin_id));
+    //     assert_eq!(engine.state.players.len(), initial_player_count);
+    // 
+    //     // Verify admin received an error message
+    //     match admin_rx
+    //         .recv()
+    //         .await
+    //         .expect("Admin should receive a message")
+    //     {
+    //         GameUpdate::Error { message } => {
+    //             assert!(message.contains("Admin cannot kick themselves"));
+    //         }
+    //         other => panic!("Admin expected Error, got {:?}", other),
+    //     }
+    // 
+    //     engine.connections.clear(); // Cleanup
+    //     admin_rx.close();
+    // }
 }

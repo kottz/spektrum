@@ -118,6 +118,7 @@ pub enum AdminAction {
     StartRound,
     EndRound,
     SkipQuestion,
+    KickPlayer { player_name: String },
     EndGame { reason: String },
     CloseGame { reason: String },
 }
@@ -670,6 +671,9 @@ async fn process_incoming_messages(
                                                         }
                                                         AdminAction::SkipQuestion => {
                                                             GameAction::SkipQuestion
+                                                        }
+                                                        AdminAction::KickPlayer { player_name } => {
+                                                            GameAction::KickPlayer { player_name }
                                                         }
                                                         AdminAction::EndGame { reason } => {
                                                             GameAction::EndGame { reason }
