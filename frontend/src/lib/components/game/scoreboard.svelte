@@ -13,6 +13,7 @@
 	const maxScore = $derived(players[0]?.score || 0);
 	const maxRoundScore = $derived(Math.max(...players.map((p) => p.roundScore), 0));
 	const gameOver = $derived(gameStore.state.phase === 'gameover');
+	const playingQuestion = $derived(gameStore.state.phase === 'question');
 
 	function getScoreWidth(score: number): string {
 		if (maxScore === 0) return '0%';
@@ -58,7 +59,7 @@
 							{/if}
 							<span class="font-medium">{player.score}</span>
 							<!-- Add Kick Button Here -->
-							{#if isAdmin && player.name !== myName && !gameOver}
+							{#if isAdmin && player.name !== myName && !gameOver && !playingQuestion}
 								<Button
 									variant="destructive"
 									size="sm"
