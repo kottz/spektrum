@@ -110,6 +110,7 @@ class GameActions {
 	}
 
 	public kickPlayer(playerName: string) {
+		gameStore.state.players.delete(playerName);
 		this.sendAdminAction({ type: 'KickPlayer', player_name: playerName });
 	}
 

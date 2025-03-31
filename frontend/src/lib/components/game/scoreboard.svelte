@@ -2,7 +2,7 @@
 	import { gameStore } from '$lib/stores/game.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
-	import { gameActions } from '$lib/stores/game-actions'; 
+	import { gameActions } from '$lib/stores/game-actions';
 
 	const players = $derived(
 		Array.from(gameStore.state.players.values()).sort((a, b) => b.score - a.score)
@@ -46,7 +46,7 @@
 							<span class="font-medium">
 								{player.name}
 								{#if player.name === myName}
-									<span class="text-xs text-muted-foreground ml-1">(You)</span>
+									<span class="ml-1 text-xs text-muted-foreground">(You)</span>
 								{/if}
 							</span>
 						</div>

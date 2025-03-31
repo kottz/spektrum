@@ -131,7 +131,7 @@ pub enum GameUpdate {
 #[derive(Clone, Debug, Serialize)]
 pub enum Recipients {
     Single(Uuid),
-    _Multiple(Vec<Uuid>),
+    Multiple(Vec<Uuid>),
     _AllExcept(Vec<Uuid>),
     All,
 }
@@ -319,7 +319,7 @@ impl GameEngine {
                     }
                 }
             }
-            Recipients::_Multiple(targets) => {
+            Recipients::Multiple(targets) => {
                 for target in targets {
                     if self.state.players.contains_key(&target) {
                         if let Some(conn) = self.connections.get(&target) {
@@ -738,7 +738,6 @@ impl GameEngine {
             .iter()
             .find(|(_, p)| p.name == target_player_name)
             .map(|(id, _)| *id);
-
         let target_player_id = match target_player_id {
             Some(id) => id,
             None => {
@@ -751,7 +750,6 @@ impl GameEngine {
                 return;
             }
         };
-
         // Admin cannot kick themselves
         if target_player_id == self.state.admin_id {
             self.push_update(
@@ -763,20 +761,20 @@ impl GameEngine {
             return;
         }
 
-        // Remove player from the game state
-        if let Some(kicked_player) = self.state.players.remove(&target_player_id) {
-            // info!(
-            //     "Admin {} kicked player {} ({})",
-            //     ctx.sender_id, kicked_player.name, target_player_id
-            // );
+        // Get player name for notification before removing
+        if let Some(kicked_player) = self.state.players.get(&target_player_id) {
+            let kicked_player_name = kicked_player.name.clone();
 
-            // Notify the kicked player specifically
+            // Notify the kicked player specifically - BEFORE removing them
             self.push_update(
                 Recipients::Single(target_player_id),
                 GameUpdate::PlayerKicked {
                     reason: "Kicked by admin".to_string(),
                 },
             );
+
+            // Now we can safely remove the player
+            self.state.players.remove(&target_player_id);
 
             // Remove the connection entry (important for cleanup and preventing re-connect issues)
             if self.connections.remove(&target_player_id).is_none() {
@@ -789,15 +787,15 @@ impl GameEngine {
             // Notify remaining players
             let remaining_players: Vec<Uuid> = self.state.players.keys().cloned().collect();
             self.push_update(
-                Recipients::_Multiple(remaining_players.clone()), // Send to all *remaining* players
+                Recipients::Multiple(remaining_players.clone()), // Send to all *remaining* players
                 GameUpdate::PlayerLeft {
-                    name: kicked_player.name,
+                    name: kicked_player_name,
                 },
             );
 
-            // Send updated scoreboard to remaining players
+            // // Send updated scoreboard to remaining players
             self.push_update(
-                Recipients::_Multiple(remaining_players),
+                Recipients::Multiple(remaining_players),
                 GameUpdate::StateDelta {
                     phase: None, // Phase doesn't change
                     question_type: None,
@@ -2051,7 +2049,7 @@ mod tests {
 
         // Test Multiple recipients
         engine.push_update(
-            Recipients::_Multiple(vec![player_id]),
+            Recipients::Multiple(vec![player_id]),
             GameUpdate::Error {
                 message: "Test error".into(),
             },
@@ -2463,16 +2461,16 @@ mod tests {
     //     let (mut engine, admin_id) = setup_test_game();
     //     let player1_id = add_test_player(&mut engine, "Player1");
     //     let player2_id = add_test_player(&mut engine, "Player2");
-    // 
+    //
     //     // Capture messages for player 1
     //     let (_player1_tx, mut player1_rx) = tokio::sync::mpsc::unbounded_channel();
     //     engine
     //         .connections
     //         .entry(player1_id)
     //         .and_modify(|c| c.tx = Some(_player1_tx));
-    // 
+    //
     //     let now = Instant::now();
-    // 
+    //
     //     // Admin kicks Player1
     //     engine.process_event(GameEvent {
     //         context: EventContext {
@@ -2483,14 +2481,14 @@ mod tests {
     //             player_name: "Player1".to_string(),
     //         },
     //     });
-    // 
+    //
     //     // Verify Player1 is removed from state
     //     assert!(!engine.state.players.contains_key(&player1_id));
     //     assert!(engine.state.players.contains_key(&player2_id)); // Player2 should remain
-    // 
+    //
     //     // Verify Player1's connection is removed from the shared map
     //     assert!(!engine.connections.contains_key(&player1_id));
-    // 
+    //
     //     // Verify Player1 received the Kicked message
     //     match player1_rx
     //         .recv()
@@ -2502,10 +2500,10 @@ mod tests {
     //         }
     //         other => panic!("Player1 expected PlayerKicked, got {:?}", other),
     //     }
-    // 
+    //
     //     // Verify scoreboard update sent to remaining players (Player2 and Admin)
     //     // (Need to capture messages for Player2 and Admin to fully verify)
-    // 
+    //
     //     engine.connections.clear(); // Cleanup
     //     player1_rx.close();
     // }
@@ -2514,17 +2512,17 @@ mod tests {
     // async fn test_admin_kick_nonexistent_player() {
     //     let (mut engine, admin_id) = setup_test_game();
     //     add_test_player(&mut engine, "Player1");
-    // 
+    //
     //     // Capture messages for admin
     //     let (_admin_tx, mut admin_rx) = tokio::sync::mpsc::unbounded_channel();
     //     engine
     //         .connections
     //         .entry(admin_id)
     //         .and_modify(|c| c.tx = Some(_admin_tx));
-    // 
+    //
     //     let initial_player_count = engine.state.players.len();
     //     let now = Instant::now();
-    // 
+    //
     //     // Admin tries to kick a player who doesn't exist
     //     engine.process_event(GameEvent {
     //         context: EventContext {
@@ -2535,10 +2533,10 @@ mod tests {
     //             player_name: "Ghost".to_string(),
     //         },
     //     });
-    // 
+    //
     //     // Verify no players were removed
     //     assert_eq!(engine.state.players.len(), initial_player_count);
-    // 
+    //
     //     // Verify admin received an error message
     //     match admin_rx
     //         .recv()
@@ -2553,22 +2551,22 @@ mod tests {
     //     engine.connections.clear(); // Cleanup
     //     admin_rx.close();
     // }
-    // 
+    //
     // #[tokio::test]
     // async fn test_admin_kick_self() {
     //     let (mut engine, admin_id) = setup_test_game();
     //     engine.add_player(admin_id, "Admin".to_string()).unwrap(); // Ensure admin is in players map
-    // 
+    //
     //     // Capture messages for admin
     //     let (_admin_tx, mut admin_rx) = tokio::sync::mpsc::unbounded_channel();
     //     engine
     //         .connections
     //         .entry(admin_id)
     //         .and_modify(|c| c.tx = Some(_admin_tx));
-    // 
+    //
     //     let initial_player_count = engine.state.players.len();
     //     let now = Instant::now();
-    // 
+    //
     //     // Admin tries to kick themselves
     //     engine.process_event(GameEvent {
     //         context: EventContext {
@@ -2579,11 +2577,11 @@ mod tests {
     //             player_name: "Admin".to_string(),
     //         },
     //     });
-    // 
+    //
     //     // Verify admin was not removed
     //     assert!(engine.state.players.contains_key(&admin_id));
     //     assert_eq!(engine.state.players.len(), initial_player_count);
-    // 
+    //
     //     // Verify admin received an error message
     //     match admin_rx
     //         .recv()
@@ -2595,7 +2593,7 @@ mod tests {
     //         }
     //         other => panic!("Admin expected Error, got {:?}", other),
     //     }
-    // 
+    //
     //     engine.connections.clear(); // Cleanup
     //     admin_rx.close();
     // }

@@ -178,7 +178,8 @@ function createGameStore() {
 				}
 
 				// Update the current question if alternatives are provided.
-				if (message.alternatives) {
+				//if (message.alternatives !== undefined && message.alternatives !== null) {
+				if (message.alternatives !== undefined) {
 					state.currentQuestion = {
 						type: message.question_type || '',
 						alternatives: message.alternatives
@@ -219,7 +220,15 @@ function createGameStore() {
 
 			case 'PlayerLeft': {
 				info(`Player left: ${message.name}`);
+				state.players.delete(message.name);
 				// Optionally remove the player from the players map or notify the UI.
+				break;
+			}
+
+			case 'PlayerKicked': {
+				info(`Player kicked: ${message.reason}`);
+				cleanup();
+				notifications.add(`${message.reason}`, 'destructive');
 				break;
 			}
 
