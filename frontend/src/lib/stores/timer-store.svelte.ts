@@ -7,9 +7,12 @@ function createTimerStore() {
 	});
 
 	let interval: number | undefined;
+	let endTime: number = 0;
 
 	function startTimer() {
 		if (browser) {
+			// Set the end time based on the current time
+			endTime = Date.now() + 60 * 1000;
 			state.timeLeft = 60;
 
 			if (interval) {
@@ -17,7 +20,13 @@ function createTimerStore() {
 			}
 
 			interval = window.setInterval(() => {
-				state.timeLeft = Math.max(0, state.timeLeft - 0.1);
+				const now = Date.now();
+				const remaining = Math.max(0, (endTime - now) / 1000);
+				state.timeLeft = remaining;
+
+				if (remaining <= 0) {
+					stopTimer();
+				}
 			}, 100);
 		}
 	}
