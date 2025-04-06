@@ -86,7 +86,7 @@
 			<div class="flex min-h-0 flex-1 flex-col lg:hidden">
 				{#if phase === GamePhase.Question}
 					<div class="flex min-h-0 flex-1 flex-col space-y-4">
-						<CoverableElement covered={hideGameContent} coverText="Questions Hidden">
+						<CoverableElement covered={hideGameContent} coverText="Answers Hidden">
 							{#snippet children()}
 								<QuestionView />
 							{/snippet}
@@ -118,7 +118,7 @@
 					<!-- Combined Question & Scoreboard for non-lobby desktop -->
 					<div class="mb-4 flex-none">
 						<!-- Coverable Question View (Desktop) -->
-						<CoverableElement covered={hideGameContent} coverText="Question Hidden">
+						<CoverableElement covered={hideGameContent} coverText="Answers Hidden">
 							{#snippet children()}
 								<QuestionView />
 							{/snippet}
