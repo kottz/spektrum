@@ -86,7 +86,11 @@
 			<div class="flex min-h-0 flex-1 flex-col lg:hidden">
 				{#if phase === GamePhase.Question}
 					<div class="flex min-h-0 flex-1 flex-col space-y-4">
-						<QuestionView />
+						<CoverableElement covered={hideGameContent} coverText="Questions Hidden">
+							{#snippet children()}
+								<QuestionView />
+							{/snippet}
+						</CoverableElement>
 						<!-- Moved timer/progress here for mobile Question phase -->
 						<div class="space-y-4">
 							<AnswerProgress />
@@ -131,14 +135,14 @@
 	<!-- Mobile-only bottom controls -->
 	<div class="fixed bottom-0 left-0 right-0 z-10 bg-background/95 p-3 backdrop-blur-sm lg:hidden">
 		<!-- Spoiler Toggle for Mobile -->
-		<div class="mb-3 flex select-none items-center justify-end gap-2 rounded text-xs">
-			<label for="spoiler-mode-mobile" class="cursor-pointer font-medium">No Spoilers</label>
+		<div class="mb-3 flex select-none items-center justify-start gap-2 rounded text-xs">
 			<input
 				type="checkbox"
 				id="spoiler-mode-mobile"
 				bind:checked={hideGameContent}
 				class="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
 			/>
+			<label for="spoiler-mode-mobile" class="cursor-pointer font-medium">No Spoiler Mode</label>
 		</div>
 		<!-- Phase Controls -->
 		{#if phase === GamePhase.Lobby}
