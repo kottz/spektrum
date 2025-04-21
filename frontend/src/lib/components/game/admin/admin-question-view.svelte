@@ -12,12 +12,10 @@
 	const placeholderCount = 6;
 
 	const correctAnswers = $derived(
-		questionType === 'character'
-			? [upcomingQuestions[0]?.options.find((opt) => opt.is_correct)?.option].filter(Boolean)
-			: upcomingQuestions[0]?.options
-					.filter((opt) => opt.is_correct)
-					.map((opt) => opt.option)
-					.filter(Boolean) || []
+		upcomingQuestions[0]?.options
+			.filter((opt) => opt.is_correct)
+			.map((opt) => opt.option)
+			.filter(Boolean) || []
 	);
 
 	const colorMap: Record<string, string> = {
