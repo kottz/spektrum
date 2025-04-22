@@ -49,6 +49,11 @@
 								{#if player.name === myName}
 									<span class="ml-1 text-xs text-muted-foreground">(You)</span>
 								{/if}
+								{#if player.consecutiveMisses >= 3}
+									<span class="ml-1 text-xs text-muted-foreground"
+										>(AFK: {player.consecutiveMisses})</span
+									>
+								{/if}
 							</span>
 						</div>
 						<div class="flex items-center gap-2">

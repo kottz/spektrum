@@ -163,6 +163,7 @@ function createGameStore() {
 							score,
 							roundScore: 0,
 							hasAnswered: false,
+							consecutiveMisses: 0,
 							answer: null
 						});
 					});
@@ -171,6 +172,14 @@ function createGameStore() {
 							const player = newPlayers.get(name);
 							if (player) {
 								player.roundScore = roundScore;
+							}
+						});
+					}
+					if (message.consecutive_misses) {
+						message.consecutive_misses.forEach(([name, misses]) => {
+							const player = newPlayers.get(name);
+							if (player) {
+								player.consecutiveMisses = misses;
 							}
 						});
 					}

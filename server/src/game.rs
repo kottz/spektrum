@@ -97,6 +97,7 @@ pub enum GameUpdate {
         alternatives: Option<Vec<String>>,
         scoreboard: Option<Vec<(String, i32)>>,
         round_scores: Option<Vec<(String, i32)>>,
+        consecutive_misses: Option<Vec<(String, u32)>>,
         // Optional extra info for admin
         admin_extra: Option<AdminExtraInfo>,
     },
@@ -191,6 +192,7 @@ pub struct PlayerState {
     pub round_score: i32,
     pub has_answered: bool,
     pub answer: Option<String>,
+    pub consecutive_misses: u32,
 }
 
 impl PlayerState {
@@ -201,6 +203,7 @@ impl PlayerState {
             round_score: 0,
             has_answered: false,
             answer: None,
+            consecutive_misses: 0,
         }
     }
 }
@@ -289,6 +292,14 @@ impl GameEngine {
             }
         }
         false
+    }
+
+    pub fn get_consecutive_misses(&self) -> Vec<(String, u32)> {
+        self.state
+            .players
+            .values()
+            .map(|p| (p.name.clone(), p.consecutive_misses))
+            .collect()
     }
 
     pub fn get_round_scores(&self) -> Vec<(String, i32)> {
@@ -415,6 +426,7 @@ impl GameEngine {
                 alternatives: Some(self.state.current_alternatives.clone()),
                 scoreboard: Some(self.get_scoreboard()),
                 round_scores: Some(self.get_round_scores()),
+                consecutive_misses: Some(self.get_consecutive_misses()),
                 admin_extra: if ctx.sender_id == self.state.admin_id {
                     Some(AdminExtraInfo {
                         upcoming_questions: self.get_upcoming_questions(3),
@@ -436,6 +448,7 @@ impl GameEngine {
                         alternatives: None,
                         scoreboard: Some(self.get_scoreboard()),
                         round_scores: None,
+                        consecutive_misses: None,
                         admin_extra: None,
                     },
                 );
@@ -586,6 +599,7 @@ impl GameEngine {
                 alternatives: None,
                 scoreboard: Some(self.get_scoreboard()),
                 round_scores: Some(self.get_round_scores()),
+                consecutive_misses: Some(self.get_consecutive_misses()),
                 admin_extra: None,
             },
         );
@@ -649,6 +663,7 @@ impl GameEngine {
                         alternatives: Some(self.state.current_alternatives.clone()),
                         scoreboard: Some(self.get_scoreboard()),
                         round_scores: Some(self.get_round_scores()),
+                        consecutive_misses: Some(self.get_consecutive_misses()),
                         admin_extra: None,
                     },
                 );
@@ -678,6 +693,16 @@ impl GameEngine {
             );
             return;
         }
+
+        // AFK check: if a player has not answered, increment their consecutive misses
+        for player in self.state.players.values_mut() {
+            if !player.has_answered {
+                player.consecutive_misses += 1;
+            } else {
+                player.consecutive_misses = 0;
+            }
+        }
+
         self.state.current_question = None;
         self.state.current_question_index += 1;
         self.state.current_alternatives.clear();
@@ -691,6 +716,7 @@ impl GameEngine {
                 alternatives: None,
                 scoreboard: Some(self.get_scoreboard()),
                 round_scores: Some(self.get_round_scores()),
+                consecutive_misses: Some(self.get_consecutive_misses()),
                 admin_extra: None,
             },
         );
@@ -802,7 +828,8 @@ impl GameEngine {
                     alternatives: None,
                     scoreboard: Some(self.get_scoreboard()), // Update scoreboard
                     round_scores: None, // Round scores might be irrelevant now, maybe send? Optional.
-                    admin_extra: None,  // Admin already knows
+                    consecutive_misses: Some(self.get_consecutive_misses()),
+                    admin_extra: None, // Admin already knows
                 },
             );
         } else {

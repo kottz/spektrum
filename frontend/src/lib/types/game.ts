@@ -43,6 +43,7 @@ export interface PlayerState {
 	score: number;
 	roundScore: number;
 	hasAnswered: boolean;
+	consecutiveMisses: number;
 	answer: string | null;
 }
 
@@ -113,6 +114,7 @@ export type GameUpdate =
 			alternatives?: string[];
 			scoreboard?: [string, number][];
 			round_scores?: [string, number][];
+			consecutive_misses?: [string, number][];
 			admin_extra?: AdminExtraInfo;
 	  }
 	| {
