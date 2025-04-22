@@ -13,12 +13,15 @@ use http::HeaderValue;
 use serde::Deserialize;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
 use tokio::signal;
-use tokio::time::Duration;
+use tokio::time::Duration as TokioDuration;
+use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};
 use tower_http::compression::{CompressionLayer, CompressionLevel};
 use tower_http::cors::CorsLayer;
 use tower_http::trace::{DefaultMakeSpan, TraceLayer};
-use tracing::info;
+use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod db;
@@ -146,6 +149,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             http::header::ACCEPT,
         ]);
 
+    // Configure rate limiting with 20 message burst and 1 second recharge
+    let governor_conf = Arc::new(
+        GovernorConfigBuilder::default()
+            .per_second(1)
+            .burst_size(20)
+            .finish()
+            .unwrap(),
+    );
+
+    // Clone the limiter for the cleanup task
+    let governor_limiter = governor_conf.limiter().clone();
+
+    // Create a task to clean up old rate limiting entries
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(TokioDuration::from_secs(60)).await;
+            if governor_limiter.len() > 1_000_000 {
+                warn!(
+                    "Rate limiting storage size is large: {}",
+                    governor_limiter.len()
+                );
+            }
+            governor_limiter.retain_recent();
+        }
+    });
+
     let question_store = QuestionStore::new(&app_config.storage).await?;
     let state = AppState::new(question_store, app_config.admin_password);
 
@@ -171,6 +200,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .quality(CompressionLevel::Default)
                 .gzip(true),
         )
+        .layer(GovernorLayer {
+            config: governor_conf,
+        })
         .layer(cors);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], app_config.server.port));
