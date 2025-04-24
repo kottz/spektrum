@@ -52,6 +52,10 @@
 		}
 	}
 
+	function preventContextMenu(event: MouseEvent) {
+		event.preventDefault();
+	}
+
 	function getButtonStyles(alternative: string) {
 		const styles: string[] = [];
 		styles.push('aspect-square', 'rounded-lg', 'transition-all', 'duration-150', 'relative');
@@ -152,12 +156,14 @@
 										loop
 										muted
 										playsinline
+										oncontextmenu={preventContextMenu}
 									></video>
 								{:else}
 									<img
 										src={`${imageBaseUrl}/${alternative}.avif`}
 										alt={alternative}
 										class="h-full w-full object-contain"
+										oncontextmenu={preventContextMenu}
 									/>
 								{/if}
 							</div>
