@@ -149,11 +149,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             http::header::ACCEPT,
         ]);
 
-    // Configure rate limiting with 20 message burst and 1 second recharge
+    // Configure rate limiting with 30 message burst and 500 ms recharge
     let governor_conf = Arc::new(
         GovernorConfigBuilder::default()
-            .per_second(1)
-            .burst_size(20)
+            .per_millisecond(500)
+            .burst_size(30)
             .finish()
             .unwrap(),
     );
