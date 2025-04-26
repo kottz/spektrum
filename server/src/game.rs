@@ -74,6 +74,7 @@ pub enum GamePhase {
     Score,
     Question,
     GameOver,
+    GameClosed,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq)]
@@ -277,7 +278,7 @@ impl GameEngine {
     }
 
     pub fn is_finished(&self) -> bool {
-        if self.state.phase == GamePhase::GameOver {
+        if self.state.phase == GamePhase::GameClosed {
             return true;
         }
         if let Some(last_msg) = self.state.last_lobby_message {
@@ -581,15 +582,21 @@ impl GameEngine {
     }
 
     fn handle_start_game(&mut self, ctx: EventContext) {
-        if self.state.phase != GamePhase::Lobby {
+        if self.state.phase != GamePhase::Lobby && self.state.phase != GamePhase::GameOver {
             self.push_update(
                 Recipients::Single(ctx.sender_id),
                 GameUpdate::Error {
-                    message: "Can only start game from lobby".into(),
+                    message: "Can only start game from lobby or after a finished game".into(),
                 },
             );
             return;
         }
+
+        // if we came from a finished game, zero everything out
+        if self.state.phase == GamePhase::GameOver {
+            self.reset_for_new_game();
+        }
+
         self.state.phase = GamePhase::Score;
         self.push_update(
             Recipients::All,
@@ -880,6 +887,27 @@ impl GameEngine {
         self.state.current_alternatives.dedup();
         fastrand::shuffle(&mut self.state.current_alternatives);
         Ok(())
+    }
+
+    fn reset_for_new_game(&mut self) {
+        // scramble the questions again
+        self.state.shuffled_question_indices = {
+            let mut v: Vec<usize> = (0..self.state.all_questions.len()).collect();
+            fastrand::shuffle(&mut v);
+            v
+        };
+        self.state.current_question_index = 0;
+        self.state.current_question = None;
+        self.state.current_alternatives.clear();
+        self.state.correct_answers = None;
+
+        // wipe every player’s scoreboard
+        for p in self.state.players.values_mut() {
+            p.score = 0;
+            p.round_score = 0;
+            p.has_answered = false;
+            p.answer = None;
+        }
     }
 
     fn get_upcoming_questions(&self, count: usize) -> Vec<GameQuestion> {
@@ -2463,7 +2491,10 @@ mod tests {
         // Should receive error message
         match admin_rx.recv().await.expect("Should receive Error message") {
             GameUpdate::Error { message } => {
-                assert_eq!(message, "Can only start game from lobby");
+                assert_eq!(
+                    message,
+                    "Can only start game from lobby or after a finished game"
+                );
             }
             other => panic!("Expected Error message, got {:?}", other),
         }
@@ -2481,6 +2512,56 @@ mod tests {
         engine.state.last_lobby_message = None;
         assert!(!engine.is_finished());
         engine.connections.clear();
+    }
+
+    #[test]
+    fn test_restart_game_in_same_lobby() {
+        use std::time::Instant;
+
+        // build a game with an admin and some questions
+        let (mut engine, admin_id) = setup_test_game();
+
+        // ── first game starts ────────────────────────────────────────────────────
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::StartGame,
+        });
+        assert_eq!(engine.state.phase, GamePhase::Score);
+
+        // ── admin ends the game ──────────────────────────────────────────────────
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::EndGame {
+                reason: "finished".to_string(),
+            },
+        });
+        assert_eq!(engine.state.phase, GamePhase::GameOver);
+
+        // ── admin starts a new game in the same lobby ────────────────────────────
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::StartGame,
+        });
+        assert_eq!(engine.state.phase, GamePhase::Score);
+
+        // every player’s score must be back to zero
+        assert!(engine
+            .state
+            .players
+            .values()
+            .all(|p| p.score == 0 && p.round_score == 0));
+
+        // fresh question sequence
+        assert_eq!(engine.state.current_question_index, 0);
     }
 
     // #[tokio::test]

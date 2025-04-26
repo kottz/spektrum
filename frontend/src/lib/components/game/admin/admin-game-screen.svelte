@@ -63,7 +63,7 @@
 							>
 						</div>
 
-						{#if phase === GamePhase.Lobby}
+						{#if phase === GamePhase.Lobby || phase === GamePhase.GameOver}
 							<StartButton />
 						{:else}
 							<div class="flex gap-2">
@@ -145,7 +145,7 @@
 			<label for="spoiler-mode-mobile" class="cursor-pointer font-medium">No Spoiler Mode</label>
 		</div>
 		<!-- Phase Controls -->
-		{#if phase === GamePhase.Lobby}
+		{#if phase === GamePhase.Lobby || phase === GamePhase.GameOver}
 			<StartButton />
 		{:else}
 			<div class="flex w-full gap-2">

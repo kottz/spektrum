@@ -8,7 +8,8 @@ export enum GamePhase {
 	Lobby = 'lobby',
 	Score = 'score',
 	Question = 'question',
-	GameOver = 'gameover'
+	GameOver = 'gameover',
+	GameClosed = 'gameclosed'
 }
 
 /**

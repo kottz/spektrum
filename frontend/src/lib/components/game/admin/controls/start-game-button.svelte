@@ -5,13 +5,14 @@
 
 	const phase = $derived(gameStore.state.phase?.toLowerCase() || 'lobby');
 	const isLobby = $derived(phase === 'lobby');
+	const isGameOver = $derived(phase === 'gameover');
 </script>
 
 <Button
 	variant="default"
 	class="w-full"
-	disabled={!isLobby}
+	disabled={!(isLobby || isGameOver)}
 	on:click={() => gameActions.startGame()}
 >
-	Start Game
+	{isGameOver ? 'Restart Game' : 'Start Game'}
 </Button>
