@@ -15,9 +15,30 @@
 		onChange?: (value: string) => void;
 	}>();
 
+	function handleInput(event: Event & { currentTarget: HTMLInputElement }) {
+		onChange(event.currentTarget.value); // Notify parent of potential changes
+	}
+
+	function handleBlur(event: FocusEvent & { currentTarget: HTMLInputElement }) {
+		const currentValue = event.currentTarget.value;
+		if (currentValue !== value) {
+			onCommit(currentValue);
+		}
+	}
+
 	function handleKeyDown(event: KeyboardEvent & { currentTarget: HTMLInputElement }) {
+		const currentValue = event.currentTarget.value;
+
 		if (event.key === 'Enter') {
-			onCommit(event.currentTarget.value);
+			event.preventDefault(); // Prevent default form submission
+			if (currentValue !== value) {
+				onCommit(currentValue);
+			}
+			event.currentTarget.blur();
+		} else if (event.key === 'Escape') {
+			event.preventDefault();
+			event.currentTarget.value = value;
+			onChange(value);
 			event.currentTarget.blur();
 		}
 	}
@@ -27,7 +48,7 @@
 	{type}
 	{value}
 	{placeholder}
-	on:input={(e) => onChange(e.currentTarget.value)}
-	on:blur={() => onCommit(value)}
+	on:input={handleInput}
+	on:blur={handleBlur}
 	on:keydown={handleKeyDown}
 />
