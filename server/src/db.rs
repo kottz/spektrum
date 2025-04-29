@@ -89,6 +89,7 @@ impl StoredData {
     /// - Questions referencing non-existent media IDs
     /// - Options referencing non-existent questions
     /// - Options referencing non-existent character names (via `option_text`)
+    /// - Text questions/options having empty strings
     /// - Sets referencing non-existent questions
     ///
     /// Returns `Ok(())` if all validations pass, or a `DbError::Validation` with detailed error message.
@@ -168,6 +169,18 @@ impl StoredData {
                     question.id, question.media_id
                 )));
             }
+
+            match question.question_type {
+                QuestionType::Text => {
+                    if question.question_text.is_none() {
+                        return Err(DbError::Validation(format!(
+                            "Question {} of type Text has no question text",
+                            question.id
+                        )));
+                    }
+                }
+                QuestionType::Year | QuestionType::Color | QuestionType::Character => {}
+            }
         }
 
         for option in &self.options {
@@ -197,7 +210,7 @@ impl StoredData {
                         )));
                     }
                 }
-                _ => {
+                QuestionType::Character => {
                     if !character_names.contains(&option.option_text) {
                         return Err(DbError::Validation(format!(
                             "Option {} references non-existent character name '{}'",
@@ -205,6 +218,15 @@ impl StoredData {
                         )));
                     }
                 }
+                QuestionType::Text => {
+                    if option.option_text.is_empty() {
+                        return Err(DbError::Validation(format!(
+                            "Option {} of type Text has no option text",
+                            option.id
+                        )));
+                    }
+                }
+                QuestionType::Year => {}
             }
         }
 
