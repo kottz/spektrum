@@ -95,6 +95,7 @@ pub enum GameUpdate {
     StateDelta {
         phase: Option<GamePhase>,
         question_type: Option<String>,
+        question_text: Option<String>,
         alternatives: Option<Vec<String>>,
         scoreboard: Option<Vec<(String, i32)>>,
         round_scores: Option<Vec<(String, i32)>>,
@@ -424,6 +425,11 @@ impl GameEngine {
                     .current_question
                     .as_ref()
                     .map(|q| q.get_question_type().to_string()),
+                question_text: self
+                    .state
+                    .current_question
+                    .as_ref()
+                    .and_then(|q| q.question_text.clone()),
                 alternatives: Some(self.state.current_alternatives.clone()),
                 scoreboard: Some(self.get_scoreboard()),
                 round_scores: Some(self.get_round_scores()),
@@ -446,6 +452,7 @@ impl GameEngine {
                     GameUpdate::StateDelta {
                         phase: None,
                         question_type: None,
+                        question_text: None,
                         alternatives: None,
                         scoreboard: Some(self.get_scoreboard()),
                         round_scores: None,
@@ -603,6 +610,7 @@ impl GameEngine {
             GameUpdate::StateDelta {
                 phase: Some(GamePhase::Score),
                 question_type: None,
+                question_text: None,
                 alternatives: None,
                 scoreboard: Some(self.get_scoreboard()),
                 round_scores: Some(self.get_round_scores()),
@@ -667,6 +675,7 @@ impl GameEngine {
                     GameUpdate::StateDelta {
                         phase: Some(GamePhase::Question),
                         question_type: Some(question.get_question_type().to_string()),
+                        question_text: question.question_text.clone(),
                         alternatives: Some(self.state.current_alternatives.clone()),
                         scoreboard: Some(self.get_scoreboard()),
                         round_scores: Some(self.get_round_scores()),
@@ -720,6 +729,7 @@ impl GameEngine {
             GameUpdate::StateDelta {
                 phase: Some(GamePhase::Score),
                 question_type: None,
+                question_text: None,
                 alternatives: None,
                 scoreboard: Some(self.get_scoreboard()),
                 round_scores: Some(self.get_round_scores()),
@@ -832,6 +842,7 @@ impl GameEngine {
                 GameUpdate::StateDelta {
                     phase: None, // Phase doesn't change
                     question_type: None,
+                    question_text: None,
                     alternatives: None,
                     scoreboard: Some(self.get_scoreboard()), // Update scoreboard
                     round_scores: None, // Round scores might be irrelevant now, maybe send? Optional.
@@ -935,6 +946,7 @@ mod tests {
             GameQuestion {
                 id: 1,
                 question_type: QuestionType::Color,
+                question_text: None,
                 title: "What color is predominantly used in this video?".to_string(),
                 artist: Some("Test Artist".to_string()),
                 youtube_id: "test123".to_string(),
@@ -953,6 +965,7 @@ mod tests {
             GameQuestion {
                 id: 2,
                 question_type: QuestionType::Text,
+                question_text: None,
                 title: "What is the main theme of this video?".to_string(),
                 artist: Some("Test Artist".to_string()),
                 youtube_id: "test456".to_string(),
@@ -975,6 +988,7 @@ mod tests {
             GameQuestion {
                 id: 3,
                 question_type: QuestionType::Year,
+                question_text: None,
                 title: "When was this video released?".to_string(),
                 artist: Some("Test Artist".to_string()),
                 youtube_id: "test789".to_string(),

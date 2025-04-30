@@ -638,6 +638,7 @@ impl QuestionDatabase {
                 Some(GameQuestion {
                     id: question.id.try_into().ok()?,
                     question_type: question.question_type,
+                    question_text: question.question_text.clone(),
                     title: media.title.clone(),
                     artist: Some(media.artist.clone()),
                     youtube_id: media.youtube_id.clone(),

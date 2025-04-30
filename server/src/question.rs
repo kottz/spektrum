@@ -116,6 +116,7 @@ pub struct GameQuestionOption {
 pub struct GameQuestion {
     pub id: u16,
     pub question_type: QuestionType,
+    pub question_text: Option<String>,
     pub title: String,
     pub artist: Option<String>,
     pub youtube_id: String,

@@ -9,11 +9,10 @@
 
 	const imageBaseUrl = $derived(`${PUBLIC_SPEKTRUM_CDN_URL}/img`);
 
-	// Access state directly through the new store structure
 	const alternatives = $derived(gameStore.state.currentQuestion?.alternatives || []);
 	const questionType = $derived(gameStore.state.currentQuestion?.type || 'default');
+	const questionText = $derived(gameStore.state.currentQuestion?.text ?? '');
 
-	// Get current player info
 	const currentPlayer = $derived(
 		gameStore.state.playerName ? gameStore.state.players.get(gameStore.state.playerName) : undefined
 	);
@@ -21,13 +20,11 @@
 	const hasAnswered = $derived(currentPlayer?.hasAnswered || false);
 	const currentAnswers = $derived(gameStore.state.currentAnswers);
 
-	// Determine if player's answer was correct
 	const myAnswer = $derived(currentAnswers.find((a) => a.name === gameStore.state.playerName));
 	const wasCorrect = $derived(myAnswer?.correct);
 
 	let clickedAnswer = $state<string | null>(null);
 
-	// Color map remains unchanged
 	const colorMap: Record<string, string> = {
 		red: '#FF0000',
 		green: '#00FF00',
@@ -58,38 +55,75 @@
 
 	function getButtonStyles(alternative: string) {
 		const styles: string[] = [];
-		styles.push('aspect-square', 'rounded-lg', 'transition-all', 'duration-150', 'relative');
+		styles.push('rounded-lg', 'transition-all', 'duration-150', 'relative');
 
+		// Type-specific layout and base appearance
 		if (questionType === 'character') {
-			styles.push('p-0', 'overflow-hidden');
+			styles.push(
+				'aspect-square',
+				'p-0',
+				'overflow-hidden',
+				'flex',
+				'items-center',
+				'justify-center'
+			);
 			if (!(alternative === clickedAnswer && myAnswer)) {
 				styles.push('bg-gray-200', 'dark:bg-gray-800');
 			}
-		} else if (questionType !== 'color') {
-			styles.push('bg-muted');
+		} else if (questionType === 'color') {
+			styles.push('aspect-square'); // Color buttons are squares, bg handled by style/later classes
+		} else if (questionType === 'text') {
+			styles.push('py-3', 'px-4', 'bg-muted', 'flex', 'items-center', 'justify-center', 'h-full'); // Text buttons are rectangular, fill height
+		} else {
+			// Fallback (matches original 'default' type style if needed)
+			styles.push('aspect-square', 'bg-muted', 'flex', 'items-center', 'justify-center');
 		}
 
+		// --- Interaction and Feedback Styles (Common Logic) ---
 		if (alternative === clickedAnswer) {
 			styles.push('ring-4', 'z-10');
 			if (myAnswer) {
+				// Feedback after answer revealed
 				if (wasCorrect) {
-					styles.push('ring-green-500', 'bg-green-500/50');
+					styles.push('ring-green-500');
+					// Apply original background feedback for character type
+					if (questionType === 'character') {
+						styles.push('bg-green-500/50');
+					} else if (questionType === 'text') {
+						styles.push('bg-green-500/20'); // Subtle tint for text
+					}
 				} else {
-					styles.push('ring-red-500', 'bg-red-500/50');
+					styles.push('ring-red-500');
+					// Apply original background feedback for character type
+					if (questionType === 'character') {
+						styles.push('bg-red-500/50');
+					} else if (questionType === 'text') {
+						styles.push('bg-red-500/20'); // Subtle tint for text
+					}
 				}
 			} else {
+				// Ring while waiting for result
 				styles.push('ring-primary');
 			}
 		}
 
 		if (clickedAnswer && alternative !== clickedAnswer) {
-			styles.push('opacity-40');
+			styles.push('opacity-40'); // Fade out unselected alternatives
 		}
 
 		if (!clickedAnswer) {
-			styles.push('hover:ring-2', 'hover:ring-muted-foreground', 'hover:scale-[1.02]');
+			// Hover effects only when clickable
+			styles.push('hover:ring-2', 'hover:ring-muted-foreground');
+			if (questionType === 'character' || questionType === 'color') {
+				styles.push('hover:scale-[1.02]');
+			} else if (questionType === 'text') {
+				styles.push('hover:brightness-95', 'dark:hover:brightness-110'); // Subtle brightness change for text
+			} else {
+				styles.push('hover:scale-[1.02]'); // Default hover
+			}
 		}
 
+		// --- Color Specific Styling ---
 		if (questionType === 'color') {
 			const lower = alternative.toLowerCase();
 			if (lower === 'white') {
@@ -98,43 +132,42 @@
 			if (lower === 'black') {
 				styles.push('border-2', 'dark:border-white');
 			}
+			// Assuming metallic classes exist in global CSS
 			if (lower === 'gold') {
 				styles.push('metallic-gold');
 			} else if (lower === 'silver') {
 				styles.push('metallic-silver');
 			}
+			// Background color for standard colors is handled by inline style attribute
 		}
 
+		// Cursor state
 		styles.push(clickedAnswer ? 'cursor-not-allowed' : 'cursor-pointer');
+
 		return styles.join(' ');
 	}
 </script>
 
 <div class="container mx-auto max-w-2xl p-4">
-	<!-- Current progress in the quiz -->
 	<Card class="mb-4">
 		<CardContent class="p-4">
 			<AnswerProgress />
 		</CardContent>
 	</Card>
 
-	<!-- Round timer (time left for the player to answer) -->
 	<Card class="mb-4">
 		<CardContent class="p-4">
 			<RoundTimer />
 		</CardContent>
 	</Card>
 
-	<!-- Main question card -->
 	<Card>
-		<CardHeader>
-			<CardTitle class="flex items-center justify-between">
-				<span>Choose your answer</span>
-			</CardTitle>
-		</CardHeader>
 		<CardContent>
-			<!-- Grid of answer buttons -->
-			<div class="grid grid-cols-3 gap-2">
+			{#if questionType === 'text'}
+				<p class="mb-4 text-center text-xl font-semibold">{questionText}</p>
+			{/if}
+
+			<div class="grid gap-2 {questionType === 'text' ? 'grid-cols-2' : 'grid-cols-3'}">
 				{#each alternatives as alternative}
 					<button
 						class={getButtonStyles(alternative)}
@@ -146,7 +179,6 @@
 							: ''}
 					>
 						{#if questionType === 'character'}
-							<!-- Character question: show an image -->
 							<div class="aspect-square w-full">
 								{#if alternative.endsWith('_video')}
 									<video
@@ -168,10 +200,10 @@
 								{/if}
 							</div>
 						{:else if questionType === 'color'}
-							<!-- For color questions, label is hidden with sr-only -->
 							<span class="sr-only">{alternative}</span>
+						{:else if questionType === 'text'}
+							<span class="text-center text-lg font-medium">{alternative}</span>
 						{:else}
-							<!-- Default text fallback for other question types -->
 							<div class="flex h-full w-full items-center justify-center text-lg font-medium">
 								{alternative}
 							</div>

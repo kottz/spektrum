@@ -187,10 +187,10 @@ function createGameStore() {
 				}
 
 				// Update the current question if alternatives are provided.
-				//if (message.alternatives !== undefined && message.alternatives !== null) {
 				if (message.alternatives !== undefined) {
 					state.currentQuestion = {
-						type: message.question_type || '',
+						type: message.question_type ?? '',
+						text: message.question_text ?? undefined,
 						alternatives: message.alternatives
 					};
 				} else {

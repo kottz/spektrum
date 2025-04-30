@@ -61,6 +61,7 @@ export interface GameState {
 	players: Map<string, PlayerState>;
 	currentQuestion?: {
 		type: string;
+		text?: string;
 		alternatives: string[];
 	};
 	currentSong?: {
@@ -112,6 +113,7 @@ export type GameUpdate =
 			type: 'StateDelta';
 			phase?: GamePhase;
 			question_type?: string;
+			question_text?: string;
 			alternatives?: string[];
 			scoreboard?: [string, number][];
 			round_scores?: [string, number][];
