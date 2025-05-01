@@ -31,6 +31,16 @@
 							.map((opt) => opt.option)
 							.join(', ')}
 					</span>
+				{:else if question.question_type === 'text'}
+					<span class="truncate">
+						{question.question_text ?? 'N/A'} |
+						{question.options
+							.filter((opt) => opt.is_correct)
+							.map((opt) => opt.option)
+							.join(', ') || 'Unknown'}
+					</span>
+				{:else}
+					<span class="truncate">Unknown</span>
 				{/if}
 			</div>
 		</div>

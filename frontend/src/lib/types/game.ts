@@ -80,6 +80,7 @@ export interface GameState {
 export interface GameQuestion {
 	id: number;
 	question_type: string;
+	question_text: string;
 	title: string;
 	artist?: string;
 	youtube_id: string;
