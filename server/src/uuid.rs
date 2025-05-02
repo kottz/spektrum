@@ -260,7 +260,7 @@ mod tests {
         let uuid = Uuid::new_v4();
         let mut bytes = *uuid.as_bytes();
         // Change the variant bits to an invalid setting.
-        bytes[8] = bytes[8] & 0x3f;
+        bytes[8] &= 0x3f;
         let s = Uuid(bytes).to_string();
         let err = s.parse::<Uuid>().unwrap_err();
         assert_eq!(err, UuidError::Variant);

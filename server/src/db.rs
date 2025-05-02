@@ -1330,7 +1330,7 @@ mod tests {
             characters: vec![Character {
                 id: 1,
                 name: long_string.clone(),
-                image_url: long_string.clone(),
+                image_url: long_string,
             }],
             questions: vec![],
             options: vec![],
@@ -1364,7 +1364,7 @@ mod tests {
             characters: vec![Character {
                 id: 1,
                 name: special_chars.clone(),
-                image_url: special_chars.clone(),
+                image_url: special_chars,
             }],
             questions: vec![],
             options: vec![],

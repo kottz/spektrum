@@ -1375,13 +1375,8 @@ mod tests {
                     "Answer should be preserved"
                 );
 
-                //also expect a rebroadcast from the other players:
-                match player_rx.try_recv() {
-                    //use try_recv since we dont *know* if it will be there
-                    Ok(GameUpdate::StateDelta { scoreboard: sb, .. }) => {
-                        assert!(sb.is_some(), "Scoreboard should be present in rebroadcast");
-                    }
-                    _ => {} //ignore, could be nothing
+                if let Ok(GameUpdate::StateDelta { scoreboard: sb, .. }) = player_rx.try_recv() {
+                    assert!(sb.is_some(), "Scoreboard should be present in rebroadcast");
                 }
             }
             other => panic!("Expected StateDelta, got {:?}", other),
@@ -1502,7 +1497,7 @@ mod tests {
         ));
 
         // Test duplicate name
-        let existing_names = vec!["TestName".to_string()];
+        let existing_names = ["TestName".to_string()];
         assert!(matches!(
             validate_player_name("TestName", existing_names.iter()),
             Err(NameValidationError::AlreadyTaken)
