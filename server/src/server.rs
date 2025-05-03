@@ -125,7 +125,7 @@ pub enum AdminAction {
 
 pub struct Connection {
     pub lobby_id: Uuid,
-    pub tx: Option<UnboundedSender<GameUpdate>>,
+    pub tx: Option<UnboundedSender<Arc<String>>>,
 }
 
 #[derive(Clone)]
@@ -527,7 +527,7 @@ impl WSConnectionState {
 
 pub async fn handle_socket(socket: WebSocket, state: AppState) {
     let (ws_tx, mut ws_rx) = socket.split();
-    let (tx, rx) = unbounded_channel::<GameUpdate>();
+    let (tx, rx) = unbounded_channel::<Arc<String>>();
     let (pong_tx, pong_rx) = unbounded_channel::<Bytes>();
     let (heartbeat_tx, heartbeat_rx) = unbounded_channel::<Bytes>();
 
@@ -555,7 +555,7 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
 /// Spawns a task to handle sending messages to the client
 fn spawn_sender_task(
     mut ws_tx: SplitSink<WebSocket, Message>,
-    mut rx: UnboundedReceiver<GameUpdate>,
+    mut rx: UnboundedReceiver<Arc<String>>,
     mut pong_rx: UnboundedReceiver<Bytes>,
     mut heartbeat_rx: UnboundedReceiver<Bytes>,
 ) -> JoinHandle<()> {
@@ -572,7 +572,8 @@ fn spawn_sender_task(
                     }
                 }
                 Some(msg) = rx.recv() => {
-                    if let Err(e) = send_server_message(&mut ws_tx, msg).await {
+                    let text_playload = (*msg).clone().into();
+                    if let Err(e) = ws_tx.send(Message::Text(text_playload)).await {
                         error!("Failed to send message: {}", e);
                         break;
                     }
@@ -599,7 +600,7 @@ async fn process_incoming_messages(
     ws_rx: &mut SplitStream<WebSocket>,
     conn_state: Arc<RwLock<WSConnectionState>>,
     state: &AppState,
-    tx: UnboundedSender<GameUpdate>,
+    tx: UnboundedSender<Arc<String>>,
     pong_tx: UnboundedSender<Bytes>,
     hb_tx: UnboundedSender<Bytes>,
 ) {
@@ -635,9 +636,11 @@ async fn process_incoming_messages(
                                     engine.process_event(event);
                                 }
                             } else {
-                                let _ = tx.send(GameUpdate::Error {
-                                    message: "ID not in lobby. Must join lobby first".into(),
-                                });
+                                send_error_to_client(
+                                    &tx,
+                                    "ID not in lobby. Must join lobby first".into(),
+                                    "connect_id_not_found",
+                                );
                             }
                         }
                         Ok(msg) => {
@@ -698,10 +701,11 @@ async fn process_incoming_messages(
                             }
                         }
                         Err(e) => {
-                            error!("Failed to parse client message: {}", e);
-                            let _ = tx.send(GameUpdate::Error {
-                                message: format!("Invalid message format: {}", e),
-                            });
+                            send_error_to_client(
+                                &tx,
+                                format!("Invalid message format: {}", e),
+                                "Failed to parse client message",
+                            );
                         }
                     }
                 }
@@ -742,15 +746,36 @@ async fn process_incoming_messages(
     }
 }
 
-// /// Sends a server message through the WebSocket
-async fn send_server_message(
-    ws_tx: &mut SplitSink<WebSocket, Message>,
-    msg: GameUpdate,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let text = serde_json::to_string(&msg)?;
-    ws_tx.send(Message::Text(text.into())).await?;
-    Ok(())
+/// Helper to create, serialize, wrap, and send a GameUpdate::Error to a specific client's channel.
+fn send_error_to_client(tx: &UnboundedSender<Arc<String>>, message: String, context: &str) {
+    let error_update = GameUpdate::Error { message };
+    match serde_json::to_string(&error_update) {
+        Ok(error_json_string) => {
+            let error_arc_string = Arc::new(error_json_string);
+            if let Err(e) = tx.send(error_arc_string) {
+                // Log context about where the error occurred
+                error!(
+                    "Failed to send '{}' error message back to client: {}",
+                    context, e
+                );
+            }
+        }
+        Err(e) => {
+            // Log context about where the serialization failed
+            error!("Failed to serialize '{}' error message: {}", context, e);
+        }
+    }
 }
+
+// /// Sends a server message through the WebSocket
+// async fn send_server_message(
+//     ws_tx: &mut SplitSink<WebSocket, Message>,
+//     msg: GameUpdate,
+// ) -> Result<(), Box<dyn std::error::Error>> {
+//     let text = serde_json::to_string(&msg)?;
+//     ws_tx.send(Message::Text(text.into())).await?;
+//     Ok(())
+// }
 
 /// Handles cleanup when a connection is closed
 async fn handle_disconnect(conn_state: Arc<RwLock<WSConnectionState>>, state: &AppState) {
