@@ -2,6 +2,7 @@ use crate::db::{DbError, StoredData};
 use crate::game::{EventContext, GameAction, GameEngine, GameEvent, GameUpdate};
 use crate::question::QuestionStore;
 use crate::uuid::Uuid;
+use axum::extract::ws::Utf8Bytes;
 use axum::extract::Path;
 use axum::http::StatusCode;
 use axum::{
@@ -125,7 +126,7 @@ pub enum AdminAction {
 
 pub struct Connection {
     pub lobby_id: Uuid,
-    pub tx: Option<UnboundedSender<Arc<String>>>,
+    pub tx: Option<UnboundedSender<Utf8Bytes>>,
 }
 
 #[derive(Clone)]
@@ -527,7 +528,7 @@ impl WSConnectionState {
 
 pub async fn handle_socket(socket: WebSocket, state: AppState) {
     let (ws_tx, mut ws_rx) = socket.split();
-    let (tx, rx) = unbounded_channel::<Arc<String>>();
+    let (tx, rx) = unbounded_channel::<Utf8Bytes>();
     let (pong_tx, pong_rx) = unbounded_channel::<Bytes>();
     let (heartbeat_tx, heartbeat_rx) = unbounded_channel::<Bytes>();
 
@@ -555,7 +556,7 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
 /// Spawns a task to handle sending messages to the client
 fn spawn_sender_task(
     mut ws_tx: SplitSink<WebSocket, Message>,
-    mut rx: UnboundedReceiver<Arc<String>>,
+    mut rx: UnboundedReceiver<Utf8Bytes>,
     mut pong_rx: UnboundedReceiver<Bytes>,
     mut heartbeat_rx: UnboundedReceiver<Bytes>,
 ) -> JoinHandle<()> {
@@ -572,8 +573,7 @@ fn spawn_sender_task(
                     }
                 }
                 Some(msg) = rx.recv() => {
-                    let text_playload = (*msg).clone().into();
-                    if let Err(e) = ws_tx.send(Message::Text(text_playload)).await {
+                    if let Err(e) = ws_tx.send(Message::Text(msg.clone())).await {
                         error!("Failed to send message: {}", e);
                         break;
                     }
@@ -600,7 +600,7 @@ async fn process_incoming_messages(
     ws_rx: &mut SplitStream<WebSocket>,
     conn_state: Arc<RwLock<WSConnectionState>>,
     state: &AppState,
-    tx: UnboundedSender<Arc<String>>,
+    tx: UnboundedSender<Utf8Bytes>,
     pong_tx: UnboundedSender<Bytes>,
     hb_tx: UnboundedSender<Bytes>,
 ) {
@@ -747,12 +747,11 @@ async fn process_incoming_messages(
 }
 
 /// Helper to create, serialize, wrap, and send a GameUpdate::Error to a specific client's channel.
-fn send_error_to_client(tx: &UnboundedSender<Arc<String>>, message: String, context: &str) {
+fn send_error_to_client(tx: &UnboundedSender<Utf8Bytes>, message: String, context: &str) {
     let error_update = GameUpdate::Error { message };
     match serde_json::to_string(&error_update) {
         Ok(error_json_string) => {
-            let error_arc_string = Arc::new(error_json_string);
-            if let Err(e) = tx.send(error_arc_string) {
+            if let Err(e) = tx.send(Utf8Bytes::from(error_json_string)) {
                 // Log context about where the error occurred
                 error!(
                     "Failed to send '{}' error message back to client: {}",

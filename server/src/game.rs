@@ -2,6 +2,8 @@ use crate::db::QuestionSet;
 use crate::question::GameQuestion;
 use crate::server::Connection;
 use crate::uuid::Uuid;
+use axum::extract::ws::Utf8Bytes;
+use bytes::Bytes;
 use dashmap::DashMap;
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -322,10 +324,19 @@ impl GameEngine {
     }
 
     fn push_update(&self, recipients: Recipients, update: GameUpdate) {
-        let serialized_update = match serde_json::to_string(&update) {
-            Ok(s) => Arc::new(s),
+        let vec = match serde_json::to_vec(&update) {
+            Ok(v) => v,
             Err(e) => {
                 error!("Failed to serialize game update: {}", e);
+                return;
+            }
+        };
+
+        let bytes = Bytes::from(vec);
+        let payload = match Utf8Bytes::try_from(bytes) {
+            Ok(payload) => payload,
+            Err(e) => {
+                error!("Failed to convert bytes to Utf8Bytes: {}", e);
                 return;
             }
         };
@@ -335,7 +346,7 @@ impl GameEngine {
                 if self.state.players.contains_key(&target) {
                     if let Some(conn) = self.connections.get(&target) {
                         if let Some(ref tx) = conn.tx {
-                            let _ = tx.send(Arc::clone(&serialized_update));
+                            let _ = tx.send(payload.clone());
                         }
                     }
                 }
@@ -345,7 +356,7 @@ impl GameEngine {
                     if self.state.players.contains_key(&target) {
                         if let Some(conn) = self.connections.get(&target) {
                             if let Some(ref tx) = conn.tx {
-                                let _ = tx.send(Arc::clone(&serialized_update));
+                                let _ = tx.send(payload.clone());
                             }
                         }
                     }
@@ -356,7 +367,7 @@ impl GameEngine {
                     if !exclusions.contains(player_id) {
                         if let Some(conn) = self.connections.get(player_id) {
                             if let Some(ref tx) = conn.tx {
-                                let _ = tx.send(Arc::clone(&serialized_update));
+                                let _ = tx.send(payload.clone());
                             }
                         }
                     }
@@ -366,7 +377,7 @@ impl GameEngine {
                 for player_id in self.state.players.keys() {
                     if let Some(conn) = self.connections.get(player_id) {
                         if let Some(ref tx) = conn.tx {
-                            let _ = tx.send(Arc::clone(&serialized_update));
+                            let _ = tx.send(payload.clone());
                         }
                     }
                 }
@@ -950,18 +961,18 @@ mod tests {
     use std::time::Duration;
     use tokio::sync::mpsc::UnboundedReceiver;
 
-    async fn receive_and_deserialize<T>(rx: &mut UnboundedReceiver<Arc<String>>) -> T
+    async fn receive_and_deserialize<T>(rx: &mut UnboundedReceiver<Utf8Bytes>) -> T
     where
         T: for<'de> Deserialize<'de> + std::fmt::Debug,
     {
-        let arc_string = rx
+        let payload = rx
             .recv()
             .await
             .expect("Test failed: Channel closed unexpectedly or failed to receive message.");
-        let json_string = &*arc_string; // Dereference Arc to get &String, then coerce to &str
-        serde_json::from_str::<T>(json_string).expect(&format!(
+        let json = payload.as_str();
+        serde_json::from_str::<T>(json).expect(&format!(
             "Test failed: Failed to deserialize received JSON: '{}'",
-            json_string
+            json
         ))
     }
 
