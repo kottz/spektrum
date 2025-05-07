@@ -6,18 +6,19 @@
 	interface DisplayListItem {
 		name: string;
 		isAnswered: boolean;
-		correct?: boolean;
+		correct?: boolean; // Only if isAnswered is true
 	}
+
+	const MAX_DISPLAYED_NAMES = 50; // Cutoff limit
 
 	const allPlayersList = $derived(Array.from(gameStore.state.players.values()));
 	const currentAnswersList = $derived(gameStore.state.currentAnswers || []);
 
-	// Calculate progress
 	const totalPlayerCount = $derived(allPlayersList.length);
 	const answeredCount = $derived(currentAnswersList.length);
 	const progress = $derived(totalPlayerCount > 0 ? (answeredCount / totalPlayerCount) * 100 : 0);
 
-	const displayItems = $derived(() => {
+	const allSortedDisplayItems = $derived(() => {
 		const answeredPlayerNames = new Set(currentAnswersList.map((ans) => ans.name));
 
 		const answeredDisplayItems: DisplayListItem[] = currentAnswersList.map((answer) => ({
@@ -36,6 +37,11 @@
 
 		return [...answeredDisplayItems, ...unansweredDisplayItems];
 	});
+
+	const renderedDisplayItems = $derived(allSortedDisplayItems().slice(0, MAX_DISPLAYED_NAMES));
+	const remainingHiddenPlayersCount = $derived(
+		Math.max(0, totalPlayerCount - MAX_DISPLAYED_NAMES) // totalPlayerCount comes from allPlayersList.length
+	);
 </script>
 
 <div class="space-y-2">
@@ -45,8 +51,8 @@
 	</div>
 	<Progress value={progress} class="h-2 bg-muted" />
 	<ScrollArea orientation="horizontal" class="min-h-[32px] whitespace-nowrap">
-		<div class="flex w-max gap-1.5">
-			{#each displayItems() as item (item.name)}
+		<div class="flex w-max items-center gap-1.5">
+			{#each renderedDisplayItems as item (item.name)}
 				<div
 					class="rounded px-2 py-1 text-sm font-medium {item.isAnswered
 						? item.correct
@@ -57,6 +63,14 @@
 					{item.name}
 				</div>
 			{/each}
+			{#if remainingHiddenPlayersCount > 0}
+				<div
+					class="rounded bg-neutral-300 px-2 py-1 text-sm font-medium text-neutral-600 dark:bg-neutral-600 dark:text-neutral-300"
+					title="{remainingHiddenPlayersCount} more players not shown"
+				>
+					+{remainingHiddenPlayersCount}
+				</div>
+			{/if}
 		</div>
 	</ScrollArea>
 </div>
