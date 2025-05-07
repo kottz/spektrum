@@ -298,6 +298,10 @@ impl GameEngine {
         false
     }
 
+    pub fn is_full(&self) -> bool {
+        self.state.players.len() >= 1024
+    }
+
     pub fn get_consecutive_misses(&self) -> Vec<(String, u32)> {
         self.state
             .players

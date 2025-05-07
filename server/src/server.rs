@@ -319,6 +319,10 @@ pub async fn join_lobby_handler(
         .get_mut(lobby_id.value())
         .ok_or_else(|| ApiError::Lobby("Lobby engine not found".into()))?;
 
+    if engine.is_full() {
+        return Err(ApiError::Lobby("Lobby is full".into()));
+    }
+
     let new_player_id = Uuid::new_v4();
 
     engine
