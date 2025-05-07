@@ -180,7 +180,7 @@ impl TestPlayer {
                     Some("StateDelta") => {
                         if data["phase"].as_str() == Some("question") {
                             // Simulate thinking time before answering.
-                            let delay = self.rng.gen_range(0.0..3.0);
+                            let delay = self.rng.gen_range(0.0..40.0);
                             tokio::time::sleep(Duration::from_secs_f32(delay)).await;
                             if let Some(alternatives) = data["alternatives"].as_array() {
                                 if let Some(answer_val) = alternatives.choose(&mut self.rng) {
