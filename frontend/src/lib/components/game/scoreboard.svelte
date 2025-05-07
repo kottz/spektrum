@@ -4,14 +4,27 @@
 	import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
 	import { gameActions } from '$lib/stores/game-actions';
 
-	const players = $derived(
+	const PAGE_SIZE = 25;
+
+	const allSortedPlayers = $derived(
 		Array.from(gameStore.state.players.values()).sort((a, b) => b.score - a.score)
 	);
 
+	let currentPage = $state(1);
+	const totalPlayers = $derived(allSortedPlayers.length);
+	const maxPages = $derived(Math.ceil(totalPlayers / PAGE_SIZE));
+
+	// The subset of players to be rendered in the DOM.
+	const renderedPlayers = $derived(allSortedPlayers.slice(0, currentPage * PAGE_SIZE));
+	let loaderElement: HTMLDivElement | undefined = $state();
+
 	const isAdmin = $derived(gameStore.state.isAdmin);
 	const myName = $derived(gameStore.state.playerName);
-	const maxScore = $derived(players[0]?.score || 0);
-	const maxRoundScore = $derived(Math.max(...players.map((p) => p.roundScore), 0));
+	const maxScore = $derived(allSortedPlayers[0]?.score || 0);
+	const maxRoundScore = $derived(
+		Math.max(...allSortedPlayers.map((p) => p.roundScore).filter(isFinite), 0)
+	);
+
 	const gameOver = $derived(gameStore.state.phase === 'gameover');
 	const playingQuestion = $derived(gameStore.state.phase === 'question');
 
@@ -22,19 +35,56 @@
 
 	function getRoundScoreClass(roundScore: number): string {
 		if (roundScore === 0) return 'text-muted-foreground';
-		if (roundScore === maxRoundScore) return 'text-emerald-700 dark:text-emerald-400 font-bold';
-		return 'text-muted-white';
+		// Highlight if it's the max round score AND that score isn't zero
+		if (roundScore === maxRoundScore && maxRoundScore !== 0)
+			return 'text-emerald-700 dark:text-emerald-400 font-bold';
+		return 'text-primary-foreground';
 	}
 
 	function kickPlayer(playerName: string) {
 		gameActions.kickPlayer(playerName);
 	}
+
+	$effect(() => {
+		const currentLoaderEl = loaderElement;
+
+		if (!currentLoaderEl) {
+			return;
+		}
+
+		// Find the Radix ScrollArea Viewport to use as the observer's root.
+		// This ensures observations are relative to the ScrollArea's scrolling, not the browser window.
+		const scrollViewportRoot: HTMLElement | null = currentLoaderEl.closest(
+			'[data-radix-scroll-area-viewport]'
+		);
+
+		const observer = new IntersectionObserver(
+			(entries) => {
+				if (entries[0].isIntersecting) {
+					if (currentPage < maxPages) {
+						currentPage += 1;
+					}
+				}
+			},
+			{
+				root: scrollViewportRoot,
+				threshold: 0.01
+			}
+		);
+
+		observer.observe(currentLoaderEl);
+
+		return () => {
+			observer.unobserve(currentLoaderEl);
+			observer.disconnect();
+		};
+	});
 </script>
 
 <div class="flex h-full min-h-0 w-full">
 	<ScrollArea class="min-h-0 w-1 flex-1 rounded-md">
 		<div class="space-y-3 p-4">
-			{#each players as player, i}
+			{#each renderedPlayers as player, i (player.name)}
 				<div class="relative">
 					<div class="absolute inset-0 rounded-lg"></div>
 					<div
@@ -63,7 +113,6 @@
 								</span>
 							{/if}
 							<span class="font-medium">{player.score}</span>
-							<!-- Add Kick Button Here -->
 							{#if isAdmin && player.name !== myName && !gameOver && !playingQuestion}
 								<Button
 									variant="destructive"
@@ -80,6 +129,12 @@
 					</div>
 				</div>
 			{/each}
+
+			{#if currentPage < maxPages}
+				<div bind:this={loaderElement} class="h-1 w-full" aria-hidden="true">
+					<!--Invisible loader element. -->
+				</div>
+			{/if}
 		</div>
 	</ScrollArea>
 </div>
