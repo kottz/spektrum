@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
+	import { Separator } from '$lib/components/ui/separator';
+	import { Github } from 'lucide-svelte';
 	import SetSelector from '$lib/components/set-selector.svelte';
 	import LightSwitch from '$lib/components/ui/light-switch.svelte';
 	import JoinLobbyCard from '$lib/components/join-lobby-card.svelte';
@@ -86,5 +88,12 @@
 				<JoinLobbyCard />
 			{/if}
 		{/if}
+		<Separator class="mt-4" />
+		<footer class="flex items-center justify-center text-sm">
+			<Button href="https://github.com/kottz/spektrum" variant="outline" size="icon">
+				<Github class="h-[1.2rem] w-[1.2rem]" />
+				<span class="sr-only">Github repository</span>
+			</Button>
+		</footer>
 	</div>
 </div>
