@@ -15,5 +15,5 @@
 	{/if}
 </svelte:head>
 
-<ModeWatcher />
+<ModeWatcher defaultMode={'dark'} />
 {@render children()}
