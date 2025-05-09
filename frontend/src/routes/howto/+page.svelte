@@ -10,13 +10,11 @@
 <div class="container flex min-h-screen flex-col items-center justify-center gap-8 py-8">
 	<NotificationList />
 	<div class="grid w-full max-w-lg gap-6">
-		<!-- House button absolutely positioned on the left -->
 		<div class="flex items-center justify-center gap-3">
 			<Button class="ml-2" variant="outline" size="icon" onclick={() => goto('/')}>
 				<House class="h-[1.2rem] w-[1.2rem]" />
 				<span class="sr-only">Go home</span>
 			</Button>
-			<!-- Centered title group -->
 			<LightSwitch />
 		</div>
 		<h1 class="text-3xl font-bold">How to Play</h1>
@@ -43,6 +41,6 @@
 			You only have to click the player manually once, after that you can use the start round button
 			to play the music as normal.
 		</p>
-		<p>Don't use your YouTube in other places while the game is active.</p>
+		<p>Don't use your YouTube account in other places while the game is active.</p>
 	</div>
 </div>

@@ -92,7 +92,12 @@
 		<footer class="flex items-center justify-center text-sm">
 			<a href="/howto"><span class="text-muted-foreground">How to play</span></a>
 			<Separator orientation="vertical" class="mx-2 h-4" />
-			<Button href="https://github.com/kottz/spektrum" variant="outline" size="icon">
+			<Button
+				href="https://github.com/kottz/spektrum"
+				target="_blank"
+				variant="outline"
+				size="icon"
+			>
 				<Github class="h-[1.2rem] w-[1.2rem]" />
 				<span class="sr-only">Github repository</span>
 			</Button>
