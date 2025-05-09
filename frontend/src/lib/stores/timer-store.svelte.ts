@@ -37,9 +37,20 @@ function createTimerStore() {
 		}
 	}
 
-	function stopTimer() {
+	function stopTimer(forceStopActualTimer: boolean = false) {
 		if (state.answeredTimeSnapshot === null && state.timeLeft > 0) {
 			state.answeredTimeSnapshot = state.timeLeft;
+		}
+
+		// If admin forces a full stop, clear the interval.
+		if (forceStopActualTimer) {
+			if (interval) {
+				clearInterval(interval);
+				interval = undefined;
+			}
+			if (state.answeredTimeSnapshot === null) {
+				state.answeredTimeSnapshot = 0;
+			}
 		}
 	}
 

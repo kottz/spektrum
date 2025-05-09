@@ -101,7 +101,7 @@ class GameActions {
 	}
 
 	public endRound() {
-		timerStore.stopTimer();
+		timerStore.stopTimer(true);
 		this.sendAdminAction({ type: 'EndRound' });
 	}
 
