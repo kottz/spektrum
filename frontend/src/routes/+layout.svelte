@@ -1,11 +1,12 @@
 <script lang="ts">
 	import { ModeWatcher } from 'mode-watcher';
 	import '../app.css';
-	import { PUBLIC_UMAMI_WEBSITE_ID } from '$env/static/public';
+	import { PUBLIC_TITLE, PUBLIC_UMAMI_WEBSITE_ID } from '$env/static/public';
 	let { children } = $props();
 </script>
 
 <svelte:head>
+	<title>{PUBLIC_TITLE}</title>
 	{#if PUBLIC_UMAMI_WEBSITE_ID}
 		<script
 			defer
