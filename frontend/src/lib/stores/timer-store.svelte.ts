@@ -54,12 +54,22 @@ function createTimerStore() {
 		}
 	}
 
+	function resetTimer() {
+		if (interval) {
+			clearInterval(interval);
+			interval = undefined;
+		}
+		state.timeLeft = roundDuration;
+		state.answeredTimeSnapshot = null;
+	}
+
 	return {
 		get state() {
 			return state;
 		},
 		startTimer,
-		stopTimer
+		stopTimer,
+		resetTimer
 	};
 }
 

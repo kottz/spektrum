@@ -115,10 +115,12 @@ class GameActions {
 	}
 
 	public endGame(reason: string = 'Game ended by admin') {
+		timerStore.resetTimer();
 		this.sendAdminAction({ type: 'EndGame', reason });
 	}
 
 	public closeGame(reason: string = 'Game closed by admin') {
+		timerStore.resetTimer();
 		this.sendAdminAction({ type: 'CloseGame', reason });
 	}
 
@@ -133,6 +135,7 @@ class GameActions {
 			type: 'Leave'
 		};
 		websocketStore.send(message);
+		timerStore.resetTimer();
 		gameStore.cleanup();
 		youtubeStore.cleanup();
 	}
