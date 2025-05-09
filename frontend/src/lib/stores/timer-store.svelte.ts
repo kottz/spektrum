@@ -1,19 +1,21 @@
-// src/lib/stores/timer-store.ts
+// src/lib/stores/timer-store.svelte.ts
 import { browser } from '$app/environment';
 
 function createTimerStore() {
 	const state = $state({
-		timeLeft: 60
+		timeLeft: 60,
+		answeredTimeSnapshot: null as number | null
 	});
 
 	let interval: number | undefined;
 	let endTime: number = 0;
+	const roundDuration = 60;
 
 	function startTimer() {
 		if (browser) {
-			// Set the end time based on the current time
-			endTime = Date.now() + 60 * 1000;
-			state.timeLeft = 60;
+			endTime = Date.now() + roundDuration * 1000;
+			state.timeLeft = roundDuration;
+			state.answeredTimeSnapshot = null;
 
 			if (interval) {
 				clearInterval(interval);
@@ -21,25 +23,30 @@ function createTimerStore() {
 
 			interval = window.setInterval(() => {
 				const now = Date.now();
-				const remaining = Math.max(0, (endTime - now) / 1000);
+				const remaining = Math.max(0, Math.round(((endTime - now) / 1000) * 10) / 10);
 				state.timeLeft = remaining;
 
 				if (remaining <= 0) {
-					stopTimer();
+					if (interval) {
+						// If time truly runs out, clear the interval
+						clearInterval(interval);
+						interval = undefined;
+					}
 				}
 			}, 100);
 		}
 	}
 
 	function stopTimer() {
-		if (interval) {
-			clearInterval(interval);
-			interval = undefined;
+		if (state.answeredTimeSnapshot === null && state.timeLeft > 0) {
+			state.answeredTimeSnapshot = state.timeLeft;
 		}
 	}
 
 	return {
-		state,
+		get state() {
+			return state;
+		},
 		startTimer,
 		stopTimer
 	};
