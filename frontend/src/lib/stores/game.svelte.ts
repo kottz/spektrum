@@ -150,6 +150,7 @@ function createGameStore() {
 
 			case 'StateDelta': {
 				// Update phase if provided.
+				const previousPhase = state.phase;
 				if (message.phase !== undefined && message.phase !== null) {
 					state.phase = message.phase;
 				}
@@ -198,16 +199,15 @@ function createGameStore() {
 				}
 
 				// Perform phase-specific actions.
-				const newPhase = (message.phase && message.phase.toLowerCase()) || '';
-				if (newPhase === GamePhase.Question.toLowerCase()) {
-					timerStore.startTimer();
+				const currentPhase = state.phase;
+				if (previousPhase !== currentPhase) {
+					if (currentPhase === GamePhase.Question) {
+						timerStore.startTimer();
+					}
+					if (currentPhase === GamePhase.Score) {
+						state.currentAnswers = [];
+					}
 				}
-				if (newPhase === GamePhase.Score.toLowerCase()) {
-					state.currentAnswers = [];
-				}
-
-				// Update the phase.
-				state.phase = message.phase || state.phase;
 				break;
 			}
 
