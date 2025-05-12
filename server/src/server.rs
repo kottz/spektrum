@@ -127,6 +127,7 @@ pub enum AdminAction {
 pub struct Connection {
     pub lobby_id: Uuid,
     pub tx: Option<UnboundedSender<Utf8Bytes>>,
+    pub connection_id: Option<Uuid>,
 }
 
 #[derive(Clone)]
@@ -275,9 +276,14 @@ pub async fn create_lobby_handler(
 
     trace!("Creating new lobby {}", lobby_id);
 
-    state
-        .connections
-        .insert(admin_id, Connection { lobby_id, tx: None });
+    state.connections.insert(
+        admin_id,
+        Connection {
+            lobby_id,
+            tx: None,
+            connection_id: None,
+        },
+    );
 
     // Insert the new engine into the global lobbies map.
     state.lobbies.insert(lobby_id, engine);
@@ -334,6 +340,7 @@ pub async fn join_lobby_handler(
         Connection {
             lobby_id: *lobby_id,
             tx: None,
+            connection_id: None,
         },
     );
 
@@ -522,11 +529,15 @@ pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> 
 /// Simplified connection state - only tracks player ID
 struct WSConnectionState {
     player_id: Option<Uuid>,
+    connection_id: Uuid,
 }
 
 impl WSConnectionState {
     fn new() -> Self {
-        Self { player_id: None }
+        Self {
+            player_id: None,
+            connection_id: Uuid::new_v4(),
+        }
     }
 }
 
@@ -620,12 +631,14 @@ async fn process_incoming_messages(
                                 drop(conn);
                                 // Store player_id in connection state.
                                 conn_state.write().await.player_id = Some(player_id);
+                                let local_conn_id = conn_state.read().await.connection_id;
                                 // Update sender in connections map.
                                 state.connections.insert(
                                     player_id,
                                     Connection {
                                         lobby_id,
                                         tx: Some(tx.clone()),
+                                        connection_id: Some(local_conn_id),
                                     },
                                 );
                                 // Send Connect action to the engine
@@ -784,13 +797,23 @@ fn send_error_to_client(tx: &UnboundedSender<Utf8Bytes>, message: String, contex
 async fn handle_disconnect(conn_state: Arc<RwLock<WSConnectionState>>, state: &AppState) {
     let state_read = conn_state.read().await;
     if let Some(player_id) = state_read.player_id {
-        // Only remove the sender, preserving the lobby_id.
-        if let Some(conn) = state.connections.get(&player_id) {
-            let lobby_id = conn.lobby_id;
-            drop(conn);
-            state
-                .connections
-                .insert(player_id, Connection { lobby_id, tx: None });
+        let local_conn_id = state_read.connection_id; // Get the ID of the connection that is disconnecting
+
+        // Check the shared map entry
+        if let Some(mut conn_entry) = state.connections.get_mut(&player_id) {
+            // Only nullify if the stored connection ID matches the one we are disconnecting
+            if conn_entry.connection_id == Some(local_conn_id) {
+                trace!(
+                    "Disconnect cleanup: Nullifying tx for player {} (conn_id {})",
+                    player_id,
+                    local_conn_id
+                );
+                conn_entry.value_mut().tx = None;
+                conn_entry.value_mut().connection_id = None; // Also clear the ID
+            } else {
+                trace!("Disconnect cleanup: Stale disconnect for player {} (conn_id {}), newer connection exists.", player_id, local_conn_id);
+                // Do nothing, a newer connection has already updated the map
+            }
         }
     }
 }
