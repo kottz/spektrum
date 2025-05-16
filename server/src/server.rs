@@ -783,16 +783,6 @@ fn send_error_to_client(tx: &UnboundedSender<Utf8Bytes>, message: String, contex
     }
 }
 
-// /// Sends a server message through the WebSocket
-// async fn send_server_message(
-//     ws_tx: &mut SplitSink<WebSocket, Message>,
-//     msg: GameUpdate,
-// ) -> Result<(), Box<dyn std::error::Error>> {
-//     let text = serde_json::to_string(&msg)?;
-//     ws_tx.send(Message::Text(text.into())).await?;
-//     Ok(())
-// }
-
 /// Handles cleanup when a connection is closed
 async fn handle_disconnect(conn_state: Arc<RwLock<WSConnectionState>>, state: &AppState) {
     let state_read = conn_state.read().await;
