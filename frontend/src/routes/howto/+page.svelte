@@ -42,9 +42,9 @@
 			to play the music as normal.
 		</p>
 		<p>Don't use your YouTube account in other places while the game is active.</p>
-		<h2 class="text-l font-bold">The colors don't look correct?</h2>
+		<h2 class="text-l font-bold">Why do the colors not look correct?</h2>
 		<p>
-			If you have Dark Reader or similar browser extensions, they may interfere with the colors.
+			If you use Dark Reader or similar browser extensions, they may interfere with the colors.
 			Disable them for this page and use the built-in dark mode toggle.
 		</p>
 	</div>
