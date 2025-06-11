@@ -2,15 +2,13 @@
 	import { GamePhase } from '$lib/types/game';
 	import { streamStore } from '$lib/stores/stream.store.svelte';
 	import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
+	import { flip } from 'svelte/animate';
+	import { fly } from 'svelte/transition';
 
 	const PAGE_SIZE = 25;
 
 	const gameState = $derived(streamStore.state.gameState);
-	const allSortedPlayers = $derived(
-		gameState?.players
-			? Array.from(gameState.players.values()).sort((a, b) => b.score - a.score)
-			: []
-	);
+	const allSortedPlayers = $derived(gameState?.realtimeScoreboard || []);
 
 	let currentPage = $state(1);
 	const totalPlayers = $derived(allSortedPlayers.length);
@@ -25,9 +23,9 @@
 	const gameOver = $derived(gameState?.phase === GamePhase.GameOver);
 	const playingQuestion = $derived(gameState?.phase === GamePhase.Question);
 
-	// Create a set of players who have answered for quick lookup
-	const answeredPlayers = $derived(
-		new Set(gameState?.currentAnswers.map((answer) => answer.name) || [])
+	// Create a map of players who have answered with their answer details
+	const playerAnswers = $derived(
+		new Map(gameState?.currentAnswers.map((answer) => [answer.name, answer]) || [])
 	);
 
 	function getScoreWidth(score: number): string {
@@ -36,7 +34,27 @@
 	}
 
 	function hasAnswered(playerName: string): boolean {
-		return answeredPlayers.has(playerName);
+		return playerAnswers.has(playerName);
+	}
+
+	function getAnswerStatus(playerName: string): 'correct' | 'incorrect' | 'none' {
+		const answer = playerAnswers.get(playerName);
+		if (!answer) return 'none';
+		return answer.score > 0 ? 'correct' : 'incorrect';
+	}
+
+	function getPlayerBorderClass(playerName: string): string {
+		if (!playingQuestion) return '';
+
+		const status = getAnswerStatus(playerName);
+		switch (status) {
+			case 'correct':
+				return 'border-2 border-emerald-500';
+			case 'incorrect':
+				return 'border-2 border-red-500';
+			default:
+				return '';
+		}
 	}
 
 	$effect(() => {
@@ -75,10 +93,11 @@
 		<div class="space-y-1 p-2">
 			{#each renderedPlayers as player, index (player.name)}
 				<div
-					class="flex items-center gap-3 rounded-md p-2 transition-colors {playingQuestion &&
-					hasAnswered(player.name)
-						? 'bg-green-500/10'
-						: 'bg-muted/30'}"
+					class="flex items-center gap-3 overflow-hidden rounded-md bg-muted/30 p-2 transition-all duration-300 {getPlayerBorderClass(
+						player.name
+					)}"
+					animate:flip={{ duration: 500 }}
+					in:fly={{ x: -20, duration: 300 }}
 				>
 					<!-- Rank -->
 					<div class="flex-none text-sm font-medium text-muted-foreground">
@@ -86,15 +105,12 @@
 					</div>
 
 					<!-- Player name and score bar -->
-					<div class="min-w-0 flex-1">
-						<div class="flex items-center justify-between">
-							<span class="truncate font-medium" title={player.name}>
+					<div class="min-w-0 flex-1 overflow-hidden">
+						<div class="flex items-center justify-between gap-2">
+							<span class="flex-1 truncate font-medium" title={player.name}>
 								{player.name}
-								{#if playingQuestion && hasAnswered(player.name)}
-									<span class="ml-1 text-xs text-green-600">✓</span>
-								{/if}
 							</span>
-							<span class="text-sm font-semibold">{player.score}</span>
+							<span class="flex-none text-sm font-semibold">{player.score}</span>
 						</div>
 						{#if !gameOver && maxScore > 0}
 							<div class="mt-1 h-1.5 w-full rounded-full bg-muted">

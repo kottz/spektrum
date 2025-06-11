@@ -44,14 +44,17 @@
 	const remainingHiddenPlayersCount = $derived(Math.max(0, totalPlayerCount - MAX_DISPLAYED_NAMES));
 </script>
 
-<div class="space-y-2">
-	<div class="flex justify-between text-sm">
-		<span class="text-muted-foreground">Answers</span>
-		<span>{answeredCount}/{totalPlayerCount}</span>
+<div class="flex h-full flex-col overflow-hidden rounded-lg bg-card shadow">
+	<div class="flex-none border-b border-border bg-muted/50 px-4 py-3">
+		<div class="flex justify-between text-sm">
+			<span class="text-muted-foreground">Live Answers</span>
+			<span>{answeredCount}/{totalPlayerCount}</span>
+		</div>
+		<Progress value={progress} class="mt-2 h-2 bg-muted" />
 	</div>
-	<Progress value={progress} class="h-2 bg-muted" />
-	<ScrollArea class="h-64 w-full">
-		<div class="flex flex-wrap gap-1.5 p-1">
+
+	<ScrollArea class="flex-1 p-2">
+		<div class="flex flex-wrap gap-1.5">
 			{#each renderedDisplayItems as item (item.name)}
 				<div
 					class="rounded px-2 py-1 text-sm font-medium {item.isAnswered

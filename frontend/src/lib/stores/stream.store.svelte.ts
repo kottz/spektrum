@@ -16,6 +16,7 @@ interface StreamGameState {
 		text?: string;
 		alternatives: string[];
 	};
+	realtimeScoreboard: Array<{ name: string; score: number }>;
 }
 
 interface StreamStoreState {
@@ -31,7 +32,8 @@ const initialStreamGameState: StreamGameState = {
 	phase: GamePhase.Lobby,
 	players: new Map(),
 	currentAnswers: [],
-	currentQuestion: undefined
+	currentQuestion: undefined,
+	realtimeScoreboard: []
 };
 
 const initialState: StreamStoreState = {
@@ -166,6 +168,11 @@ function createStreamStore() {
 					message.scoreboard.forEach(([name, score]) => {
 						state.gameState!.players.set(name, { name, score });
 					});
+
+					// Update realtime scoreboard from official scores
+					state.gameState.realtimeScoreboard = message.scoreboard
+						.map(([name, score]) => ({ name, score }))
+						.sort((a, b) => b.score - a.score);
 				}
 				break;
 			}
@@ -184,6 +191,24 @@ function createStreamStore() {
 					score: message.score,
 					timestamp: Date.now()
 				});
+
+				// Update realtime scoreboard if player got points
+				if (message.score > 0) {
+					state.gameState.realtimeScoreboard = state.gameState.realtimeScoreboard
+						.map((player) => {
+							if (player.name === message.name) {
+								return { ...player, score: player.score + message.score };
+							}
+							return player;
+						})
+						.sort((a, b) => b.score - a.score);
+
+					info('StreamStore: Updated realtime scoreboard', {
+						player: message.name,
+						roundScore: message.score,
+						newScoreboard: state.gameState.realtimeScoreboard
+					});
+				}
 
 				info('StreamStore: Current answers after update', state.gameState.currentAnswers);
 				break;

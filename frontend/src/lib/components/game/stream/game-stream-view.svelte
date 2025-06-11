@@ -28,29 +28,32 @@
 
 		<!-- Main Content Area -->
 		<div class="grid min-h-0 flex-1 grid-cols-12 gap-4">
-			<!-- Left Column: Answer Progress, Timer (if any) -->
-			<div class="col-span-12 space-y-4 lg:col-span-4">
-				{#if phase === GamePhase.Question}
+			<!-- Left Column: Question Options + Answer Progress -->
+			<div class="col-span-12 flex flex-col space-y-4 lg:col-span-6">
+				<!-- Question Options (top) -->
+				<div class="flex-none">
+					{#if phase === GamePhase.Question}
+						<StreamQuestionView />
+					{:else if phase === GamePhase.Lobby}
+						<div class="flex h-48 items-center justify-center rounded-lg bg-card p-4 shadow">
+							<p class="text-xl text-muted-foreground">Waiting for game to start...</p>
+						</div>
+					{:else}
+						<div class="flex h-48 items-center justify-center rounded-lg bg-card p-4 shadow">
+							<p class="text-xl text-muted-foreground">Round Over</p>
+						</div>
+					{/if}
+				</div>
+
+				<!-- Answer Progress (bottom) -->
+				<div class="min-h-0 flex-1">
 					<StreamAnswerProgress />
-					<!-- Timer component could be added here if needed -->
-				{/if}
-				{#if phase === GamePhase.Lobby}
-					<div class="flex h-full items-center justify-center rounded-lg bg-card p-4 shadow">
-						<p class="text-xl text-muted-foreground">Waiting for game to start...</p>
-					</div>
-				{/if}
+				</div>
 			</div>
 
-			<!-- Right Column: Question or Scoreboard -->
-			<div class="col-span-12 lg:col-span-8">
-				{#if phase === GamePhase.Question}
-					<StreamQuestionView />
-				{:else if showScoreboard}
-					<StreamScoreboard />
-				{:else if phase === GamePhase.Lobby}
-					<!-- Show lobby players via scoreboard -->
-					<StreamScoreboard />
-				{/if}
+			<!-- Right Column: Always-visible Scoreboard -->
+			<div class="col-span-12 lg:col-span-6">
+				<StreamScoreboard />
 			</div>
 		</div>
 	</div>
