@@ -5,11 +5,9 @@ import { youtubeStore } from '$lib/stores/youtube-store.svelte';
 import { timerStore } from '$lib/stores/timer-store.svelte';
 import { info, warn } from '$lib/utils/logger';
 import { notifications } from '$lib/stores/notification-store';
-import { StreamEventManager, createPublicStateFilter } from '$lib/utils/stream.utils';
 import { broadcastService } from '$lib/services/broadcast.service';
 
-import type { GameState, GameUpdate, PublicGameState } from '../types/game';
-import type { StreamEvent } from '$lib/types/stream.types';
+import type { GameState, GameUpdate } from '../types/game';
 import { GamePhase } from '../types/game';
 import { PUBLIC_SPEKTRUM_SERVER_URL } from '$env/static/public';
 
@@ -57,8 +55,6 @@ const initialState: GameState = {
 
 function createGameStore() {
 	const state = $state<GameState>({ ...initialState });
-	const streamEventManager = new StreamEventManager(10);
-	const publicStateFilter = createPublicStateFilter();
 
 	/**
 	 * Cleanup resets the store and removes the current session.
@@ -125,92 +121,24 @@ function createGameStore() {
 	}
 
 	/**
-	 * Generate a public version of the game state safe for broadcasting
-	 */
-	function getPublicState(): PublicGameState {
-		const publicPlayers = publicStateFilter.filterPlayers(state.players);
-
-		let publicCurrentQuestion;
-		if (state.currentQuestion && state.phase === GamePhase.Question) {
-			publicCurrentQuestion = publicStateFilter.filterQuestion(state.currentQuestion);
-		}
-
-		let publicCurrentAnswers;
-		const shouldRevealCorrectness =
-			state.phase === GamePhase.Score || state.phase === GamePhase.GameOver;
-		if (state.currentAnswers.length > 0) {
-			publicCurrentAnswers = publicStateFilter.filterAnswers(
-				state.currentAnswers,
-				shouldRevealCorrectness
-			);
-		}
-
-		const publicState = {
-			phase: { type: state.phase },
-			joinCode: state.joinCode,
-			roundDuration: state.roundDuration,
-			players: publicPlayers,
-			currentQuestionPublic: publicCurrentQuestion,
-			currentAnswersPublic: publicCurrentAnswers,
-			upcomingQuestionCount: state.upcomingQuestions?.length
-		};
-
-		// Ensure the state is serializable by doing a test serialization
-		try {
-			JSON.stringify(publicState);
-			return publicState;
-		} catch (error) {
-			warn('GameStore: Public state contains non-serializable data', error);
-			// Return a safe fallback
-			return {
-				phase: { type: state.phase },
-				joinCode: state.joinCode || '',
-				roundDuration: state.roundDuration || 60,
-				players: [],
-				currentQuestionPublic: undefined,
-				currentAnswersPublic: undefined,
-				upcomingQuestionCount: 0
-			};
-		}
-	}
-
-	/**
-	 * Get and clear stream events for broadcasting
-	 */
-	function getStreamEvents(): StreamEvent[] {
-		return streamEventManager.getEvents();
-	}
-
-	function clearStreamEvents(): void {
-		streamEventManager.clearEvents();
-	}
-
-	/**
-	 * Broadcast game state and events to stream window
-	 */
-	function broadcastChanges(): void {
-		if (!state.isAdmin) return; // Only admin should broadcast
-
-		// Initialize broadcast service if not already done
-		if (!broadcastService.getIsInitialized() && !broadcastService.getIsStreamWindow()) {
-			broadcastService.initialize(false); // false = admin window
-		}
-
-		const publicState = getPublicState();
-		broadcastService.broadcastStateUpdate('SpektrumGame', publicState);
-
-		const eventsToBroadcast = getStreamEvents();
-		eventsToBroadcast.forEach((event) => {
-			broadcastService.broadcastStreamEvent('SpektrumGame', event);
-		});
-		clearStreamEvents();
-	}
-
-	/**
 	 * Processes an incoming GameUpdate message from the server.
 	 */
 	function processServerMessage(message: GameUpdate) {
 		info('Handling server message:', message);
+
+		// Initialize broadcast service if not already done and this is admin
+		if (
+			state.isAdmin &&
+			!broadcastService.getIsInitialized() &&
+			!broadcastService.getIsStreamWindow()
+		) {
+			broadcastService.initialize(false); // false = admin window
+		}
+
+		// Broadcast the raw server message to stream immediately (only if admin)
+		if (state.isAdmin) {
+			broadcastService.broadcastServerMessage('SpektrumGame', message as Record<string, unknown>);
+		}
 
 		// If the game is closed, run cleanup.
 		if (message.type === 'GameClosed') {
@@ -240,18 +168,6 @@ function createGameStore() {
 				const previousPhase = state.phase;
 				if (message.phase !== undefined && message.phase !== null) {
 					state.phase = message.phase;
-
-					// Add phase change stream event
-					if (previousPhase !== state.phase) {
-						streamEventManager.addEvent(
-							'PHASE_CHANGE_STREAM',
-							{
-								newPhase: state.phase,
-								previousPhase
-							},
-							2000
-						);
-					}
 				}
 
 				// Update players using provided scoreboard and round scores.
@@ -293,18 +209,6 @@ function createGameStore() {
 						text: message.question_text ?? undefined,
 						alternatives: message.alternatives
 					};
-
-					// Add new question stream event
-					if (state.phase === GamePhase.Question) {
-						streamEventManager.addEvent(
-							'NEW_QUESTION_STREAM',
-							{
-								questionText: message.question_text,
-								alternativesCount: message.alternatives.length
-							},
-							4000
-						);
-					}
 				} else {
 					state.currentQuestion = undefined;
 				}
@@ -335,15 +239,6 @@ function createGameStore() {
 						timestamp: Date.now()
 					}
 				];
-
-				// Add player answered stream event
-				streamEventManager.addEvent(
-					'PLAYER_ANSWERED_STREAM',
-					{
-						playerName: message.name
-					},
-					3000
-				);
 
 				break;
 			}
@@ -405,9 +300,6 @@ function createGameStore() {
 			default:
 				warn('Unhandled message type:', message);
 		}
-
-		// Broadcast changes to stream window after processing any message
-		broadcastChanges();
 	}
 
 	function setAdmin() {

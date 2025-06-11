@@ -1,17 +1,14 @@
 <script lang="ts">
-	import type { PublicGameState } from '$lib/types/game';
 	import { GamePhase } from '$lib/types/game';
+	import { streamStore } from '$lib/stores/stream.store.svelte';
 	import StreamQuestionView from './stream-question-view.svelte';
 	import StreamScoreboard from './stream-scoreboard.svelte';
 	import StreamAnswerProgress from './stream-answer-progress.svelte';
 
-	interface Props {
-		gameState: PublicGameState | null;
-	}
-	let { gameState }: Props = $props();
-
-	const phase = $derived(gameState?.phase.type);
+	const gameState = $derived(streamStore.state.gameState);
+	const phase = $derived(gameState?.phase);
 	const showScoreboard = $derived(phase === GamePhase.Score || phase === GamePhase.GameOver);
+	const joinCode = $derived(gameState?.joinCode || 'N/A');
 </script>
 
 {#if gameState}
@@ -21,7 +18,7 @@
 			<div class="flex items-center justify-between rounded-lg bg-card p-4 shadow">
 				<div>
 					<span class="text-muted-foreground">Join Code: </span>
-					<span class="font-mono text-xl font-bold">{gameState.joinCode || 'N/A'}</span>
+					<span class="font-mono text-xl font-bold">{joinCode}</span>
 				</div>
 				<div class="text-lg font-semibold capitalize">
 					{phase}
@@ -34,7 +31,7 @@
 			<!-- Left Column: Answer Progress, Timer (if any) -->
 			<div class="col-span-12 space-y-4 lg:col-span-4">
 				{#if phase === GamePhase.Question}
-					<StreamAnswerProgress {gameState} />
+					<StreamAnswerProgress />
 					<!-- Timer component could be added here if needed -->
 				{/if}
 				{#if phase === GamePhase.Lobby}
@@ -47,12 +44,12 @@
 			<!-- Right Column: Question or Scoreboard -->
 			<div class="col-span-12 lg:col-span-8">
 				{#if phase === GamePhase.Question}
-					<StreamQuestionView {gameState} />
+					<StreamQuestionView />
 				{:else if showScoreboard}
-					<StreamScoreboard {gameState} />
+					<StreamScoreboard />
 				{:else if phase === GamePhase.Lobby}
 					<!-- Show lobby players via scoreboard -->
-					<StreamScoreboard {gameState} />
+					<StreamScoreboard />
 				{/if}
 			</div>
 		</div>

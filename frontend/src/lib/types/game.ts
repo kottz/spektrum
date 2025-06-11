@@ -206,7 +206,7 @@ export interface PublicGameState extends BasePublicGameState {
 		text?: string;
 		alternatives: string[];
 	};
-	currentAnswersPublic?: Array<{ name: string; isCorrect?: boolean }>;
+	currentAnswersPublic?: Array<{ name: string; score?: number; isCorrect?: boolean }>;
 	upcomingQuestionCount?: number;
 }
 

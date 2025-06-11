@@ -36,6 +36,6 @@
 		</div>
 	{:else}
 		<!-- Render game-specific stream view -->
-		<GameStreamView gameState={state.gameState} />
+		<GameStreamView />
 	{/if}
 </div>

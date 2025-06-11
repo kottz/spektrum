@@ -20,7 +20,17 @@ interface StreamControlMessage {
 	action: 'show' | 'hide';
 }
 
-type BroadcastMessage = StateUpdateMessage | StreamEventMessage | StreamControlMessage;
+interface ServerMessageMessage {
+	type: 'SERVER_MESSAGE';
+	gameType: string;
+	message: Record<string, unknown>;
+}
+
+type BroadcastMessage =
+	| StateUpdateMessage
+	| StreamEventMessage
+	| StreamControlMessage
+	| ServerMessageMessage;
 
 class BroadcastService {
 	private channel: BroadcastChannel | null = null;
@@ -153,6 +163,27 @@ class BroadcastService {
 		}
 	}
 
+	broadcastServerMessage(gameType: string, message: Record<string, unknown>): void {
+		if (!this.isInitialized || !this.channel || this.isStreamWindow) {
+			return; // Only admin windows should broadcast
+		}
+
+		const broadcastMessage: ServerMessageMessage = {
+			type: 'SERVER_MESSAGE',
+			gameType,
+			message
+		};
+
+		try {
+			// Deep clone and serialize to ensure data is safe for broadcast
+			const serializedMessage = JSON.parse(JSON.stringify(broadcastMessage));
+			this.channel.postMessage(serializedMessage);
+			info('BroadcastService: Server message relayed', { gameType, messageType: message.type });
+		} catch (error) {
+			warn('BroadcastService: Failed to broadcast server message', error);
+		}
+	}
+
 	getIsInitialized(): boolean {
 		return this.isInitialized;
 	}
@@ -163,4 +194,10 @@ class BroadcastService {
 }
 
 export const broadcastService = new BroadcastService();
-export type { BroadcastMessage, StateUpdateMessage, StreamEventMessage, StreamControlMessage };
+export type {
+	BroadcastMessage,
+	StateUpdateMessage,
+	StreamEventMessage,
+	StreamControlMessage,
+	ServerMessageMessage
+};

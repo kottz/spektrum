@@ -1,16 +1,15 @@
 <script lang="ts">
-	import type { PublicGameState } from '$lib/types/game';
+	import { GamePhase } from '$lib/types/game';
+	import { streamStore } from '$lib/stores/stream.store.svelte';
 	import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
-
-	interface Props {
-		gameState: PublicGameState | null;
-	}
-	let { gameState }: Props = $props();
 
 	const PAGE_SIZE = 25;
 
+	const gameState = $derived(streamStore.state.gameState);
 	const allSortedPlayers = $derived(
-		gameState?.players ? [...gameState.players].sort((a, b) => b.score - a.score) : []
+		gameState?.players
+			? Array.from(gameState.players.values()).sort((a, b) => b.score - a.score)
+			: []
 	);
 
 	let currentPage = $state(1);
@@ -23,12 +22,21 @@
 
 	const maxScore = $derived(allSortedPlayers[0]?.score || 0);
 
-	const gameOver = $derived(gameState?.phase.type === 'gameover');
-	const playingQuestion = $derived(gameState?.phase.type === 'question');
+	const gameOver = $derived(gameState?.phase === GamePhase.GameOver);
+	const playingQuestion = $derived(gameState?.phase === GamePhase.Question);
+
+	// Create a set of players who have answered for quick lookup
+	const answeredPlayers = $derived(
+		new Set(gameState?.currentAnswers.map((answer) => answer.name) || [])
+	);
 
 	function getScoreWidth(score: number): string {
 		if (maxScore === 0) return '0%';
 		return `${(score / maxScore) * 100}%`;
+	}
+
+	function hasAnswered(playerName: string): boolean {
+		return answeredPlayers.has(playerName);
 	}
 
 	$effect(() => {
@@ -68,7 +76,7 @@
 			{#each renderedPlayers as player, index (player.name)}
 				<div
 					class="flex items-center gap-3 rounded-md p-2 transition-colors {playingQuestion &&
-					player.hasAnsweredPublic
+					hasAnswered(player.name)
 						? 'bg-green-500/10'
 						: 'bg-muted/30'}"
 				>
@@ -82,7 +90,7 @@
 						<div class="flex items-center justify-between">
 							<span class="truncate font-medium" title={player.name}>
 								{player.name}
-								{#if playingQuestion && player.hasAnsweredPublic}
+								{#if playingQuestion && hasAnswered(player.name)}
 									<span class="ml-1 text-xs text-green-600">✓</span>
 								{/if}
 							</span>

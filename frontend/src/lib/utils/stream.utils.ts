@@ -123,6 +123,7 @@ export function createPublicStateFilter() {
 		) => {
 			return answers.map((ans) => ({
 				name: ans.name,
+				score: ans.score,
 				...(revealCorrectness && { isCorrect: ans.score > 0 })
 			}));
 		}

@@ -1,17 +1,13 @@
 <script lang="ts">
-	import type { PublicGameState } from '$lib/types/game';
+	import { streamStore } from '$lib/stores/stream.store.svelte';
 	import { Card, CardContent } from '$lib/components/ui/card';
 	import { PUBLIC_SPEKTRUM_CDN_URL } from '$env/static/public';
 
-	interface Props {
-		gameState: PublicGameState | null;
-	}
-	let { gameState }: Props = $props();
-
 	const imageBaseUrl = PUBLIC_SPEKTRUM_CDN_URL + '/img';
 
-	// Derived from gameState prop
-	const question = $derived(gameState?.currentQuestionPublic);
+	// Get question data from stream store
+	const gameState = $derived(streamStore.state.gameState);
+	const question = $derived(gameState?.currentQuestion);
 	const alternatives = $derived(question?.alternatives || []);
 	const questionType = $derived(question?.type || 'default');
 	const questionText = $derived(question?.text ?? '');

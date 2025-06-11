@@ -2,21 +2,42 @@ import { browser } from '$app/environment';
 import { broadcastService } from '$lib/services/broadcast.service';
 import type { BroadcastMessage } from '$lib/services/broadcast.service';
 import type { StreamEvent, DisplayConfig } from '$lib/types/stream.types';
-import type { PublicGameState } from '$lib/types/game';
+import type { GameUpdate, GamePhase, PlayerAnswer } from '$lib/types/game';
 import { DEFAULT_DISPLAY_CONFIG } from '$lib/types/stream.types';
 import { info, warn } from '$lib/utils/logger';
+
+interface StreamGameState {
+	phase: GamePhase;
+	joinCode?: string;
+	players: Map<string, { name: string; score: number }>;
+	currentAnswers: PlayerAnswer[];
+	currentQuestion?: {
+		type: string;
+		text?: string;
+		alternatives: string[];
+	};
+}
 
 interface StreamStoreState {
 	isVisible: boolean;
 	currentGameType: string | null;
-	gameState: PublicGameState | null;
+	gameState: StreamGameState | null;
 	activeEvents: StreamEvent[];
 }
+
+import { GamePhase } from '$lib/types/game';
+
+const initialStreamGameState: StreamGameState = {
+	phase: GamePhase.Lobby,
+	players: new Map(),
+	currentAnswers: [],
+	currentQuestion: undefined
+};
 
 const initialState: StreamStoreState = {
 	isVisible: true,
 	currentGameType: null,
-	gameState: null,
+	gameState: { ...initialStreamGameState },
 	activeEvents: []
 };
 
@@ -71,21 +92,15 @@ function createStreamStore() {
 
 	function handleBroadcastMessage(message: BroadcastMessage): void {
 		switch (message.type) {
-			case 'STATE_UPDATE': {
-				info('StreamStore: Received state update', { gameType: message.gameType });
-				state.currentGameType = message.gameType;
-				state.gameState = message.gameState as PublicGameState;
-				break;
-			}
-
-			case 'STREAM_EVENT': {
-				info('StreamStore: Received stream event', {
+			case 'SERVER_MESSAGE': {
+				info('StreamStore: Received server message', {
 					gameType: message.gameType,
-					eventType: message.event.type
+					messageType: message.message.type
 				});
 
-				if (message.gameType === state.currentGameType) {
-					addStreamEvent(message.event);
+				if (message.gameType === state.currentGameType || !state.currentGameType) {
+					state.currentGameType = message.gameType;
+					processServerMessage(message.message as GameUpdate);
 				}
 				break;
 			}
@@ -98,6 +113,95 @@ function createStreamStore() {
 
 			default:
 				warn('StreamStore: Unknown message type', message);
+		}
+	}
+
+	function processServerMessage(message: GameUpdate): void {
+		if (!state.gameState) {
+			state.gameState = { ...initialStreamGameState };
+		}
+
+		info('StreamStore: Processing server message', { messageType: message.type, message });
+
+		switch (message.type) {
+			case 'Connected': {
+				// Initialize or update player
+				if ('player_id' in message && 'name' in message) {
+					state.gameState.players.set(message.name, {
+						name: message.name,
+						score: 0
+					});
+				}
+				break;
+			}
+
+			case 'StateDelta': {
+				info('StreamStore: Processing StateDelta', message);
+
+				if (message.phase !== undefined) {
+					const previousPhase = state.gameState.phase;
+					state.gameState.phase = message.phase;
+					info('StreamStore: Phase changed', { from: previousPhase, to: message.phase });
+
+					// Clear answers when entering a new question phase
+					if (message.phase === GamePhase.Question) {
+						state.gameState.currentAnswers = [];
+						info('StreamStore: Cleared answers for new question');
+					}
+				}
+
+				// Handle question data
+				if (message.question_type !== undefined || message.alternatives !== undefined) {
+					state.gameState.currentQuestion = {
+						type: message.question_type || 'default',
+						text: message.question_text,
+						alternatives: message.alternatives || []
+					};
+					info('StreamStore: Updated current question', state.gameState.currentQuestion);
+				}
+
+				if (message.scoreboard) {
+					info('StreamStore: Updating players from scoreboard', message.scoreboard);
+					state.gameState.players.clear();
+					message.scoreboard.forEach(([name, score]) => {
+						state.gameState!.players.set(name, { name, score });
+					});
+				}
+				break;
+			}
+
+			case 'Answered': {
+				info('StreamStore: Processing Answered', { name: message.name, score: message.score });
+
+				// Remove any existing answer from this player
+				state.gameState.currentAnswers = state.gameState.currentAnswers.filter(
+					(answer) => answer.name !== message.name
+				);
+
+				// Add the new answer
+				state.gameState.currentAnswers.push({
+					name: message.name,
+					score: message.score,
+					timestamp: Date.now()
+				});
+
+				info('StreamStore: Current answers after update', state.gameState.currentAnswers);
+				break;
+			}
+
+			case 'PlayerLeft': {
+				if ('name' in message) {
+					state.gameState.players.delete(message.name);
+					// Also remove from current answers
+					state.gameState.currentAnswers = state.gameState.currentAnswers.filter(
+						(answer) => answer.name !== message.name
+					);
+				}
+				break;
+			}
+
+			default:
+				info('StreamStore: Unhandled server message', { messageType: message.type });
 		}
 	}
 

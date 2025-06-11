@@ -1,12 +1,8 @@
 <script lang="ts">
-	import type { PublicGameState } from '$lib/types/game';
 	import { Progress } from '$lib/components/ui/progress';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
-
-	interface Props {
-		gameState: PublicGameState | null;
-	}
-	let { gameState }: Props = $props();
+	import { streamStore } from '$lib/stores/stream.store.svelte';
+	import { GamePhase } from '$lib/types/game';
 
 	interface DisplayListItem {
 		name: string;
@@ -16,17 +12,13 @@
 
 	const MAX_DISPLAYED_NAMES = 50;
 
-	const allPlayersList = $derived(gameState?.players || []);
-	const currentAnswersList = $derived(gameState?.currentAnswersPublic || []);
+	const gameState = $derived(streamStore.state.gameState);
+	const allPlayersList = $derived(gameState ? Array.from(gameState.players.values()) : []);
+	const currentAnswersList = $derived(gameState?.currentAnswers || []);
 
 	const totalPlayerCount = $derived(allPlayersList.length);
 	const answeredCount = $derived(currentAnswersList.length);
 	const progress = $derived(totalPlayerCount > 0 ? (answeredCount / totalPlayerCount) * 100 : 0);
-
-	// Show correctness only in Score or GameOver phases
-	const shouldRevealCorrectness = $derived(
-		gameState?.phase.type === 'score' || gameState?.phase.type === 'gameover'
-	);
 
 	const allSortedDisplayItems = $derived(() => {
 		const answeredPlayerNames = new Set(currentAnswersList.map((ans) => ans.name));
@@ -34,7 +26,7 @@
 		const answeredDisplayItems: DisplayListItem[] = currentAnswersList.map((answer) => ({
 			name: answer.name,
 			isAnswered: true,
-			correct: shouldRevealCorrectness ? answer.isCorrect : undefined
+			correct: answer.score > 0
 		}));
 
 		const unansweredDisplayItems: DisplayListItem[] = allPlayersList
@@ -57,44 +49,28 @@
 		<span class="text-muted-foreground">Answers</span>
 		<span>{answeredCount}/{totalPlayerCount}</span>
 	</div>
-
-	<Progress value={progress} class="h-2" />
-
-	{#if renderedDisplayItems.length > 0}
-		<ScrollArea class="h-32 w-full rounded border">
-			<div class="space-y-0.5 p-2">
-				{#each renderedDisplayItems as item (item.name)}
-					<div
-						class="flex items-center justify-between rounded px-2 py-1 text-sm transition-colors
-						{item.isAnswered
-							? shouldRevealCorrectness && item.correct === true
-								? 'bg-green-500/10 text-green-700 dark:text-green-400'
-								: shouldRevealCorrectness && item.correct === false
-									? 'bg-red-500/10 text-red-700 dark:text-red-400'
-									: 'bg-blue-500/10 text-blue-700 dark:text-blue-400'
-							: 'text-muted-foreground'}"
-					>
-						<span class="truncate">{item.name}</span>
-						<span class="ml-2 flex-none">
-							{#if item.isAnswered}
-								{#if shouldRevealCorrectness && item.correct !== undefined}
-									{item.correct ? '✓' : '✗'}
-								{:else}
-									✓
-								{/if}
-							{:else}
-								⋯
-							{/if}
-						</span>
-					</div>
-				{/each}
-
-				{#if remainingHiddenPlayersCount > 0}
-					<div class="py-1 text-center text-xs text-muted-foreground">
-						+{remainingHiddenPlayersCount} more players
-					</div>
-				{/if}
-			</div>
-		</ScrollArea>
-	{/if}
+	<Progress value={progress} class="h-2 bg-muted" />
+	<ScrollArea class="h-64 w-full">
+		<div class="flex flex-wrap gap-1.5 p-1">
+			{#each renderedDisplayItems as item (item.name)}
+				<div
+					class="rounded px-2 py-1 text-sm font-medium {item.isAnswered
+						? item.correct
+							? 'bg-emerald-500/20 text-emerald-400' // Answered and correct
+							: 'bg-red-500/20 text-red-400' // Answered and incorrect
+						: 'bg-neutral-200 text-neutral-500 dark:bg-neutral-700 dark:text-neutral-400'}"
+				>
+					{item.name}
+				</div>
+			{/each}
+			{#if remainingHiddenPlayersCount > 0}
+				<div
+					class="rounded bg-neutral-300 px-2 py-1 text-sm font-medium text-neutral-600 dark:bg-neutral-600 dark:text-neutral-300"
+					title="{remainingHiddenPlayersCount} more players not shown"
+				>
+					+{remainingHiddenPlayersCount}
+				</div>
+			{/if}
+		</div>
+	</ScrollArea>
 </div>
