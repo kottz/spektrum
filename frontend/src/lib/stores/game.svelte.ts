@@ -331,7 +331,7 @@ function createGameStore() {
 					...state.currentAnswers,
 					{
 						name: message.name,
-						correct: message.correct,
+						score: message.score,
 						timestamp: Date.now()
 					}
 				];

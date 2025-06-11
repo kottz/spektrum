@@ -24,7 +24,7 @@
 		const answeredDisplayItems: DisplayListItem[] = currentAnswersList.map((answer) => ({
 			name: answer.name,
 			isAnswered: true,
-			correct: answer.correct
+			correct: answer.score > 0
 		}));
 
 		const unansweredDisplayItems: DisplayListItem[] = allPlayersList

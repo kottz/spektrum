@@ -74,7 +74,7 @@ function createStreamStore() {
 			case 'STATE_UPDATE': {
 				info('StreamStore: Received state update', { gameType: message.gameType });
 				state.currentGameType = message.gameType;
-				state.gameState = message.gameState;
+				state.gameState = message.gameState as PublicGameState;
 				break;
 			}
 

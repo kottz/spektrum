@@ -113,7 +113,7 @@ pub enum GameUpdate {
     },
     Answered {
         name: String,
-        correct: bool,
+        score: i32,
     },
     GameOver {
         final_scores: Vec<(String, i32)>,
@@ -544,7 +544,7 @@ impl GameEngine {
             );
             return;
         }
-        let (player_name, correct) = {
+        let (player_name, score) = {
             let player = match self.state.players.get_mut(&ctx.sender_id) {
                 Some(p) => p,
                 None => {
@@ -600,13 +600,13 @@ impl GameEngine {
             player.round_score = score_delta;
             player.has_answered = true;
             player.answer = Some(answer);
-            (player.name.clone(), correct)
+            (player.name.clone(), score_delta)
         };
         self.push_update(
             Recipients::All,
             GameUpdate::Answered {
                 name: player_name,
-                correct,
+                score,
             },
         );
     }

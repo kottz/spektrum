@@ -1,5 +1,5 @@
 import type { StreamEvent } from '$lib/types/stream.types';
-import type { SpektrumStreamEvent, PlayerState } from '$lib/types/game';
+import type { SpektrumStreamEvent, PlayerState, GamePhase } from '$lib/types/game';
 
 /**
  * Manages a queue of stream events with automatic expiration
@@ -80,8 +80,8 @@ export const createStreamEvent = {
 	}),
 
 	phaseChange: (
-		newPhase: string,
-		previousPhase: string,
+		newPhase: GamePhase,
+		previousPhase: GamePhase,
 		duration: number = 2000
 	): SpektrumStreamEvent => ({
 		id: `phase_change_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -118,12 +118,12 @@ export function createPublicStateFilter() {
 		},
 
 		filterAnswers: (
-			answers: Array<{ name: string; correct: boolean }>,
+			answers: Array<{ name: string; score: number }>,
 			revealCorrectness: boolean = false
 		) => {
 			return answers.map((ans) => ({
 				name: ans.name,
-				...(revealCorrectness && { isCorrect: ans.correct })
+				...(revealCorrectness && { isCorrect: ans.score > 0 })
 			}));
 		}
 	};

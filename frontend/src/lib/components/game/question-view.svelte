@@ -21,7 +21,7 @@
 	const currentAnswers = $derived(gameStore.state.currentAnswers);
 
 	const myAnswer = $derived(currentAnswers.find((a) => a.name === gameStore.state.playerName));
-	const wasCorrect = $derived(myAnswer?.correct);
+	const wasCorrect = $derived(myAnswer?.score ? myAnswer.score > 0 : false);
 
 	let clickedAnswer = $state<string | null>(null);
 

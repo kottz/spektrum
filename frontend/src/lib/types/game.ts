@@ -32,7 +32,7 @@ export enum ErrorCode {
  */
 export interface PlayerAnswer {
 	name: string;
-	correct: boolean;
+	score: number;
 	timestamp: number;
 }
 
@@ -132,7 +132,7 @@ export type GameUpdate =
 	| {
 			type: 'Answered';
 			name: string;
-			correct: boolean;
+			score: number;
 	  }
 	| {
 			type: 'GameOver';
