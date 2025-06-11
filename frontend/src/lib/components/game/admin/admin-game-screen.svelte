@@ -14,6 +14,7 @@
 	import RoundButton from '$lib/components/game/admin/controls/round-control-button.svelte';
 	import SkipButton from '$lib/components/game/admin/controls/skip-control-button.svelte';
 	import CoverableElement from '$lib/components/coverable-element.svelte';
+	import StreamControls from './stream-controls.svelte';
 
 	const phase = $derived(gameStore.state.phase);
 	const showScoreboard = $derived(phase === GamePhase.Score || phase === GamePhase.GameOver);
@@ -29,6 +30,7 @@
 				<div class="space-y-4">
 					<EndLeaveButton />
 					<JoinCodeCard />
+					<StreamControls />
 					<div class="aspect-video w-full">
 						<CoverableElement covered={hideGameContent} coverText="Video Hidden">
 							{#snippet children()}

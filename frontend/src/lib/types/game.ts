@@ -189,6 +189,52 @@ export type AdminAction =
 	| { type: 'EndGame'; reason: string }
 	| { type: 'CloseGame'; reason: string };
 
+/* ------------------------------------------------------------------
+   STREAM TYPES FOR BROADCASTING
+------------------------------------------------------------------ */
+
+import type { StreamEvent as BaseStreamEvent, BasePublicGameState } from '$lib/types/stream.types';
+
+// Public version of GameState for broadcasting
+export interface PublicGameState extends BasePublicGameState {
+	phase: { type: GamePhase; data?: Record<string, unknown> };
+	joinCode?: string;
+	roundDuration: number;
+	players: Array<{ name: string; score: number; hasAnsweredPublic?: boolean }>;
+	currentQuestionPublic?: {
+		type: string;
+		text?: string;
+		alternatives: string[];
+	};
+	currentAnswersPublic?: Array<{ name: string; isCorrect?: boolean }>;
+	upcomingQuestionCount?: number;
+}
+
+// Specific stream event types for Spektrum
+export type PlayerAnsweredStreamEventData = { playerName: string };
+export type NewQuestionStreamEventData = { questionText?: string; alternativesCount: number };
+export type PhaseChangeStreamEventData = { newPhase: GamePhase; previousPhase: GamePhase };
+
+export interface PlayerAnsweredStreamEvent extends BaseStreamEvent {
+	type: 'PLAYER_ANSWERED_STREAM';
+	data: PlayerAnsweredStreamEventData;
+}
+
+export interface NewQuestionStreamEvent extends BaseStreamEvent {
+	type: 'NEW_QUESTION_STREAM';
+	data: NewQuestionStreamEventData;
+}
+
+export interface PhaseChangeStreamEvent extends BaseStreamEvent {
+	type: 'PHASE_CHANGE_STREAM';
+	data: PhaseChangeStreamEventData;
+}
+
+export type SpektrumStreamEvent =
+	| PlayerAnsweredStreamEvent
+	| NewQuestionStreamEvent
+	| PhaseChangeStreamEvent;
+
 /**
  * Common name validation errors that might be returned by the server or client.
  */
