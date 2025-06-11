@@ -20,15 +20,23 @@
 		totalRoundDuration > 0 ? (actualTimeLeftInRound / totalRoundDuration) * 100 : 0
 	);
 
-	const points = $derived(
-		totalRoundDuration > 0 ? (timeLeftForPoints / totalRoundDuration) * 5000 : 0
-	);
+	const points = $derived(() => {
+		const playerAnswer = gameStore.state.currentAnswers.find(
+			(a) => a.name === gameStore.state.playerName
+		);
+
+		if (playerAnswer?.score != null) {
+			return playerAnswer.score;
+		}
+
+		return totalRoundDuration > 0 ? (timeLeftForPoints / totalRoundDuration) * 5000 : 0;
+	});
 </script>
 
 <div class="space-y-2">
 	<div class="flex justify-between text-sm">
 		<span class="text-muted-foreground">Time Remaining</span>
-		<span class="w-24 text-right text-sm font-medium">{points.toFixed(0)}</span>
+		<span class="w-24 text-right text-sm font-medium">{points().toFixed(0)}</span>
 	</div>
 	<div class="flex items-center gap-4">
 		<div class="relative h-2 flex-1 overflow-hidden rounded-full bg-secondary">
