@@ -26,11 +26,24 @@ interface ServerMessageMessage {
 	message: Record<string, unknown>;
 }
 
+interface InitialStateMessage {
+	type: 'INITIAL_STATE';
+	gameType: string;
+	joinCode: string;
+	gameState: BasePublicGameState | Record<string, unknown>;
+}
+
+interface StreamReadyMessage {
+	type: 'STREAM_READY';
+}
+
 type BroadcastMessage =
 	| StateUpdateMessage
 	| StreamEventMessage
 	| StreamControlMessage
-	| ServerMessageMessage;
+	| ServerMessageMessage
+	| InitialStateMessage
+	| StreamReadyMessage;
 
 class BroadcastService {
 	private channel: BroadcastChannel | null = null;
@@ -184,6 +197,49 @@ class BroadcastService {
 		}
 	}
 
+	broadcastInitialState(
+		gameType: string,
+		joinCode: string,
+		gameState: BasePublicGameState | Record<string, unknown>
+	): void {
+		if (!this.isInitialized || !this.channel || this.isStreamWindow) {
+			return; // Only admin windows should broadcast
+		}
+
+		const message: InitialStateMessage = {
+			type: 'INITIAL_STATE',
+			gameType,
+			joinCode,
+			gameState
+		};
+
+		try {
+			// Deep clone and serialize to ensure data is safe for broadcast
+			const serializedMessage = JSON.parse(JSON.stringify(message));
+			this.channel.postMessage(serializedMessage);
+			info('BroadcastService: Initial state sent', { gameType, joinCode });
+		} catch (error) {
+			warn('BroadcastService: Failed to broadcast initial state', error);
+		}
+	}
+
+	broadcastStreamReady(): void {
+		if (!this.isInitialized || !this.channel || !this.isStreamWindow) {
+			return; // Only stream windows should broadcast ready signal
+		}
+
+		const message: StreamReadyMessage = {
+			type: 'STREAM_READY'
+		};
+
+		try {
+			this.channel.postMessage(message);
+			info('BroadcastService: Stream ready signal sent');
+		} catch (error) {
+			warn('BroadcastService: Failed to broadcast stream ready', error);
+		}
+	}
+
 	getIsInitialized(): boolean {
 		return this.isInitialized;
 	}
@@ -199,5 +255,7 @@ export type {
 	StateUpdateMessage,
 	StreamEventMessage,
 	StreamControlMessage,
-	ServerMessageMessage
+	ServerMessageMessage,
+	InitialStateMessage,
+	StreamReadyMessage
 };

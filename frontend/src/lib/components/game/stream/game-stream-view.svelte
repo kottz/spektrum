@@ -66,15 +66,12 @@
 
 {#if gameState}
 	<div class="flex h-screen flex-col">
-		<!-- Header section: Join Code, Phase Info -->
+		<!-- Header section: Join Code -->
 		<header class="mb-4 flex-none p-3">
-			<div class="flex items-center justify-between rounded-lg bg-card p-4 shadow">
-				<div>
-					<span class="text-muted-foreground">Join Code: </span>
-					<span class="font-mono text-xl font-bold">{joinCode}</span>
-				</div>
-				<div class="text-lg font-semibold capitalize">
-					{phase}
+			<div class="flex items-center justify-center rounded-lg bg-card p-4 shadow">
+				<div class="flex items-center gap-2">
+					<span class="text-lg text-muted-foreground">Join Code:</span>
+					<span class="font-mono text-4xl font-bold">{joinCode}</span>
 				</div>
 			</div>
 		</header>

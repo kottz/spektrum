@@ -47,7 +47,7 @@
 <div class="flex h-full flex-col overflow-hidden rounded-lg bg-card shadow">
 	<div class="flex-none border-b border-border bg-muted/50 px-4 py-3">
 		<div class="flex justify-between text-sm">
-			<span class="text-muted-foreground">Live Answers</span>
+			<span class="text-muted-foreground">Answers</span>
 			<span>{answeredCount}/{totalPlayerCount}</span>
 		</div>
 		<Progress value={progress} class="mt-2 h-2 bg-muted" />

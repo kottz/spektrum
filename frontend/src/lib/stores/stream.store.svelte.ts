@@ -71,6 +71,9 @@ function createStreamStore() {
 
 		isInitialized = true;
 		info('StreamStore: Initialized');
+
+		// Signal that the stream window is ready to receive data
+		broadcastService.broadcastStreamReady();
 	}
 
 	function cleanup(): void {
@@ -103,6 +106,25 @@ function createStreamStore() {
 				if (message.gameType === state.currentGameType || !state.currentGameType) {
 					state.currentGameType = message.gameType;
 					processServerMessage(message.message as GameUpdate);
+				}
+				break;
+			}
+
+			case 'INITIAL_STATE': {
+				info('StreamStore: Received initial state', {
+					gameType: message.gameType,
+					joinCode: message.joinCode
+				});
+
+				state.currentGameType = message.gameType;
+				if (!state.gameState) {
+					state.gameState = { ...initialStreamGameState };
+				}
+				state.gameState.joinCode = message.joinCode;
+
+				// Process the initial game state if it contains server message data
+				if (message.gameState && typeof message.gameState === 'object') {
+					processServerMessage(message.gameState as GameUpdate);
 				}
 				break;
 			}

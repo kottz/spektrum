@@ -2,12 +2,41 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { uiStore } from '$lib/stores/ui.store.svelte';
+	import { gameStore } from '$lib/stores/game.svelte';
 	import { broadcastService } from '$lib/services/broadcast.service';
 	import { MonitorPlay, Eye, EyeOff, ExternalLink } from 'lucide-svelte';
 	import { info } from '$lib/utils/logger';
 
 	const streamWindowState = $derived(uiStore.streamWindow);
+	const gameState = $derived(gameStore.state);
 	let isStreamContentVisible = $state(true);
+
+	function handleStreamReady() {
+		if (gameState.joinCode) {
+			// Create a simplified state object for the stream
+			const streamState = {
+				phase: gameState.phase,
+				scoreboard: Array.from(gameState.players.entries()).map(([name, player]) => [
+					name,
+					player.score
+				]),
+				round_scores: Array.from(gameState.players.entries()).map(([name, player]) => [
+					name,
+					player.roundScore || 0
+				]),
+				currentQuestion: gameState.currentQuestion,
+				question_type: gameState.currentQuestion?.type,
+				question_text: gameState.currentQuestion?.text,
+				alternatives: gameState.currentQuestion?.alternatives
+			};
+
+			info(
+				'StreamControls: Stream ready, sending initial state with join code',
+				gameState.joinCode
+			);
+			broadcastService.broadcastInitialState('SpektrumGame', gameState.joinCode, streamState);
+		}
+	}
 
 	function handleOpenStreamWindow(): void {
 		info('StreamControls: Opening stream window');
@@ -17,12 +46,31 @@
 		if (!broadcastService.getIsInitialized() && !broadcastService.getIsStreamWindow()) {
 			broadcastService.initialize(false); // false = admin window
 		}
+
+		// Listen for stream ready signal
+		broadcastService.addListener(handleBroadcastMessage);
+	}
+
+	function handleBroadcastMessage(message: any) {
+		if (message.type === 'STREAM_READY') {
+			info('StreamControls: Received stream ready signal');
+			handleStreamReady();
+		}
 	}
 
 	function handleCloseStreamWindow(): void {
 		info('StreamControls: Closing stream window');
 		uiStore.closeStreamWindow();
+		// Remove the listener when closing the stream window
+		broadcastService.removeListener(handleBroadcastMessage);
 	}
+
+	// Clean up listener when component is destroyed
+	$effect(() => {
+		return () => {
+			broadcastService.removeListener(handleBroadcastMessage);
+		};
+	});
 
 	function handleToggleVisibility(): void {
 		if (isStreamContentVisible) {
