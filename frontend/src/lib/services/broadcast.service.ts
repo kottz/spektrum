@@ -41,6 +41,10 @@ interface StreamCloseMessage {
 	type: 'STREAM_CLOSE';
 }
 
+interface StreamDisconnectedMessage {
+	type: 'STREAM_DISCONNECTED';
+}
+
 type BroadcastMessage =
 	| StateUpdateMessage
 	| StreamEventMessage
@@ -48,13 +52,15 @@ type BroadcastMessage =
 	| ServerMessageMessage
 	| InitialStateMessage
 	| StreamReadyMessage
-	| StreamCloseMessage;
+	| StreamCloseMessage
+	| StreamDisconnectedMessage;
 
 class BroadcastService {
 	private channel: BroadcastChannel | null = null;
 	private listeners: Set<(message: BroadcastMessage) => void> = new Set();
 	private isInitialized = false;
 	private isStreamWindow = false;
+	private hasActiveStreams = false;
 
 	initialize(isStreamWindow: boolean = false): void {
 		if (this.isInitialized) {
@@ -182,8 +188,8 @@ class BroadcastService {
 	}
 
 	broadcastServerMessage(gameType: string, message: Record<string, unknown>): void {
-		if (!this.isInitialized || !this.channel || this.isStreamWindow) {
-			return; // Only admin windows should broadcast
+		if (!this.isInitialized || !this.channel || this.isStreamWindow || !this.hasActiveStreams) {
+			return; // Only admin windows should broadcast, and only when streams are active
 		}
 
 		const broadcastMessage: ServerMessageMessage = {
@@ -262,12 +268,38 @@ class BroadcastService {
 		}
 	}
 
+	broadcastStreamDisconnected(): void {
+		if (!this.isInitialized || !this.channel || !this.isStreamWindow) {
+			return; // Only stream windows should broadcast disconnect signal
+		}
+
+		const message: StreamDisconnectedMessage = {
+			type: 'STREAM_DISCONNECTED'
+		};
+
+		try {
+			this.channel.postMessage(message);
+			info('BroadcastService: Stream disconnected signal sent');
+		} catch (error) {
+			warn('BroadcastService: Failed to broadcast stream disconnected', error);
+		}
+	}
+
 	getIsInitialized(): boolean {
 		return this.isInitialized;
 	}
 
 	getIsStreamWindow(): boolean {
 		return this.isStreamWindow;
+	}
+
+	getHasActiveStreams(): boolean {
+		return this.hasActiveStreams;
+	}
+
+	setHasActiveStreams(hasStreams: boolean): void {
+		this.hasActiveStreams = hasStreams;
+		info('BroadcastService: Active streams status updated', { hasActiveStreams: hasStreams });
 	}
 }
 
@@ -280,5 +312,6 @@ export type {
 	ServerMessageMessage,
 	InitialStateMessage,
 	StreamReadyMessage,
-	StreamCloseMessage
+	StreamCloseMessage,
+	StreamDisconnectedMessage
 };

@@ -54,12 +54,17 @@
 	function handleBroadcastMessage(message: any) {
 		if (message.type === 'STREAM_READY') {
 			info('StreamControls: Received stream ready signal');
+			broadcastService.setHasActiveStreams(true);
 			handleStreamReady();
+		} else if (message.type === 'STREAM_DISCONNECTED') {
+			info('StreamControls: Stream window disconnected');
+			broadcastService.setHasActiveStreams(false);
 		}
 	}
 
 	function handleCloseStreamWindow(): void {
 		info('StreamControls: Closing stream window');
+		broadcastService.setHasActiveStreams(false);
 		uiStore.closeStreamWindow();
 		// Remove the listener when closing the stream window
 		broadcastService.removeListener(handleBroadcastMessage);

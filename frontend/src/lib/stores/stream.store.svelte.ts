@@ -74,6 +74,11 @@ function createStreamStore() {
 
 		// Signal that the stream window is ready to receive data
 		broadcastService.broadcastStreamReady();
+
+		// Listen for window close/refresh to notify admin
+		window.addEventListener('beforeunload', () => {
+			broadcastService.broadcastStreamDisconnected();
+		});
 	}
 
 	function cleanup(): void {
