@@ -135,6 +135,12 @@ function createStreamStore() {
 				break;
 			}
 
+			case 'STREAM_CLOSE': {
+				info('StreamStore: Received stream close signal, closing window');
+				window.close();
+				break;
+			}
+
 			default:
 				warn('StreamStore: Unknown message type', message);
 		}

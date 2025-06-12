@@ -37,13 +37,18 @@ interface StreamReadyMessage {
 	type: 'STREAM_READY';
 }
 
+interface StreamCloseMessage {
+	type: 'STREAM_CLOSE';
+}
+
 type BroadcastMessage =
 	| StateUpdateMessage
 	| StreamEventMessage
 	| StreamControlMessage
 	| ServerMessageMessage
 	| InitialStateMessage
-	| StreamReadyMessage;
+	| StreamReadyMessage
+	| StreamCloseMessage;
 
 class BroadcastService {
 	private channel: BroadcastChannel | null = null;
@@ -240,6 +245,23 @@ class BroadcastService {
 		}
 	}
 
+	broadcastStreamClose(): void {
+		if (!this.isInitialized || !this.channel || this.isStreamWindow) {
+			return; // Only admin windows should broadcast close signal
+		}
+
+		const message: StreamCloseMessage = {
+			type: 'STREAM_CLOSE'
+		};
+
+		try {
+			this.channel.postMessage(message);
+			info('BroadcastService: Stream close signal sent');
+		} catch (error) {
+			warn('BroadcastService: Failed to broadcast stream close', error);
+		}
+	}
+
 	getIsInitialized(): boolean {
 		return this.isInitialized;
 	}
@@ -257,5 +279,6 @@ export type {
 	StreamControlMessage,
 	ServerMessageMessage,
 	InitialStateMessage,
-	StreamReadyMessage
+	StreamReadyMessage,
+	StreamCloseMessage
 };

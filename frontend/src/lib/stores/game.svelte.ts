@@ -61,6 +61,12 @@ function createGameStore() {
 	 */
 	function cleanup() {
 		info('Running cleanup...');
+
+		// Close stream window if admin
+		if (state.isAdmin && broadcastService.getIsInitialized()) {
+			broadcastService.broadcastStreamClose();
+		}
+
 		removeSession();
 		state.playerId = undefined;
 		state.playerName = undefined;
