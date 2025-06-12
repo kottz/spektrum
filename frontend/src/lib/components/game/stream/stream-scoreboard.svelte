@@ -44,7 +44,7 @@
 	}
 
 	function getPlayerBorderClass(playerName: string): string {
-		if (!playingQuestion) return '';
+		if (!playingQuestion) return 'border-2 border-transparent';
 
 		const status = getAnswerStatus(playerName);
 		switch (status) {
@@ -53,7 +53,7 @@
 			case 'incorrect':
 				return 'border-2 border-red-500';
 			default:
-				return '';
+				return 'border-2 border-transparent';
 		}
 	}
 
