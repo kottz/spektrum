@@ -12,7 +12,7 @@
 </script>
 
 {#if gameState}
-	<div class="container mx-auto flex h-screen flex-col p-3">
+	<div class="flex h-screen flex-col p-3">
 		<!-- Header section: Join Code, Phase Info -->
 		<header class="mb-4 flex-none">
 			<div class="flex items-center justify-between rounded-lg bg-card p-4 shadow">

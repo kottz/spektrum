@@ -16,7 +16,7 @@ interface StreamGameState {
 		text?: string;
 		alternatives: string[];
 	};
-	realtimeScoreboard: Array<{ name: string; score: number }>;
+	realtimeScoreboard: Array<{ name: string; score: number; roundScore: number }>;
 }
 
 interface StreamStoreState {
@@ -148,8 +148,16 @@ function createStreamStore() {
 					// Clear answers when entering a new question phase
 					if (message.phase === GamePhase.Question) {
 						state.gameState.currentAnswers = [];
-						info('StreamStore: Cleared answers for new question');
+						// Reset round scores for new question
+						state.gameState.realtimeScoreboard = state.gameState.realtimeScoreboard.map(
+							(player) => ({
+								...player,
+								roundScore: 0
+							})
+						);
+						info('StreamStore: Cleared answers and reset round scores for new question');
 					}
+					// Keep round scores visible during Score phase
 				}
 
 				// Handle question data
@@ -171,7 +179,12 @@ function createStreamStore() {
 
 					// Update realtime scoreboard from official scores
 					state.gameState.realtimeScoreboard = message.scoreboard
-						.map(([name, score]) => ({ name, score }))
+						.map(([name, score]) => {
+							// Find round score for this player
+							const roundScore =
+								message.round_scores?.find(([playerName]) => playerName === name)?.[1] || 0;
+							return { name, score, roundScore };
+						})
 						.sort((a, b) => b.score - a.score);
 				}
 				break;
@@ -197,7 +210,11 @@ function createStreamStore() {
 					state.gameState.realtimeScoreboard = state.gameState.realtimeScoreboard
 						.map((player) => {
 							if (player.name === message.name) {
-								return { ...player, score: player.score + message.score };
+								return {
+									...player,
+									score: player.score + message.score,
+									roundScore: player.roundScore + message.score
+								};
 							}
 							return player;
 						})

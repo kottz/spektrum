@@ -10,10 +10,10 @@
 		correct?: boolean; // Only if revealed
 	}
 
-	const MAX_DISPLAYED_NAMES = 50;
+	const MAX_DISPLAYED_NAMES = 100;
 
 	const gameState = $derived(streamStore.state.gameState);
-	const allPlayersList = $derived(gameState ? Array.from(gameState.players.values()) : []);
+	const allPlayersList = $derived(gameState?.realtimeScoreboard || []);
 	const currentAnswersList = $derived(gameState?.currentAnswers || []);
 
 	const totalPlayerCount = $derived(allPlayersList.length);

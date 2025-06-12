@@ -80,7 +80,7 @@
 
 <div class="flex h-full flex-col overflow-hidden rounded-lg bg-card shadow">
 	<div class="flex-none border-b border-border bg-muted/50 px-4 py-3">
-		<h2 class="text-lg font-semibold">
+		<h2 class="text-xl font-bold">
 			{#if gameOver}
 				Final Scores
 			{:else}
@@ -93,33 +93,41 @@
 		<div class="space-y-1 p-2">
 			{#each renderedPlayers as player, index (player.name)}
 				<div
-					class="flex items-center gap-3 overflow-hidden rounded-md bg-muted/30 p-2 transition-all duration-300 {getPlayerBorderClass(
+					class="relative overflow-hidden rounded-md transition-all duration-300 {getPlayerBorderClass(
 						player.name
 					)}"
 					animate:flip={{ duration: 500 }}
 					in:fly={{ x: -20, duration: 300 }}
 				>
-					<!-- Rank -->
-					<div class="flex-none text-sm font-medium text-muted-foreground">
-						#{index + 1}
-					</div>
+					<!-- Background score bar -->
+					{#if !gameOver && maxScore > 0}
+						<div
+							class="absolute inset-0 bg-primary/20 transition-all duration-500"
+							style="width: {getScoreWidth(player.score)}"
+						></div>
+					{/if}
 
-					<!-- Player name and score bar -->
-					<div class="min-w-0 flex-1 overflow-hidden">
-						<div class="flex items-center justify-between gap-2">
-							<span class="flex-1 truncate font-medium" title={player.name}>
-								{player.name}
-							</span>
-							<span class="flex-none text-sm font-semibold">{player.score}</span>
+					<!-- Content -->
+					<div class="relative flex items-center gap-4 p-3">
+						<!-- Rank -->
+						<div class="flex-none text-lg font-semibold text-muted-foreground">
+							#{index + 1}
 						</div>
-						{#if !gameOver && maxScore > 0}
-							<div class="mt-1 h-1.5 w-full rounded-full bg-muted">
-								<div
-									class="h-full rounded-full bg-primary transition-all duration-300"
-									style="width: {getScoreWidth(player.score)}"
-								></div>
+
+						<!-- Player name and scores -->
+						<div class="min-w-0 flex-1 overflow-hidden">
+							<div class="flex items-center justify-between gap-3">
+								<span class="flex-1 truncate text-lg font-semibold" title={player.name}>
+									{player.name}
+								</span>
+								<div class="flex flex-none items-center gap-3 text-lg font-bold">
+									{#if player.roundScore > 0}
+										<span class="text-emerald-400">+{player.roundScore}</span>
+									{/if}
+									<span>{player.score.toLocaleString()}</span>
+								</div>
 							</div>
-						{/if}
+						</div>
 					</div>
 				</div>
 			{/each}
