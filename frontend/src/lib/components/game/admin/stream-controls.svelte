@@ -13,8 +13,9 @@
 
 	function handleStreamReady() {
 		if (gameState.joinCode) {
-			// Create a simplified state object for the stream
+			// Create a simplified state object for the stream including current phase
 			const streamState = {
+				type: 'StateDelta', // Make it look like a StateDelta message for processing
 				phase: gameState.phase,
 				scoreboard: Array.from(gameState.players.entries()).map(([name, player]) => [
 					name,
@@ -30,10 +31,10 @@
 				alternatives: gameState.currentQuestion?.alternatives
 			};
 
-			info(
-				'StreamControls: Stream ready, sending initial state with join code',
-				gameState.joinCode
-			);
+			info('StreamControls: Stream ready, sending initial state with join code and phase', {
+				joinCode: gameState.joinCode,
+				phase: gameState.phase
+			});
 			broadcastService.broadcastInitialState('SpektrumGame', gameState.joinCode, streamState);
 		}
 	}
