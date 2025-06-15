@@ -5,6 +5,8 @@
 	import StreamScoreboard from './stream-scoreboard.svelte';
 	import StreamAnswerProgress from './stream-answer-progress.svelte';
 	import StreamLobbyView from './stream-lobby-view.svelte';
+	import StreamTimer from './stream-timer.svelte';
+	import StreamGameOver from './stream-game-over.svelte';
 
 	const gameState = $derived(streamStore.state.gameState);
 	const phase = $derived(gameState?.phase);
@@ -68,7 +70,7 @@
 {#if gameState}
 	<div class="flex h-screen flex-col">
 		<!-- Header section: Join Code -->
-		<header class="mb-4 flex-none p-3">
+		<header class="flex-none p-3">
 			<div class="flex items-center justify-center rounded-lg bg-card p-4 shadow">
 				<div class="flex items-center gap-2">
 					<span class="text-lg text-muted-foreground">Join Code:</span>
@@ -82,6 +84,11 @@
 			<!-- Full-screen lobby view -->
 			<div class="flex-1">
 				<StreamLobbyView />
+			</div>
+		{:else if phase === GamePhase.GameOver}
+			<!-- Full-screen game over view -->
+			<div class="flex-1">
+				<StreamGameOver />
 			</div>
 		{:else}
 			<!-- Resizable Layout for Game Phases -->
@@ -106,7 +113,7 @@
 				<!-- Content Area -->
 				<div class="flex min-h-0 flex-1 flex-col p-3">
 					<div class="grid min-h-0 flex-1 grid-cols-12 gap-4">
-						<!-- Left Column: Question Options + Answer Progress -->
+						<!-- Left Column: Question Options + Timer + Answer Progress -->
 						<div class="answer-resize-container col-span-12 flex flex-col space-y-4 lg:col-span-6">
 							<!-- Question Options (top) -->
 							<div class="flex-none">
@@ -117,6 +124,11 @@
 										class="flex h-96 items-center justify-center rounded-lg bg-card p-4 shadow"
 									></div>
 								{/if}
+							</div>
+
+							<!-- Timer (middle) -->
+							<div class="flex-none">
+								<StreamTimer />
 							</div>
 
 							<!-- Answer Progress (bottom) with horizontal resize -->

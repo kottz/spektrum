@@ -5,6 +5,7 @@ import type { StreamEvent, DisplayConfig } from '$lib/types/stream.types';
 import type { GameUpdate, GamePhase, PlayerAnswer } from '$lib/types/game';
 import { DEFAULT_DISPLAY_CONFIG } from '$lib/types/stream.types';
 import { info, warn } from '$lib/utils/logger';
+import { streamTimerStore } from './stream-timer.store.svelte';
 
 interface StreamGameState {
 	phase: GamePhase;
@@ -178,8 +179,9 @@ function createStreamStore() {
 					state.gameState.phase = message.phase;
 					info('StreamStore: Phase changed', { from: previousPhase, to: message.phase });
 
-					// Clear answers when entering a new question phase
+					// Handle phase-specific actions
 					if (message.phase === GamePhase.Question) {
+						// Clear answers when entering a new question phase
 						state.gameState.currentAnswers = [];
 						// Reset round scores for new question
 						state.gameState.realtimeScoreboard = state.gameState.realtimeScoreboard.map(
@@ -188,7 +190,14 @@ function createStreamStore() {
 								roundScore: 0
 							})
 						);
-						info('StreamStore: Cleared answers and reset round scores for new question');
+						// Start the timer for the new question
+						streamTimerStore.startTimer(60); // Default to 60 seconds, could be made configurable
+						info(
+							'StreamStore: Cleared answers, reset round scores, and started timer for new question'
+						);
+					} else {
+						// Stop timer when leaving Question phase
+						streamTimerStore.stopTimer();
 					}
 					// Keep round scores visible during Score phase
 				}
@@ -272,6 +281,33 @@ function createStreamStore() {
 						(answer) => answer.name !== message.name
 					);
 				}
+				break;
+			}
+
+			case 'GameOver': {
+				info('StreamStore: Processing GameOver', {
+					finalScores: message.final_scores,
+					reason: message.reason
+				});
+
+				// Set phase to GameOver
+				state.gameState.phase = GamePhase.GameOver;
+
+				// Update final scores in the scoreboard
+				if (message.final_scores) {
+					state.gameState.players.clear();
+					message.final_scores.forEach(([name, score]) => {
+						state.gameState!.players.set(name, { name, score });
+					});
+
+					// Update realtime scoreboard with final scores
+					state.gameState.realtimeScoreboard = message.final_scores
+						.map(([name, score]) => ({ name, score, roundScore: 0 }))
+						.sort((a, b) => b.score - a.score);
+				}
+
+				// Stop the timer when game ends
+				streamTimerStore.stopTimer();
 				break;
 			}
 
