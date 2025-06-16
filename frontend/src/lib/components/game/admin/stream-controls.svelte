@@ -96,31 +96,24 @@
 	}
 </script>
 
-<Card>
-	<CardHeader>
-		<CardTitle class="flex items-center gap-2">
-			<MonitorPlay class="h-5 w-5" />
-			Stream View
-		</CardTitle>
-	</CardHeader>
-	<CardContent class="space-y-2">
+<Card class="flex h-full">
+	<CardContent class="flex flex-1 items-center p-4">
 		{#if streamWindowState.isOpen}
-			<Button onclick={handleFocusStream} variant="outline" size="sm" class="w-full">
-				<MonitorPlay class="mr-2 h-4 w-4" /> Focus Window
-			</Button>
-			<Button onclick={handleToggleVisibility} variant="outline" size="sm" class="w-full">
-				{#if isStreamContentVisible}
-					<Eye class="mr-2 h-4 w-4" /> Hide Content
-				{:else}
-					<EyeOff class="mr-2 h-4 w-4" /> Show Content
-				{/if}
-			</Button>
-			<Button onclick={handleCloseStreamWindow} variant="destructive" size="sm" class="w-full">
-				<ExternalLink class="mr-2 h-4 w-4" /> Close Window
-			</Button>
+			<div class="flex w-full gap-2">
+				<Button onclick={handleToggleVisibility} variant="outline" size="sm">
+					{#if isStreamContentVisible}
+						<Eye class="h-4 w-4" />
+					{:else}
+						<EyeOff class="h-4 w-4" />
+					{/if}
+				</Button>
+				<Button onclick={handleCloseStreamWindow} variant="destructive" size="sm" class="flex-1">
+					<ExternalLink class="mr-2 h-4 w-4" /> Close
+				</Button>
+			</div>
 		{:else}
-			<Button onclick={handleOpenStreamWindow} variant="default" size="sm" class="w-full">
-				<MonitorPlay class="mr-2 h-4 w-4" /> Open Stream Window
+			<Button onclick={handleOpenStreamWindow} variant="default" class="w-full">
+				<MonitorPlay class="mr-2 h-4 w-4" /> Stream View
 			</Button>
 		{/if}
 	</CardContent>

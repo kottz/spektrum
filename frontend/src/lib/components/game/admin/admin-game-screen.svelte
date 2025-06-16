@@ -29,8 +29,14 @@
 			<div class="grid grid-cols-2 gap-4 lg:block lg:space-y-4">
 				<div class="space-y-4">
 					<EndLeaveButton />
-					<JoinCodeCard />
-					<StreamControls />
+					<div class="flex gap-4">
+						<div class="hidden lg:block">
+							<StreamControls />
+						</div>
+						<div class="flex-1">
+							<JoinCodeCard />
+						</div>
+					</div>
 					<div class="aspect-video w-full">
 						<CoverableElement covered={hideGameContent} coverText="Video Hidden">
 							{#snippet children()}
