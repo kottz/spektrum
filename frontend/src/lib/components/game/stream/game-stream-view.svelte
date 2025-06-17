@@ -158,7 +158,7 @@
 						</div>
 
 						<!-- Right Column: Always-visible Scoreboard -->
-						<div class="col-span-12 lg:col-span-6">
+						<div class="col-span-12 flex min-h-0 flex-1 lg:col-span-6">
 							<StreamScoreboard />
 						</div>
 					</div>

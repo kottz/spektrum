@@ -78,7 +78,7 @@
 	});
 </script>
 
-<div class="flex h-full flex-col overflow-hidden rounded-lg bg-card shadow">
+<div class="flex h-full w-full flex-col overflow-hidden rounded-lg bg-card shadow">
 	<div class="flex-none border-b border-border bg-muted/50 px-4 py-3">
 		<h2 class="text-xl font-bold">
 			{#if gameOver}
@@ -89,54 +89,56 @@
 		</h2>
 	</div>
 
-	<ScrollArea class="flex-1">
-		<div class="space-y-1 p-2">
-			{#each renderedPlayers as player, index (player.name)}
-				<div
-					class="relative overflow-hidden rounded-md transition-all duration-300 {getPlayerBorderClass(
-						player.name
-					)}"
-					animate:flip={{ duration: 500 }}
-					in:fly={{ x: -20, duration: 300 }}
-				>
-					<!-- Background score bar -->
-					{#if !gameOver && maxScore > 0}
-						<div
-							class="absolute inset-0 bg-primary/20 transition-all duration-500"
-							style="width: {getScoreWidth(player.score)}"
-						></div>
-					{/if}
+	<div class="flex min-h-0 flex-1">
+		<ScrollArea class="min-h-0 w-1 flex-1">
+			<div class="space-y-1 p-2">
+				{#each renderedPlayers as player, index (player.name)}
+					<div
+						class="relative overflow-hidden rounded-md transition-all duration-300 {getPlayerBorderClass(
+							player.name
+						)}"
+						animate:flip={{ duration: 500 }}
+						in:fly={{ x: -20, duration: 300 }}
+					>
+						<!-- Background score bar -->
+						{#if !gameOver && maxScore > 0}
+							<div
+								class="absolute inset-0 bg-primary/20 transition-all duration-500"
+								style="width: {getScoreWidth(player.score)}"
+							></div>
+						{/if}
 
-					<!-- Content -->
-					<div class="relative flex items-center gap-4 p-3">
-						<!-- Rank -->
-						<div class="flex-none text-lg font-semibold text-muted-foreground">
-							#{index + 1}
-						</div>
+						<!-- Content -->
+						<div class="relative flex items-center gap-4 p-3">
+							<!-- Rank -->
+							<div class="flex-none text-lg font-semibold text-muted-foreground">
+								#{index + 1}
+							</div>
 
-						<!-- Player name and scores -->
-						<div class="min-w-0 flex-1 overflow-hidden">
-							<div class="flex items-center justify-between gap-3">
-								<span class="flex-1 truncate text-lg font-semibold" title={player.name}>
-									{player.name}
-								</span>
-								<div class="flex flex-none items-center gap-3 text-lg font-bold">
-									{#if player.roundScore > 0}
-										<span class="text-emerald-400">+{player.roundScore}</span>
-									{/if}
-									<span>{player.score.toLocaleString()}</span>
+							<!-- Player name and scores -->
+							<div class="min-w-0 flex-1 overflow-hidden">
+								<div class="flex items-center justify-between gap-3">
+									<span class="flex-1 truncate text-lg font-semibold" title={player.name}>
+										{player.name}
+									</span>
+									<div class="flex flex-none items-center gap-3 text-lg font-bold">
+										{#if player.roundScore > 0}
+											<span class="text-emerald-400">+{player.roundScore}</span>
+										{/if}
+										<span>{player.score.toLocaleString()}</span>
+									</div>
 								</div>
 							</div>
 						</div>
 					</div>
-				</div>
-			{/each}
+				{/each}
 
-			{#if currentPage < maxPages}
-				<div bind:this={loaderElement} class="flex justify-center py-4">
-					<div class="text-sm text-muted-foreground">Loading more players...</div>
-				</div>
-			{/if}
-		</div>
-	</ScrollArea>
+				{#if currentPage < maxPages}
+					<div bind:this={loaderElement} class="flex justify-center py-4">
+						<div class="text-sm text-muted-foreground">Loading more players...</div>
+					</div>
+				{/if}
+			</div>
+		</ScrollArea>
+	</div>
 </div>
