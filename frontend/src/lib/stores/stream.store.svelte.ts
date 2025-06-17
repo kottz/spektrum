@@ -247,27 +247,42 @@ function createStreamStore() {
 					timestamp: Date.now()
 				});
 
-				// Update realtime scoreboard if player got points
-				if (message.score > 0) {
-					state.gameState.realtimeScoreboard = state.gameState.realtimeScoreboard
-						.map((player) => {
-							if (player.name === message.name) {
-								return {
-									...player,
-									score: player.score + message.score,
-									roundScore: player.roundScore + message.score
-								};
-							}
-							return player;
-						})
-						.sort((a, b) => b.score - a.score);
+				// Update realtime scoreboard - add new players or update existing ones
+				const existingPlayerIndex = state.gameState.realtimeScoreboard.findIndex(
+					(player) => player.name === message.name
+				);
 
-					info('StreamStore: Updated realtime scoreboard', {
-						player: message.name,
-						roundScore: message.score,
-						newScoreboard: state.gameState.realtimeScoreboard
+				if (existingPlayerIndex >= 0) {
+					// Update existing player
+					if (message.score > 0) {
+						state.gameState.realtimeScoreboard = state.gameState.realtimeScoreboard
+							.map((player) => {
+								if (player.name === message.name) {
+									return {
+										...player,
+										score: player.score + message.score,
+										roundScore: player.roundScore + message.score
+									};
+								}
+								return player;
+							})
+							.sort((a, b) => b.score - a.score);
+					}
+				} else {
+					// Add new player to scoreboard
+					state.gameState.realtimeScoreboard.push({
+						name: message.name,
+						score: message.score,
+						roundScore: message.score
 					});
+					state.gameState.realtimeScoreboard.sort((a, b) => b.score - a.score);
 				}
+
+				info('StreamStore: Updated realtime scoreboard', {
+					player: message.name,
+					roundScore: message.score,
+					newScoreboard: state.gameState.realtimeScoreboard
+				});
 
 				info('StreamStore: Current answers after update', state.gameState.currentAnswers);
 				break;
