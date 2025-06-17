@@ -69,12 +69,18 @@
 
 {#if gameState}
 	<div class="flex h-[100dvh] flex-col">
-		<!-- Header section: Join Code -->
+		<!-- Header section: App Name, Join Code and Timer -->
 		<header class="flex-none p-3">
-			<div class="flex items-center justify-center rounded-lg bg-card p-4 shadow">
+			<div class="flex items-center justify-between rounded-lg bg-card p-4 shadow">
+				<div class="flex flex-1">
+					<span class="text-4xl font-bold">Melodiquiz.se</span>
+				</div>
 				<div class="flex items-center gap-2">
 					<span class="text-lg text-muted-foreground">Join Code:</span>
 					<span class="font-mono text-4xl font-bold">{joinCode}</span>
+				</div>
+				<div class="flex flex-1 justify-end">
+					<StreamTimer />
 				</div>
 			</div>
 		</header>
@@ -126,11 +132,6 @@
 										class="flex h-96 items-center justify-center rounded-lg bg-card p-4 shadow"
 									></div>
 								{/if}
-							</div>
-
-							<!-- Timer (middle) -->
-							<div class="flex-none">
-								<StreamTimer />
 							</div>
 
 							<!-- Answer Progress (bottom) with horizontal resize -->
