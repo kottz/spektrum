@@ -68,7 +68,7 @@
 </script>
 
 {#if gameState}
-	<div class="flex h-screen flex-col">
+	<div class="flex h-[100dvh] flex-col">
 		<!-- Header section: Join Code -->
 		<header class="flex-none p-3">
 			<div class="flex items-center justify-center rounded-lg bg-card p-4 shadow">
@@ -112,9 +112,11 @@
 
 				<!-- Content Area -->
 				<div class="flex min-h-0 flex-1 flex-col p-3">
-					<div class="grid min-h-0 flex-1 grid-cols-12 gap-4">
+					<div class="grid min-h-0 flex-1 grid-cols-12 gap-4 overflow-hidden">
 						<!-- Left Column: Question Options + Timer + Answer Progress -->
-						<div class="answer-resize-container col-span-12 flex flex-col space-y-4 lg:col-span-6">
+						<div
+							class="answer-resize-container col-span-12 flex min-h-0 flex-1 flex-col space-y-4 lg:col-span-6"
+						>
 							<!-- Question Options (top) -->
 							<div class="flex-none">
 								{#if phase === GamePhase.Question}
@@ -158,7 +160,7 @@
 						</div>
 
 						<!-- Right Column: Always-visible Scoreboard -->
-						<div class="col-span-12 flex min-h-0 flex-1 lg:col-span-6">
+						<div class="col-span-12 flex min-h-0 flex-1 overflow-hidden lg:col-span-6">
 							<StreamScoreboard />
 						</div>
 					</div>
