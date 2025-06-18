@@ -4,7 +4,7 @@
 	import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
 
 	const gameState = $derived(streamStore.state.gameState);
-	const players = $derived(gameState ? Array.from(gameState.players.values()) : []);
+	const players = $derived(gameState?.realtimeScoreboard || []);
 </script>
 
 <div class="container mx-auto max-w-4xl space-y-8 p-8">
