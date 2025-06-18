@@ -56,7 +56,7 @@
 	});
 </script>
 
-<div class="container mx-auto max-w-6xl p-8">
+<div class="container mx-auto flex h-full w-full max-w-6xl flex-col overflow-hidden p-8">
 	<!-- Winner announcement -->
 	<Card class="mb-12">
 		<div class="px-6 py-8 text-center">
@@ -72,12 +72,15 @@
 		</div>
 	</Card>
 
-	<!-- Final Scoreboard -->
-	<Card>
-		<div class="px-6 py-6">
+	<!-- Final Scoreboard - working height structure with original styling -->
+	<Card class="flex h-full w-full flex-col overflow-hidden shadow">
+		<div class="flex-none px-6 py-6">
 			<h2 class="mb-6 text-center text-4xl font-bold">Final Leaderboard</h2>
-			<ScrollArea class="h-full">
-				<div>
+		</div>
+
+		<div class="flex min-h-0 flex-1">
+			<ScrollArea class="min-h-0 w-1 flex-1">
+				<div class="px-6 pb-6">
 					{#each renderedPlayers as player, index (player.name)}
 						<div
 							class="relative mb-3 overflow-hidden rounded-md {index === 0

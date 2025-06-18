@@ -88,12 +88,12 @@
 		<!-- Main Content Area -->
 		{#if phase === GamePhase.Lobby}
 			<!-- Full-screen lobby view -->
-			<div class="flex-1">
+			<div class="flex min-h-0 flex-1 flex-1">
 				<StreamLobbyView />
 			</div>
 		{:else if phase === GamePhase.GameOver}
 			<!-- Full-screen game over view -->
-			<div class="flex-1">
+			<div class="flex min-h-0 flex-1">
 				<StreamGameOver />
 			</div>
 		{:else}
