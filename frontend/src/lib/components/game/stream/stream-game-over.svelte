@@ -3,9 +3,57 @@
 	import { streamStore } from '$lib/stores/stream.store.svelte';
 	import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
 
+	const PAGE_SIZE = 25;
+
 	const gameState = $derived(streamStore.state.gameState);
-	const players = $derived(gameState?.realtimeScoreboard?.sort((a, b) => b.score - a.score) || []);
-	const winner = $derived(players[0]);
+	const allSortedPlayers = $derived(
+		gameState?.realtimeScoreboard
+			? [...gameState.realtimeScoreboard].sort((a, b) => b.score - a.score)
+			: []
+	);
+	const winner = $derived(allSortedPlayers[0]);
+
+	let currentPage = $state(1);
+	const totalPlayers = $derived(allSortedPlayers.length);
+	const maxPages = $derived(Math.ceil(totalPlayers / PAGE_SIZE));
+
+	// The subset of players to be rendered in the DOM
+	const renderedPlayers = $derived(allSortedPlayers.slice(0, currentPage * PAGE_SIZE));
+	let loaderElement: HTMLDivElement | undefined = $state();
+
+	$effect(() => {
+		const currentLoaderEl = loaderElement;
+
+		if (!currentLoaderEl) {
+			return;
+		}
+
+		// Find the Radix ScrollArea Viewport to use as the observer's root
+		const scrollViewportRoot: HTMLElement | null = currentLoaderEl.closest(
+			'[data-radix-scroll-area-viewport]'
+		);
+
+		const observer = new IntersectionObserver(
+			(entries) => {
+				if (entries[0].isIntersecting) {
+					if (currentPage < maxPages) {
+						currentPage += 1;
+					}
+				}
+			},
+			{
+				root: scrollViewportRoot,
+				threshold: 0.01
+			}
+		);
+
+		observer.observe(currentLoaderEl);
+
+		return () => {
+			observer.unobserve(currentLoaderEl);
+			observer.disconnect();
+		};
+	});
 </script>
 
 <div class="container mx-auto max-w-6xl p-8">
@@ -28,19 +76,19 @@
 	<Card>
 		<div class="px-6 py-6">
 			<h2 class="mb-6 text-center text-4xl font-bold">Final Leaderboard</h2>
-			<ScrollArea class="h-96">
+			<ScrollArea class="h-full">
 				<div>
-					{#each players as player, index (player.name)}
+					{#each renderedPlayers as player, index (player.name)}
 						<div
 							class="relative mb-3 overflow-hidden rounded-md {index === 0
 								? 'border-2 border-yellow-500 bg-yellow-500/20'
 								: 'bg-muted/30'}"
 						>
 							<!-- Background score bar for visual appeal -->
-							{#if players[0]?.score > 0}
+							{#if allSortedPlayers[0]?.score > 0}
 								<div
 									class="absolute inset-0 bg-primary/10 transition-all duration-500"
-									style="width: {(player.score / players[0].score) * 100}%"
+									style="width: {(player.score / allSortedPlayers[0].score) * 100}%"
 								></div>
 							{/if}
 
@@ -82,6 +130,12 @@
 							</div>
 						</div>
 					{/each}
+
+					{#if currentPage < maxPages}
+						<div bind:this={loaderElement} class="flex justify-center py-4">
+							<div class="text-sm text-muted-foreground">Loading more players...</div>
+						</div>
+					{/if}
 				</div>
 			</ScrollArea>
 		</div>
