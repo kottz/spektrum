@@ -6,7 +6,7 @@
 </script>
 
 <svelte:head>
-	<title>Spektrum Game Stream</title>
+	<title>Melodiquiz - Stream View</title>
 	<meta name="robots" content="noindex, nofollow" />
 </svelte:head>
 
