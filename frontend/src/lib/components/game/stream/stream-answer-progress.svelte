@@ -1,8 +1,6 @@
 <script lang="ts">
-	import { Progress } from '$lib/components/ui/progress';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import { streamStore } from '$lib/stores/stream.store.svelte';
-	import { GamePhase } from '$lib/types/game';
 
 	interface DisplayListItem {
 		name: string;
@@ -17,8 +15,6 @@
 	const currentAnswersList = $derived(gameState?.currentAnswers || []);
 
 	const totalPlayerCount = $derived(allPlayersList.length);
-	const answeredCount = $derived(currentAnswersList.length);
-	const progress = $derived(totalPlayerCount > 0 ? (answeredCount / totalPlayerCount) * 100 : 0);
 
 	const allSortedDisplayItems = $derived(() => {
 		const answeredPlayerNames = new Set(currentAnswersList.map((ans) => ans.name));
@@ -45,14 +41,6 @@
 </script>
 
 <div class="flex h-full flex-col overflow-hidden rounded-lg bg-card shadow">
-	<div class="flex-none border-b border-border bg-muted/50 px-4 py-3">
-		<div class="flex justify-between text-4xl">
-			<span class="text-muted-foreground">Answers</span>
-			<span>{answeredCount}/{totalPlayerCount}</span>
-		</div>
-		<Progress value={progress} class="mt-2 h-2 bg-muted" />
-	</div>
-
 	<ScrollArea class="flex-1 p-2">
 		<div class="flex flex-wrap gap-1.5">
 			{#each renderedDisplayItems as item (item.name)}

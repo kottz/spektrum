@@ -2,6 +2,7 @@
 	import { GamePhase } from '$lib/types/game';
 	import { streamStore } from '$lib/stores/stream.store.svelte';
 	import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
+	import { Progress } from '$lib/components/ui/progress';
 	import { flip } from 'svelte/animate';
 	import { fly } from 'svelte/transition';
 
@@ -9,6 +10,7 @@
 
 	const gameState = $derived(streamStore.state.gameState);
 	const allSortedPlayers = $derived(gameState?.realtimeScoreboard || []);
+	const currentAnswersList = $derived(gameState?.currentAnswers || []);
 
 	let currentPage = $state(1);
 	const totalPlayers = $derived(allSortedPlayers.length);
@@ -22,6 +24,10 @@
 
 	const gameOver = $derived(gameState?.phase === GamePhase.GameOver);
 	const playingQuestion = $derived(gameState?.phase === GamePhase.Question);
+
+	// Answer progress calculations
+	const answeredCount = $derived(currentAnswersList.length);
+	const answerProgress = $derived(totalPlayers > 0 ? (answeredCount / totalPlayers) * 100 : 0);
 
 	// Create a map of players who have answered with their answer details
 	const playerAnswers = $derived(
@@ -82,6 +88,15 @@
 	<div class="flex-none border-b border-border bg-muted/50 px-4 py-3">
 		{#if gameOver}
 			<h2 class="text-4xl font-bold">Final Scores</h2>
+		{:else if playingQuestion}
+			<div class="flex items-center justify-between">
+				<Progress value={answerProgress} class="h-6 flex-1 bg-muted" />
+				<span class="ml-4 text-4xl">{answeredCount}/{totalPlayers}</span>
+			</div>
+		{:else}
+			<h2 class="text-xl font-bold">
+				Scoreboard ({totalPlayers} players)
+			</h2>
 		{/if}
 	</div>
 
