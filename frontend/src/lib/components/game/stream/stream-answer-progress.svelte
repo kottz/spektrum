@@ -46,7 +46,7 @@
 
 <div class="flex h-full flex-col overflow-hidden rounded-lg bg-card shadow">
 	<div class="flex-none border-b border-border bg-muted/50 px-4 py-3">
-		<div class="flex justify-between text-sm">
+		<div class="flex justify-between text-4xl">
 			<span class="text-muted-foreground">Answers</span>
 			<span>{answeredCount}/{totalPlayerCount}</span>
 		</div>
@@ -57,7 +57,7 @@
 		<div class="flex flex-wrap gap-1.5">
 			{#each renderedDisplayItems as item (item.name)}
 				<div
-					class="rounded px-2 py-1 text-sm font-medium {item.isAnswered
+					class="rounded px-2 py-1 text-4xl font-medium {item.isAnswered
 						? item.correct
 							? 'bg-emerald-500/20 text-emerald-400' // Answered and correct
 							: 'bg-red-500/20 text-red-400' // Answered and incorrect

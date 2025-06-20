@@ -80,13 +80,9 @@
 
 <div class="flex h-full w-full flex-col overflow-hidden rounded-lg bg-card shadow">
 	<div class="flex-none border-b border-border bg-muted/50 px-4 py-3">
-		<h2 class="text-xl font-bold">
-			{#if gameOver}
-				Final Scores
-			{:else}
-				Scoreboard ({totalPlayers} players)
-			{/if}
-		</h2>
+		{#if gameOver}
+			<h2 class="text-4xl font-bold">Final Scores</h2>
+		{/if}
 	</div>
 
 	<div class="flex min-h-0 flex-1">
@@ -111,17 +107,17 @@
 						<!-- Content -->
 						<div class="relative flex items-center gap-4 p-3">
 							<!-- Rank -->
-							<div class="flex-none text-lg font-semibold text-muted-foreground">
-								#{index + 1}
+							<div class="flex-none text-4xl font-semibold text-muted-foreground">
+								{index + 1}.
 							</div>
 
 							<!-- Player name and scores -->
 							<div class="min-w-0 flex-1 overflow-hidden">
 								<div class="flex items-center justify-between gap-3">
-									<span class="flex-1 truncate text-lg font-semibold" title={player.name}>
+									<span class="flex-1 truncate text-4xl font-semibold" title={player.name}>
 										{player.name}
 									</span>
-									<div class="flex flex-none items-center gap-3 text-lg font-bold">
+									<div class="flex flex-none items-center gap-3 text-4xl font-bold">
 										{#if player.roundScore > 0}
 											<span class="text-emerald-400">+{player.roundScore}</span>
 										{/if}

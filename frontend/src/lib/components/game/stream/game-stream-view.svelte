@@ -117,7 +117,7 @@
 				</div>
 
 				<!-- Content Area -->
-				<div class="flex min-h-0 flex-1 flex-col p-3">
+				<div class="flex min-h-0 flex-1 flex-col">
 					<div class="grid min-h-0 flex-1 grid-cols-12 gap-4 overflow-hidden">
 						<!-- Left Column: Question Options + Timer + Answer Progress -->
 						<div

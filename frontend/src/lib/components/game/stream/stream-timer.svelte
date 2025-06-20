@@ -27,10 +27,10 @@
 				style="width: {progress}%"
 			></div>
 		</div>
-		<div class="flex items-center gap-2 text-lg font-bold">
-			<span class="w-12 text-right">{timeDisplay}s</span>
+		<div class="flex items-center gap-2 text-4xl font-bold">
+			<span class="w-24 text-right">{timeDisplay}s</span>
 			<Separator orientation="vertical" />
-			<span class="w-12 text-left">{points.toFixed(0)}</span>
+			<span class="w-24 text-left">{points.toFixed(0)}</span>
 		</div>
 	</div>
 {/if}
