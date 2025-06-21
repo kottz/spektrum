@@ -14,6 +14,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use thiserror::Error;
 use tracing::{info, warn};
 
@@ -34,18 +35,18 @@ pub enum DbError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Media {
     id: i64,
-    title: String,
-    artist: String,
+    title: Arc<str>,
+    artist: Arc<str>,
     release_year: Option<i32>,
-    spotify_uri: Option<String>,
-    youtube_id: String,
+    spotify_uri: Option<Arc<str>>,
+    youtube_id: Arc<str>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Character {
     id: i64,
-    name: String,
-    image_url: String,
+    name: Arc<str>,
+    image_url: Arc<str>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,8 +54,8 @@ struct Question {
     id: i64,
     media_id: i64,
     question_type: QuestionType,
-    question_text: Option<String>,
-    image_url: Option<String>,
+    question_text: Option<Arc<str>>,
+    image_url: Option<Arc<str>>,
     is_active: bool,
 }
 
@@ -62,14 +63,14 @@ struct Question {
 struct QuestionOption {
     id: i64,
     question_id: i64,
-    option_text: String,
+    option_text: Arc<str>,
     is_correct: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QuestionSet {
     pub id: i64,
-    pub name: String,
+    pub name: Arc<str>,
     pub question_ids: Vec<i64>,
 }
 
@@ -203,7 +204,7 @@ impl StoredData {
 
             match question_type {
                 QuestionType::Color => {
-                    if !valid_colors.contains(&option.option_text) {
+                    if !valid_colors.contains(option.option_text.as_ref()) {
                         return Err(DbError::Validation(format!(
                             "Option {} references invalid color name '{}'",
                             option.id, option.option_text
@@ -334,7 +335,7 @@ impl FilesystemBackend {
             Ok(())
         })
         .await
-        .map_err(|e| DbError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?
+        .map_err(|e| DbError::Io(std::io::Error::other(e)))?
     }
 }
 
@@ -630,7 +631,7 @@ impl QuestionDatabase {
                     .iter()
                     .filter(|o| o.question_id == question.id)
                     .map(|opt| GameQuestionOption {
-                        option: opt.option_text.clone(),
+                        option: Arc::from(&*opt.option_text),
                         is_correct: opt.is_correct,
                     })
                     .collect();
@@ -638,10 +639,10 @@ impl QuestionDatabase {
                 Some(GameQuestion {
                     id: question.id.try_into().ok()?,
                     question_type: question.question_type,
-                    question_text: question.question_text.clone(),
-                    title: media.title.clone(),
-                    artist: Some(media.artist.clone()),
-                    youtube_id: media.youtube_id.clone(),
+                    question_text: question.question_text.as_ref().map(|s| Arc::from(&**s)),
+                    title: Arc::from(&*media.title),
+                    artist: Some(Arc::from(&*media.artist)),
+                    youtube_id: Arc::from(&*media.youtube_id),
                     options,
                 })
             })
@@ -702,16 +703,16 @@ mod tests {
         let data = StoredData {
             media: vec![Media {
                 id: 1,
-                title: "Title".to_string(),
-                artist: "Artist".to_string(),
+                title: Arc::from("Title"),
+                artist: Arc::from("Artist"),
                 release_year: None,
                 spotify_uri: None,
-                youtube_id: "youtube_id".to_string(),
+                youtube_id: Arc::from("youtube_id"),
             }],
             characters: vec![Character {
                 id: 1,
-                name: "CharacterName".to_string(),
-                image_url: "image_url".to_string(),
+                name: Arc::from("CharacterName"),
+                image_url: Arc::from("image_url"),
             }],
             questions: vec![Question {
                 id: 1,
@@ -724,12 +725,12 @@ mod tests {
             options: vec![QuestionOption {
                 id: 1,
                 question_id: 1,
-                option_text: "CharacterName".to_string(),
+                option_text: Arc::from("CharacterName"),
                 is_correct: true,
             }],
             sets: vec![QuestionSet {
                 id: 1,
-                name: "Set Name".to_string(),
+                name: Arc::from("Set Name"),
                 question_ids: vec![1],
             }],
         };
@@ -742,19 +743,19 @@ mod tests {
             media: vec![
                 Media {
                     id: 1,
-                    title: "Title1".to_string(),
-                    artist: "Artist1".to_string(),
+                    title: Arc::from("Title1"),
+                    artist: Arc::from("Artist1"),
                     release_year: None,
                     spotify_uri: None,
-                    youtube_id: "youtube_id1".to_string(),
+                    youtube_id: Arc::from("youtube_id1"),
                 },
                 Media {
                     id: 1,
-                    title: "Title2".to_string(),
-                    artist: "Artist2".to_string(),
+                    title: Arc::from("Title2"),
+                    artist: Arc::from("Artist2"),
                     release_year: None,
                     spotify_uri: None,
-                    youtube_id: "youtube_id2".to_string(),
+                    youtube_id: Arc::from("youtube_id2"),
                 },
             ],
             characters: vec![],
@@ -775,13 +776,13 @@ mod tests {
             characters: vec![
                 Character {
                     id: 1,
-                    name: "Name1".to_string(),
-                    image_url: "url1".to_string(),
+                    name: Arc::from("Name1"),
+                    image_url: Arc::from("url1"),
                 },
                 Character {
                     id: 1,
-                    name: "Name2".to_string(),
-                    image_url: "url2".to_string(),
+                    name: Arc::from("Name2"),
+                    image_url: Arc::from("url2"),
                 },
             ],
             questions: vec![],
@@ -799,11 +800,11 @@ mod tests {
         let data = StoredData {
             media: vec![Media {
                 id: 1,
-                title: "Title".to_string(),
-                artist: "Artist".to_string(),
+                title: Arc::from("Title"),
+                artist: Arc::from("Artist"),
                 release_year: None,
                 spotify_uri: None,
-                youtube_id: "youtube_id".to_string(),
+                youtube_id: Arc::from("youtube_id"),
             }],
             characters: vec![],
             questions: vec![
@@ -838,16 +839,16 @@ mod tests {
         let data = StoredData {
             media: vec![Media {
                 id: 1,
-                title: "Title".to_string(),
-                artist: "Artist".to_string(),
+                title: Arc::from("Title"),
+                artist: Arc::from("Artist"),
                 release_year: None,
                 spotify_uri: None,
-                youtube_id: "youtube_id".to_string(),
+                youtube_id: Arc::from("youtube_id"),
             }],
             characters: vec![Character {
                 id: 1,
-                name: "CharacterName".to_string(),
-                image_url: "image_url".to_string(),
+                name: Arc::from("CharacterName"),
+                image_url: Arc::from("image_url"),
             }],
             questions: vec![Question {
                 id: 1,
@@ -861,13 +862,13 @@ mod tests {
                 QuestionOption {
                     id: 1,
                     question_id: 1,
-                    option_text: "Option1".to_string(),
+                    option_text: Arc::from("Option1"),
                     is_correct: true,
                 },
                 QuestionOption {
                     id: 1,
                     question_id: 1,
-                    option_text: "Option2".to_string(),
+                    option_text: Arc::from("Option2"),
                     is_correct: false,
                 },
             ],
@@ -889,12 +890,12 @@ mod tests {
             sets: vec![
                 QuestionSet {
                     id: 1,
-                    name: "Set1".to_string(),
+                    name: Arc::from("Set1"),
                     question_ids: vec![],
                 },
                 QuestionSet {
                     id: 1,
-                    name: "Set2".to_string(),
+                    name: Arc::from("Set2"),
                     question_ids: vec![],
                 },
             ],
@@ -912,13 +913,13 @@ mod tests {
             characters: vec![
                 Character {
                     id: 1,
-                    name: "CharacterName".to_string(),
-                    image_url: "url1".to_string(),
+                    name: Arc::from("CharacterName"),
+                    image_url: Arc::from("url1"),
                 },
                 Character {
                     id: 2,
-                    name: "CharacterName".to_string(),
-                    image_url: "url2".to_string(),
+                    name: Arc::from("CharacterName"),
+                    image_url: Arc::from("url2"),
                 },
             ],
             questions: vec![],
@@ -938,13 +939,13 @@ mod tests {
             characters: vec![
                 Character {
                     id: 1,
-                    name: "Name1".to_string(),
-                    image_url: "image_url".to_string(),
+                    name: Arc::from("Name1"),
+                    image_url: Arc::from("image_url"),
                 },
                 Character {
                     id: 2,
-                    name: "Name2".to_string(),
-                    image_url: "image_url".to_string(),
+                    name: Arc::from("Name2"),
+                    image_url: Arc::from("image_url"),
                 },
             ],
             questions: vec![],
@@ -984,22 +985,22 @@ mod tests {
         let data = StoredData {
             media: vec![Media {
                 id: 1,
-                title: "Title".to_string(),
-                artist: "Artist".to_string(),
+                title: Arc::from("Title"),
+                artist: Arc::from("Artist"),
                 release_year: None,
                 spotify_uri: None,
-                youtube_id: "youtube_id".to_string(),
+                youtube_id: Arc::from("youtube_id"),
             }],
             characters: vec![Character {
                 id: 1,
-                name: "CharacterName".to_string(),
-                image_url: "image_url".to_string(),
+                name: Arc::from("CharacterName"),
+                image_url: Arc::from("image_url"),
             }],
             questions: vec![],
             options: vec![QuestionOption {
                 id: 1,
                 question_id: 1,
-                option_text: "CharacterName".to_string(),
+                option_text: Arc::from("CharacterName"),
                 is_correct: true,
             }],
             sets: vec![],
@@ -1019,7 +1020,7 @@ mod tests {
             options: vec![],
             sets: vec![QuestionSet {
                 id: 1,
-                name: "Set Name".to_string(),
+                name: Arc::from("Set Name"),
                 question_ids: vec![1],
             }],
         };
@@ -1034,16 +1035,16 @@ mod tests {
         let data = StoredData {
             media: vec![Media {
                 id: 1,
-                title: "Title".to_string(),
-                artist: "Artist".to_string(),
+                title: Arc::from("Title"),
+                artist: Arc::from("Artist"),
                 release_year: None,
                 spotify_uri: None,
-                youtube_id: "youtube_id".to_string(),
+                youtube_id: Arc::from("youtube_id"),
             }],
             characters: vec![Character {
                 id: 1,
-                name: "CharacterName".to_string(),
-                image_url: "image_url".to_string(),
+                name: Arc::from("CharacterName"),
+                image_url: Arc::from("image_url"),
             }],
             questions: vec![Question {
                 id: 1,
@@ -1056,7 +1057,7 @@ mod tests {
             options: vec![QuestionOption {
                 id: 1,
                 question_id: 1,
-                option_text: "NonExistentCharacter".to_string(),
+                option_text: Arc::from("NonExistentCharacter"),
                 is_correct: true,
             }],
             sets: vec![],
@@ -1075,11 +1076,11 @@ mod tests {
         let data = StoredData {
             media: vec![Media {
                 id: 1,
-                title: "Title".to_string(),
-                artist: "Artist".to_string(),
+                title: Arc::from("Title"),
+                artist: Arc::from("Artist"),
                 release_year: None,
                 spotify_uri: None,
-                youtube_id: "youtube_id".to_string(),
+                youtube_id: Arc::from("youtube_id"),
             }],
             characters: vec![],
             questions: vec![Question {
@@ -1093,7 +1094,7 @@ mod tests {
             options: vec![QuestionOption {
                 id: 1,
                 question_id: 1,
-                option_text: "invalid_color".to_string(),
+                option_text: Arc::from("invalid_color"),
                 is_correct: true,
             }],
             sets: vec![],
@@ -1109,11 +1110,11 @@ mod tests {
         let data = StoredData {
             media: vec![Media {
                 id: 1,
-                title: "Title".to_string(),
-                artist: "Artist".to_string(),
+                title: Arc::from("Title"),
+                artist: Arc::from("Artist"),
                 release_year: None,
                 spotify_uri: None,
-                youtube_id: "youtube_id".to_string(),
+                youtube_id: Arc::from("youtube_id"),
             }],
             characters: vec![],
             questions: vec![Question {
@@ -1127,7 +1128,7 @@ mod tests {
             options: vec![QuestionOption {
                 id: 1,
                 question_id: 1,
-                option_text: "Red".to_string(),
+                option_text: Arc::from("Red"),
                 is_correct: true,
             }],
             sets: vec![],
@@ -1140,11 +1141,11 @@ mod tests {
         let data = StoredData {
             media: vec![Media {
                 id: 1,
-                title: "Title".to_string(),
-                artist: "Artist".to_string(),
+                title: Arc::from("Title"),
+                artist: Arc::from("Artist"),
                 release_year: None,
                 spotify_uri: None,
-                youtube_id: "youtube_id".to_string(),
+                youtube_id: Arc::from("youtube_id"),
             }],
             characters: vec![],
             questions: vec![Question {
@@ -1156,7 +1157,7 @@ mod tests {
                 is_active: true,
             }],
             options: vec![GameQuestionOption {
-                option: "Red".to_string(),
+                option: Arc::from("Red"),
                 is_correct: true,
             }
             .into_stored(1)],
@@ -1170,16 +1171,16 @@ mod tests {
         let data = StoredData {
             media: vec![Media {
                 id: 1,
-                title: "Title".to_string(),
-                artist: "Artist".to_string(),
+                title: Arc::from("Title"),
+                artist: Arc::from("Artist"),
                 release_year: None,
                 spotify_uri: None,
-                youtube_id: "youtube_id".to_string(),
+                youtube_id: Arc::from("youtube_id"),
             }],
             characters: vec![Character {
                 id: 1,
-                name: "CharacterName".to_string(),
-                image_url: "image_url".to_string(),
+                name: Arc::from("CharacterName"),
+                image_url: Arc::from("image_url"),
             }],
             questions: vec![Question {
                 id: 1,
@@ -1190,7 +1191,7 @@ mod tests {
                 is_active: true,
             }],
             options: vec![GameQuestionOption {
-                option: "CharacterName".to_string(),
+                option: Arc::from("CharacterName"),
                 is_correct: true,
             }
             .into_stored(1)],
@@ -1204,22 +1205,22 @@ mod tests {
         let data = StoredData {
             media: vec![Media {
                 id: 1,
-                title: "Title".to_string(),
-                artist: "Artist".to_string(),
+                title: Arc::from("Title"),
+                artist: Arc::from("Artist"),
                 release_year: None,
                 spotify_uri: None,
-                youtube_id: "youtube_id".to_string(),
+                youtube_id: Arc::from("youtube_id"),
             }],
             characters: vec![
                 Character {
                     id: 1,
-                    name: "CharacterName1".to_string(),
-                    image_url: "image_url1".to_string(),
+                    name: Arc::from("CharacterName1"),
+                    image_url: Arc::from("image_url1"),
                 },
                 Character {
                     id: 2,
-                    name: "CharacterName2".to_string(),
-                    image_url: "image_url2".to_string(),
+                    name: Arc::from("CharacterName2"),
+                    image_url: Arc::from("image_url2"),
                 },
             ],
             questions: vec![Question {
@@ -1234,13 +1235,13 @@ mod tests {
                 QuestionOption {
                     id: 1,
                     question_id: 1,
-                    option_text: "CharacterName1".to_string(),
+                    option_text: Arc::from("CharacterName1"),
                     is_correct: true,
                 },
                 QuestionOption {
                     id: 2,
                     question_id: 1,
-                    option_text: "CharacterName2".to_string(),
+                    option_text: Arc::from("CharacterName2"),
                     is_correct: false,
                 },
             ],
@@ -1254,16 +1255,16 @@ mod tests {
         let data = StoredData {
             media: vec![Media {
                 id: 1,
-                title: "Title".to_string(),
-                artist: "Artist".to_string(),
+                title: Arc::from("Title"),
+                artist: Arc::from("Artist"),
                 release_year: None,
                 spotify_uri: None,
-                youtube_id: "youtube_id".to_string(),
+                youtube_id: Arc::from("youtube_id"),
             }],
             characters: vec![Character {
                 id: 1,
-                name: "CharacterName".to_string(),
-                image_url: "image_url".to_string(),
+                name: Arc::from("CharacterName"),
+                image_url: Arc::from("image_url"),
             }],
             questions: vec![
                 Question {
@@ -1287,19 +1288,19 @@ mod tests {
                 QuestionOption {
                     id: 1,
                     question_id: 1,
-                    option_text: "CharacterName".to_string(),
+                    option_text: Arc::from("CharacterName"),
                     is_correct: true,
                 },
                 QuestionOption {
                     id: 2,
                     question_id: 2,
-                    option_text: "CharacterName".to_string(),
+                    option_text: Arc::from("CharacterName"),
                     is_correct: true,
                 },
             ],
             sets: vec![QuestionSet {
                 id: 1,
-                name: "Set Name".to_string(),
+                name: Arc::from("Set Name"),
                 question_ids: vec![1, 2],
             }],
         };
@@ -1315,7 +1316,7 @@ mod tests {
             options: vec![],
             sets: vec![QuestionSet {
                 id: 1,
-                name: "Set Name".to_string(),
+                name: Arc::from("Set Name"),
                 question_ids: vec![], // Empty question_ids
             }],
         };
@@ -1329,8 +1330,8 @@ mod tests {
             media: vec![],
             characters: vec![Character {
                 id: 1,
-                name: long_string.clone(),
-                image_url: long_string,
+                name: Arc::from(long_string.clone()),
+                image_url: Arc::from(long_string),
             }],
             questions: vec![],
             options: vec![],
@@ -1346,8 +1347,8 @@ mod tests {
             media: vec![],
             characters: vec![Character {
                 id: 1,
-                name: unicode_name,
-                image_url: "url1".to_string(),
+                name: Arc::from(unicode_name),
+                image_url: Arc::from("url1"),
             }],
             questions: vec![],
             options: vec![],
@@ -1363,8 +1364,8 @@ mod tests {
             media: vec![],
             characters: vec![Character {
                 id: 1,
-                name: special_chars.clone(),
-                image_url: special_chars,
+                name: Arc::from(special_chars.clone()),
+                image_url: Arc::from(special_chars),
             }],
             questions: vec![],
             options: vec![],
@@ -1378,7 +1379,7 @@ mod tests {
             QuestionOption {
                 id: 0, // Dummy ID, not used in validation
                 question_id,
-                option_text: self.option,
+                option_text: self.option.clone(),
                 is_correct: self.is_correct,
             }
         }

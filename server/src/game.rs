@@ -47,7 +47,7 @@ impl std::fmt::Display for NameValidationError {
 
 fn validate_player_name<'a>(
     name: &str,
-    mut existing_names: impl Iterator<Item = &'a String>,
+    mut existing_names: impl Iterator<Item = &'a str>,
 ) -> Result<(), NameValidationError> {
     let name = name.trim();
 
@@ -90,40 +90,40 @@ pub enum GameUpdate {
     /// A lightweight acknowledgement of connection.
     Connected {
         player_id: Uuid,
-        name: String,
+        name: Arc<str>,
         round_duration: u64,
     },
     /// A partial (delta) state update.
     StateDelta {
         phase: Option<GamePhase>,
-        question_type: Option<String>,
-        question_text: Option<String>,
-        alternatives: Option<Vec<String>>,
-        scoreboard: Option<Vec<(String, i32)>>,
-        round_scores: Option<Vec<(String, i32)>>,
-        consecutive_misses: Option<Vec<(String, u32)>>,
+        question_type: Option<Arc<str>>,
+        question_text: Option<Arc<str>>,
+        alternatives: Option<Vec<Arc<str>>>,
+        scoreboard: Option<Vec<(Arc<str>, i32)>>,
+        round_scores: Option<Vec<(Arc<str>, i32)>>,
+        consecutive_misses: Option<Vec<(Arc<str>, u32)>>,
         // Optional extra info for admin
         admin_extra: Option<AdminExtraInfo>,
     },
     PlayerLeft {
-        name: String,
+        name: Arc<str>,
     },
     PlayerKicked {
-        reason: String,
+        reason: Arc<str>,
     },
     Answered {
-        name: String,
+        name: Arc<str>,
         score: i32,
     },
     GameOver {
-        final_scores: Vec<(String, i32)>,
-        reason: String,
+        final_scores: Vec<(Arc<str>, i32)>,
+        reason: Arc<str>,
     },
     GameClosed {
-        reason: String,
+        reason: Arc<str>,
     },
     Error {
-        message: String,
+        message: Arc<str>,
     },
     AdminInfo {
         current_question: GameQuestion,
@@ -162,9 +162,9 @@ pub enum GameAction {
     StartRound,
     EndRound,
     SkipQuestion,
-    KickPlayer { player_name: String },
-    EndGame { reason: String },
-    CloseGame { reason: String },
+    KickPlayer { player_name: Arc<str> },
+    EndGame { reason: Arc<str> },
+    CloseGame { reason: Arc<str> },
 }
 
 #[derive(Clone, Debug)]
@@ -180,8 +180,8 @@ pub struct GameState {
     pub admin_id: Uuid,
     pub round_start_time: Option<Instant>,
     pub round_duration: u64,
-    pub current_alternatives: Vec<String>,
-    pub correct_answers: Option<Vec<String>>,
+    pub current_alternatives: Vec<Arc<str>>,
+    pub correct_answers: Option<Vec<Arc<str>>>,
     pub current_question: Option<GameQuestion>,
     pub all_questions: Arc<Vec<GameQuestion>>,
     pub shuffled_question_indices: Vec<usize>,
@@ -191,16 +191,16 @@ pub struct GameState {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct PlayerState {
-    pub name: String,
+    pub name: Arc<str>,
     pub score: i32,
     pub round_score: i32,
     pub has_answered: bool,
-    pub answer: Option<String>,
+    pub answer: Option<Arc<str>>,
     pub consecutive_misses: u32,
 }
 
 impl PlayerState {
-    pub fn new(name: String) -> Self {
+    pub fn new(name: Arc<str>) -> Self {
         Self {
             name,
             score: 0,
@@ -268,11 +268,11 @@ impl GameEngine {
 
     pub fn add_player(&mut self, player_id: Uuid, name: String) -> Result<(), NameValidationError> {
         let trimmed = name.trim();
-        let existing_names = self.state.players.values().map(|p| &p.name);
+        let existing_names = self.state.players.values().map(|p| p.name.as_ref());
         validate_player_name(trimmed, existing_names)?;
         self.state
             .players
-            .insert(player_id, PlayerState::new(trimmed.to_string()));
+            .insert(player_id, PlayerState::new(Arc::from(trimmed)));
         Ok(())
     }
 
@@ -302,7 +302,7 @@ impl GameEngine {
         self.state.players.len() >= 1024
     }
 
-    pub fn get_consecutive_misses(&self) -> Vec<(String, u32)> {
+    pub fn get_consecutive_misses(&self) -> Vec<(Arc<str>, u32)> {
         self.state
             .players
             .values()
@@ -310,7 +310,7 @@ impl GameEngine {
             .collect()
     }
 
-    pub fn get_round_scores(&self) -> Vec<(String, i32)> {
+    pub fn get_round_scores(&self) -> Vec<(Arc<str>, i32)> {
         self.state
             .players
             .values()
@@ -318,7 +318,7 @@ impl GameEngine {
             .collect()
     }
 
-    fn get_scoreboard(&self) -> Vec<(String, i32)> {
+    fn get_scoreboard(&self) -> Vec<(Arc<str>, i32)> {
         self.state
             .players
             .iter()
@@ -447,7 +447,7 @@ impl GameEngine {
                     .state
                     .current_question
                     .as_ref()
-                    .map(|q| q.get_question_type().to_string()),
+                    .map(|q| Arc::from(q.get_question_type())),
                 question_text: self
                     .state
                     .current_question
@@ -586,7 +586,7 @@ impl GameEngine {
                 .state
                 .correct_answers
                 .as_ref()
-                .is_some_and(|answers| answers.contains(&answer));
+                .is_some_and(|answers| answers.iter().any(|a| a.as_ref() == answer));
             let score_delta = if correct {
                 ((5000.0 * (self.state.round_duration as f64 - elapsed.as_secs_f64())
                     / self.state.round_duration as f64)
@@ -599,7 +599,7 @@ impl GameEngine {
             }
             player.round_score = score_delta;
             player.has_answered = true;
-            player.answer = Some(answer);
+            player.answer = Some(Arc::from(answer));
             (player.name.clone(), score_delta)
         };
         self.push_update(
@@ -697,7 +697,7 @@ impl GameEngine {
                     Recipients::All,
                     GameUpdate::StateDelta {
                         phase: Some(GamePhase::Question),
-                        question_type: Some(question.get_question_type().to_string()),
+                        question_type: Some(Arc::from(question.get_question_type())),
                         question_text: question.question_text.clone(),
                         alternatives: Some(self.state.current_alternatives.clone()),
                         scoreboard: Some(self.get_scoreboard()),
@@ -716,7 +716,9 @@ impl GameEngine {
             Err(msg) => {
                 self.push_update(
                     Recipients::Single(ctx.sender_id),
-                    GameUpdate::Error { message: msg },
+                    GameUpdate::Error {
+                        message: Arc::from(msg),
+                    },
                 );
             }
         }
@@ -796,13 +798,13 @@ impl GameEngine {
         }
     }
 
-    fn handle_kick_player(&mut self, ctx: EventContext, target_player_name: String) {
+    fn handle_kick_player(&mut self, ctx: EventContext, target_player_name: Arc<str>) {
         // Find the player ID based on the name
         let target_player_id = self
             .state
             .players
             .iter()
-            .find(|(_, p)| p.name == target_player_name)
+            .find(|(_, p)| p.name.as_ref() == target_player_name.as_ref())
             .map(|(id, _)| *id);
         let target_player_id = match target_player_id {
             Some(id) => id,
@@ -810,7 +812,7 @@ impl GameEngine {
                 self.push_update(
                     Recipients::Single(ctx.sender_id), // Send error to admin
                     GameUpdate::Error {
-                        message: format!("Player '{}' not found.", target_player_name),
+                        message: Arc::from(format!("Player '{}' not found.", target_player_name)),
                     },
                 );
                 return;
@@ -835,7 +837,7 @@ impl GameEngine {
             self.push_update(
                 Recipients::Single(target_player_id),
                 GameUpdate::PlayerKicked {
-                    reason: "Kicked by admin".to_string(),
+                    reason: Arc::from("Kicked by admin"),
                 },
             );
 
@@ -878,16 +880,16 @@ impl GameEngine {
             self.push_update(
                 Recipients::Single(ctx.sender_id), // Send error to admin
                 GameUpdate::Error {
-                    message: format!(
+                    message: Arc::from(format!(
                         "Failed to remove player '{}' internally.",
                         target_player_name
-                    ),
+                    )),
                 },
             );
         }
     }
 
-    fn handle_end_game(&mut self, _ctx: EventContext, reason: String) {
+    fn handle_end_game(&mut self, _ctx: EventContext, reason: Arc<str>) {
         self.state.phase = GamePhase::GameOver;
         self.push_update(
             Recipients::All,
@@ -898,7 +900,7 @@ impl GameEngine {
         );
     }
 
-    fn handle_close_game(&self, _ctx: EventContext, reason: String) {
+    fn handle_close_game(&self, _ctx: EventContext, reason: Arc<str>) {
         self.push_update(Recipients::All, GameUpdate::GameClosed { reason });
     }
 
@@ -987,16 +989,16 @@ mod tests {
                 id: 1,
                 question_type: QuestionType::Color,
                 question_text: None,
-                title: "What color is predominantly used in this video?".to_string(),
-                artist: Some("Test Artist".to_string()),
-                youtube_id: "test123".to_string(),
+                title: Arc::from("What color is predominantly used in this video?"),
+                artist: Some(Arc::from("Test Artist")),
+                youtube_id: Arc::from("test123"),
                 options: vec![
                     GameQuestionOption {
-                        option: "Red".to_string(),
+                        option: Arc::from("Red"),
                         is_correct: true,
                     },
                     GameQuestionOption {
-                        option: "Blue".to_string(),
+                        option: Arc::from("Blue"),
                         is_correct: false,
                     },
                 ],
@@ -1006,20 +1008,20 @@ mod tests {
                 id: 2,
                 question_type: QuestionType::Text,
                 question_text: None,
-                title: "What is the main theme of this video?".to_string(),
-                artist: Some("Test Artist".to_string()),
-                youtube_id: "test456".to_string(),
+                title: Arc::from("What is the main theme of this video?"),
+                artist: Some(Arc::from("Test Artist")),
+                youtube_id: Arc::from("test456"),
                 options: vec![
                     GameQuestionOption {
-                        option: "Love".to_string(),
+                        option: Arc::from("Love"),
                         is_correct: true,
                     },
                     GameQuestionOption {
-                        option: "War".to_string(),
+                        option: Arc::from("War"),
                         is_correct: false,
                     },
                     GameQuestionOption {
-                        option: "Peace".to_string(),
+                        option: Arc::from("Peace"),
                         is_correct: false,
                     },
                 ],
@@ -1029,11 +1031,11 @@ mod tests {
                 id: 3,
                 question_type: QuestionType::Year,
                 question_text: None,
-                title: "When was this video released?".to_string(),
-                artist: Some("Test Artist".to_string()),
-                youtube_id: "test789".to_string(),
+                title: Arc::from("When was this video released?"),
+                artist: Some(Arc::from("Test Artist")),
+                youtube_id: Arc::from("test789"),
                 options: vec![GameQuestionOption {
-                    option: "2020".to_string(),
+                    option: Arc::from("2020"),
                     is_correct: true,
                 }],
             },
@@ -1052,6 +1054,7 @@ mod tests {
             Connection {
                 lobby_id: Uuid::new_v4(),
                 tx: Some(tx),
+                connection_id: None,
             },
         );
 
@@ -1073,6 +1076,7 @@ mod tests {
                     .unwrap()
                     .lobby_id,
                 tx: Some(tx),
+                connection_id: None,
             },
         );
         engine.add_player(player_id, name.to_string()).unwrap();
@@ -1119,7 +1123,7 @@ mod tests {
                     timestamp: now + Duration::from_secs(1),
                 },
                 action: GameAction::Answer {
-                    answer: correct_answer.clone(),
+                    answer: correct_answer.to_string(),
                 },
             });
 
@@ -1130,7 +1134,7 @@ mod tests {
                     timestamp: now + Duration::from_secs(5),
                 },
                 action: GameAction::Answer {
-                    answer: correct_answer,
+                    answer: correct_answer.to_string(),
                 },
             });
 
@@ -1162,7 +1166,7 @@ mod tests {
                 timestamp: now,
             },
             action: GameAction::EndGame {
-                reason: "Game completed".to_string(),
+                reason: Arc::from("Game completed"),
             },
         });
         assert_eq!(engine.state.phase, GamePhase::GameOver);
@@ -1274,7 +1278,7 @@ mod tests {
                 timestamp: Instant::now(),
             },
             action: GameAction::Answer {
-                answer: answer.clone(),
+                answer: answer.to_string(),
             },
         });
         engine.process_event(GameEvent {
@@ -1282,7 +1286,9 @@ mod tests {
                 sender_id: player_id,
                 timestamp: Instant::now(),
             },
-            action: GameAction::Answer { answer },
+            action: GameAction::Answer {
+                answer: answer.to_string(),
+            },
         });
 
         // Test late answer
@@ -1336,7 +1342,7 @@ mod tests {
                 timestamp: Instant::now(),
             },
             action: GameAction::CloseGame {
-                reason: "Test close".to_string(),
+                reason: Arc::from("Test close"),
             },
         });
         engine.connections.clear();
@@ -1454,6 +1460,7 @@ mod tests {
                     .unwrap()
                     .lobby_id,
                 tx: Some(player_tx),
+                connection_id: None,
             },
         );
 
@@ -1535,9 +1542,9 @@ mod tests {
         ));
 
         // Test duplicate name
-        let existing_names = ["TestName".to_string()];
+        let existing_names = ["TestName"];
         assert!(matches!(
-            validate_player_name("TestName", existing_names.iter()),
+            validate_player_name("TestName", existing_names.iter().copied()),
             Err(NameValidationError::AlreadyTaken)
         ));
     }
@@ -1630,7 +1637,7 @@ mod tests {
                 timestamp: Instant::now(),
             },
             action: GameAction::CloseGame {
-                reason: "Test close".to_string(),
+                reason: Arc::from("Test close"),
             },
         });
         engine.connections.clear();
@@ -1663,7 +1670,7 @@ mod tests {
         let question_set = QuestionSet {
             id: 1,
             question_ids: vec![1, 2], // Only include first two questions
-            name: "Test Set".to_string(),
+            name: Arc::from("Test Set"),
         };
 
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
@@ -1672,6 +1679,7 @@ mod tests {
             Connection {
                 lobby_id: Uuid::new_v4(),
                 tx: Some(tx),
+                connection_id: None,
             },
         );
 
@@ -1695,6 +1703,7 @@ mod tests {
             Connection {
                 lobby_id: Uuid::new_v4(),
                 tx: Some(admin_tx),
+                connection_id: None,
             },
         );
 
@@ -1735,6 +1744,7 @@ mod tests {
             Connection {
                 lobby_id: Uuid::new_v4(),
                 tx: Some(admin_tx2),
+                connection_id: None,
             },
         );
 
@@ -1788,6 +1798,7 @@ mod tests {
             Connection {
                 lobby_id: admin_lobby_id,
                 tx: Some(admin_tx),
+                connection_id: None,
             },
         );
 
@@ -1813,6 +1824,7 @@ mod tests {
             Connection {
                 lobby_id: admin_lobby_id,
                 tx: Some(player_tx),
+                connection_id: None,
             },
         );
 
@@ -1836,7 +1848,7 @@ mod tests {
         // Verify the message
         match message {
             GameUpdate::GameClosed { reason } => {
-                assert_eq!(reason, "Host left the game");
+                assert_eq!(reason.as_ref(), "Host left the game");
             }
             other => panic!("Expected GameClosed message, got {:?}", other),
         }
@@ -2205,6 +2217,7 @@ mod tests {
             Connection {
                 lobby_id: admin_lobby_id,
                 tx: Some(player_tx),
+                connection_id: None,
             },
         );
         engine.add_player(player_id, "Player1".to_string()).unwrap();
@@ -2226,7 +2239,7 @@ mod tests {
                 ..
             } => {
                 assert_eq!(pid, player_id);
-                assert_eq!(name, "Player1");
+                assert_eq!(name.as_ref(), "Player1");
             }
             other => panic!("Expected Connected message, got {:?}", other),
         }
@@ -2276,6 +2289,7 @@ mod tests {
             Connection {
                 lobby_id: admin_lobby_id,
                 tx: Some(admin_tx),
+                connection_id: None,
             },
         );
 
@@ -2295,7 +2309,7 @@ mod tests {
                 ..
             } => {
                 assert_eq!(pid, admin_id);
-                assert_eq!(name, "Admin");
+                assert_eq!(name.as_ref(), "Admin");
             }
             other => panic!("Expected Connected message, got {:?}", other),
         }
@@ -2387,6 +2401,7 @@ mod tests {
             Connection {
                 lobby_id: admin_lobby_id,
                 tx: Some(admin_tx),
+                connection_id: None,
             },
         );
 
@@ -2409,6 +2424,7 @@ mod tests {
             Connection {
                 lobby_id: admin_lobby_id,
                 tx: Some(player_tx),
+                connection_id: None,
             },
         );
         engine.add_player(player_id, "Player1".to_string()).unwrap();
@@ -2431,7 +2447,7 @@ mod tests {
         // Verify player received game closed message
         match receive_and_deserialize(&mut player_rx).await {
             GameUpdate::GameClosed { reason } => {
-                assert_eq!(reason, "Host left the game");
+                assert_eq!(reason.as_ref(), "Host left the game");
             }
             other => panic!("Expected GameClosed message, got {:?}", other),
         }
@@ -2453,6 +2469,7 @@ mod tests {
             Connection {
                 lobby_id: admin_lobby_id,
                 tx: Some(admin_tx),
+                connection_id: None,
             },
         );
         // Create game engine directly
@@ -2536,7 +2553,7 @@ mod tests {
         match receive_and_deserialize(&mut admin_rx).await {
             GameUpdate::Error { message } => {
                 assert_eq!(
-                    message,
+                    message.as_ref(),
                     "Can only start game from lobby or after a finished game"
                 );
             }
@@ -2581,7 +2598,7 @@ mod tests {
                 timestamp: Instant::now(),
             },
             action: GameAction::EndGame {
-                reason: "finished".to_string(),
+                reason: Arc::from("finished"),
             },
         });
         assert_eq!(engine.state.phase, GamePhase::GameOver);

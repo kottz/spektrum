@@ -187,7 +187,7 @@ impl AppState {
 #[derive(Debug, Serialize)]
 pub struct SetInfo {
     pub id: i64,
-    pub name: String,
+    pub name: Arc<str>,
     pub question_count: usize,
 }
 
@@ -271,7 +271,7 @@ pub async fn create_lobby_handler(
     );
 
     engine
-        .add_player(admin_id, "Admin".to_string())
+        .add_player(admin_id, "Admin".into())
         .map_err(|e| ApiError::Lobby(e.to_string()))?;
 
     trace!("Creating new lobby {}", lobby_id);
@@ -693,13 +693,19 @@ async fn process_incoming_messages(
                                                             GameAction::SkipQuestion
                                                         }
                                                         AdminAction::KickPlayer { player_name } => {
-                                                            GameAction::KickPlayer { player_name }
+                                                            GameAction::KickPlayer {
+                                                                player_name: Arc::from(player_name),
+                                                            }
                                                         }
                                                         AdminAction::EndGame { reason } => {
-                                                            GameAction::EndGame { reason }
+                                                            GameAction::EndGame {
+                                                                reason: Arc::from(reason),
+                                                            }
                                                         }
                                                         AdminAction::CloseGame { reason } => {
-                                                            GameAction::CloseGame { reason }
+                                                            GameAction::CloseGame {
+                                                                reason: Arc::from(reason),
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -765,7 +771,9 @@ async fn process_incoming_messages(
 
 /// Helper to create, serialize, wrap, and send a GameUpdate::Error to a specific client's channel.
 fn send_error_to_client(tx: &UnboundedSender<Utf8Bytes>, message: String, context: &str) {
-    let error_update = GameUpdate::Error { message };
+    let error_update = GameUpdate::Error {
+        message: Arc::from(message),
+    };
     match serde_json::to_string(&error_update) {
         Ok(error_json_string) => {
             if let Err(e) = tx.send(Utf8Bytes::from(error_json_string)) {

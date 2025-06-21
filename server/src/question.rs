@@ -108,7 +108,7 @@ pub enum QuestionError {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct GameQuestionOption {
-    pub option: String,
+    pub option: Arc<str>,
     pub is_correct: bool,
 }
 
@@ -116,10 +116,10 @@ pub struct GameQuestionOption {
 pub struct GameQuestion {
     pub id: u16,
     pub question_type: QuestionType,
-    pub question_text: Option<String>,
-    pub title: String,
-    pub artist: Option<String>,
-    pub youtube_id: String,
+    pub question_text: Option<Arc<str>>,
+    pub title: Arc<str>,
+    pub artist: Option<Arc<str>>,
+    pub youtube_id: Arc<str>,
     pub options: Vec<GameQuestionOption>,
 }
 
@@ -128,7 +128,7 @@ impl GameQuestion {
         self.options.iter().filter(|opt| opt.is_correct).collect()
     }
 
-    pub fn get_question_type(&self) -> &str {
+    pub fn get_question_type(&self) -> &'static str {
         match self.question_type {
             QuestionType::Color => "color",
             QuestionType::Character => "character",
@@ -137,18 +137,22 @@ impl GameQuestion {
         }
     }
 
-    pub fn get_correct_answer(&self) -> Vec<String> {
+    pub fn get_correct_answer(&self) -> Vec<Arc<str>> {
         self.get_correct_options()
             .iter()
             .map(|opt| opt.option.clone())
             .collect()
     }
 
-    pub fn generate_round_alternatives(&self) -> Vec<String> {
+    pub fn generate_round_alternatives(&self) -> Vec<Arc<str>> {
         match self.question_type {
-            QuestionType::Color => self.generate_color_alternatives(),
+            QuestionType::Color => self
+                .generate_color_alternatives()
+                .into_iter()
+                .map(Arc::from)
+                .collect(),
             QuestionType::Character | QuestionType::Text => {
-                let mut alternatives: Vec<String> =
+                let mut alternatives: Vec<Arc<str>> =
                     self.options.iter().map(|opt| opt.option.clone()).collect();
                 fastrand::shuffle(&mut alternatives);
                 alternatives
@@ -160,6 +164,9 @@ impl GameQuestion {
                     .and_then(|y| y.parse().ok())
                 {
                     self.generate_year_alternatives(year)
+                        .into_iter()
+                        .map(Arc::from)
+                        .collect()
                 } else {
                     vec![]
                 }
@@ -167,7 +174,7 @@ impl GameQuestion {
         }
     }
 
-    fn generate_color_alternatives(&self) -> Vec<String> {
+    fn generate_color_alternatives(&self) -> Vec<&'static str> {
         const TARGET_SIZE: usize = 6;
 
         // Get initial colors from correct options
@@ -213,10 +220,42 @@ impl GameQuestion {
         }
 
         fastrand::shuffle(&mut round_colors);
-        round_colors.into_iter().map(|c| c.to_string()).collect()
+        round_colors
+            .into_iter()
+            .map(|c| match c {
+                Color::Red => "Red",
+                Color::Green => "Green",
+                Color::Blue => "Blue",
+                Color::Yellow => "Yellow",
+                Color::Purple => "Purple",
+                Color::Gold => "Gold",
+                Color::Silver => "Silver",
+                Color::Pink => "Pink",
+                Color::Black => "Black",
+                Color::White => "White",
+                Color::Brown => "Brown",
+                Color::Orange => "Orange",
+                Color::Gray => "Gray",
+            })
+            .collect()
     }
 
-    fn generate_year_alternatives(&self, correct_year: i32) -> Vec<String> {
+    fn generate_year_alternatives(&self, correct_year: i32) -> Vec<&'static str> {
+        use std::collections::HashMap;
+        use std::sync::OnceLock;
+
+        static YEAR_CACHE: OnceLock<HashMap<i32, &'static str>> = OnceLock::new();
+
+        let cache = YEAR_CACHE.get_or_init(|| {
+            let mut map = HashMap::new();
+            // Pre-populate common years (1950-2030)
+            for year in 1950..=2030 {
+                let year_str: &'static str = Box::leak(year.to_string().into_boxed_str());
+                map.insert(year, year_str);
+            }
+            map
+        });
+
         let mut alternatives = [
             correct_year - 2,
             correct_year - 1,
@@ -225,7 +264,17 @@ impl GameQuestion {
             correct_year + 2,
         ];
         fastrand::shuffle(&mut alternatives);
-        alternatives.iter().map(|y| y.to_string()).collect()
+
+        alternatives
+            .iter()
+            .map(|&y| {
+                cache.get(&y).copied().unwrap_or_else(|| {
+                    // Fallback for years outside our cache range
+                    let year_str: &'static str = Box::leak(y.to_string().into_boxed_str());
+                    year_str
+                })
+            })
+            .collect()
     }
 }
 
