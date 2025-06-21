@@ -205,7 +205,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .layer(cors);
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], app_config.server.port));
+    let addr = SocketAddr::from(([0, 0, 0, 0], app_config.server.port));
     info!("Starting server on {}", addr);
 
     // Create server handle for shutdown.

@@ -22,8 +22,7 @@ use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 use std::{sync::Arc, time::Instant};
 use thiserror::Error;
-use tokio::sync::mpsc::unbounded_channel;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
@@ -128,7 +127,7 @@ pub enum AdminAction {
 
 pub struct Connection {
     pub lobby_id: Uuid,
-    pub tx: Option<UnboundedSender<Utf8Bytes>>,
+    pub tx: Option<Sender<Utf8Bytes>>,
     pub connection_id: Option<Uuid>,
 }
 
@@ -555,9 +554,9 @@ impl WSConnectionState {
 
 pub async fn handle_socket(socket: WebSocket, state: AppState) {
     let (ws_tx, mut ws_rx) = socket.split();
-    let (tx, rx) = unbounded_channel::<Utf8Bytes>();
-    let (pong_tx, pong_rx) = unbounded_channel::<Bytes>();
-    let (heartbeat_tx, heartbeat_rx) = unbounded_channel::<Bytes>();
+    let (tx, rx) = channel::<Utf8Bytes>(128);
+    let (pong_tx, pong_rx) = channel::<Bytes>(128);
+    let (heartbeat_tx, heartbeat_rx) = channel::<Bytes>(128);
 
     let conn_state = Arc::new(RwLock::new(WSConnectionState::new()));
 
@@ -583,9 +582,9 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
 /// Spawns a task to handle sending messages to the client
 fn spawn_sender_task(
     mut ws_tx: SplitSink<WebSocket, Message>,
-    mut rx: UnboundedReceiver<Utf8Bytes>,
-    mut pong_rx: UnboundedReceiver<Bytes>,
-    mut heartbeat_rx: UnboundedReceiver<Bytes>,
+    mut rx: Receiver<Utf8Bytes>,
+    mut pong_rx: Receiver<Bytes>,
+    mut heartbeat_rx: Receiver<Bytes>,
 ) -> JoinHandle<()> {
     let mut ping_interval = tokio::time::interval(Duration::from_secs(30));
 
@@ -627,9 +626,9 @@ async fn process_incoming_messages(
     ws_rx: &mut SplitStream<WebSocket>,
     conn_state: Arc<RwLock<WSConnectionState>>,
     state: &AppState,
-    tx: UnboundedSender<Utf8Bytes>,
-    pong_tx: UnboundedSender<Bytes>,
-    hb_tx: UnboundedSender<Bytes>,
+    tx: Sender<Utf8Bytes>,
+    pong_tx: Sender<Bytes>,
+    hb_tx: Sender<Bytes>,
 ) {
     while let Some(result) = ws_rx.next().await {
         match result {
@@ -747,7 +746,7 @@ async fn process_incoming_messages(
                 Message::Binary(payload) => {
                     // Only respond if the payload exactly matches our heartbeat value.
                     if payload == Bytes::from_static(&[HEARTBEAT_BYTE]) {
-                        if let Err(e) = hb_tx.send(Bytes::from_static(&[HEARTBEAT_BYTE])) {
+                        if let Err(e) = hb_tx.try_send(Bytes::from_static(&[HEARTBEAT_BYTE])) {
                             error!("Failed to send heartbeat response: {}", e);
                             break;
                         }
@@ -757,7 +756,7 @@ async fn process_incoming_messages(
                     }
                 }
                 Message::Ping(payload) => {
-                    if let Err(e) = pong_tx.send(payload) {
+                    if let Err(e) = pong_tx.try_send(payload) {
                         error!("Failed to send pong: {}", e);
                         break;
                     }
@@ -782,13 +781,13 @@ async fn process_incoming_messages(
 }
 
 /// Helper to create, serialize, wrap, and send a GameUpdate::Error to a specific client's channel.
-fn send_error_to_client(tx: &UnboundedSender<Utf8Bytes>, message: String, context: &str) {
+fn send_error_to_client(tx: &Sender<Utf8Bytes>, message: String, context: &str) {
     let error_update = GameUpdate::Error {
         message: Arc::from(message),
     };
     match serde_json::to_string(&error_update) {
         Ok(error_json_string) => {
-            if let Err(e) = tx.send(Utf8Bytes::from(error_json_string)) {
+            if let Err(e) = tx.try_send(Utf8Bytes::from(error_json_string)) {
                 // Log context about where the error occurred
                 error!(
                     "Failed to send '{}' error message back to client: {}",

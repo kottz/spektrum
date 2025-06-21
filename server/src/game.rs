@@ -362,7 +362,7 @@ impl GameEngine {
                 if self.state.players.contains_key(&target) {
                     if let Some(conn) = self.connections.get(&target) {
                         if let Some(ref tx) = conn.tx {
-                            let _ = tx.send(payload.clone());
+                            let _ = tx.try_send(payload.clone());
                         }
                     }
                 }
@@ -372,7 +372,7 @@ impl GameEngine {
                     if self.state.players.contains_key(&target) {
                         if let Some(conn) = self.connections.get(&target) {
                             if let Some(ref tx) = conn.tx {
-                                let _ = tx.send(payload.clone());
+                                let _ = tx.try_send(payload.clone());
                             }
                         }
                     }
@@ -383,7 +383,7 @@ impl GameEngine {
                     if !exclusions.contains(player_id) {
                         if let Some(conn) = self.connections.get(player_id) {
                             if let Some(ref tx) = conn.tx {
-                                let _ = tx.send(payload.clone());
+                                let _ = tx.try_send(payload.clone());
                             }
                         }
                     }
@@ -393,7 +393,7 @@ impl GameEngine {
                 for player_id in self.state.players.keys() {
                     if let Some(conn) = self.connections.get(player_id) {
                         if let Some(ref tx) = conn.tx {
-                            let _ = tx.send(payload.clone());
+                            let _ = tx.try_send(payload.clone());
                         }
                     }
                 }
@@ -979,9 +979,9 @@ mod tests {
     use crate::question::{Color, GameQuestion, GameQuestionOption, QuestionType};
     use serde::Deserialize;
     use std::time::Duration;
-    use tokio::sync::mpsc::UnboundedReceiver;
+    use tokio::sync::mpsc::Receiver;
 
-    async fn receive_and_deserialize<T>(rx: &mut UnboundedReceiver<Utf8Bytes>) -> T
+    async fn receive_and_deserialize<T>(rx: &mut Receiver<Utf8Bytes>) -> T
     where
         T: for<'de> Deserialize<'de> + std::fmt::Debug,
     {
@@ -1062,7 +1062,7 @@ mod tests {
         let connections = Arc::new(DashMap::new());
 
         // Create a connection for admin
-        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let (tx, _rx) = tokio::sync::mpsc::channel(128);
         connections.insert(
             admin_id,
             Connection {
@@ -1080,7 +1080,7 @@ mod tests {
 
     fn add_test_player(engine: &mut GameEngine, name: &str) -> Uuid {
         let player_id = Uuid::new_v4();
-        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let (tx, _rx) = tokio::sync::mpsc::channel(128);
         engine.connections.insert(
             player_id,
             Connection {
@@ -1464,7 +1464,7 @@ mod tests {
         engine.connections.remove(&player_id);
 
         // Re-add the player with a new connection
-        let (player_tx, mut player_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (player_tx, mut player_rx) = tokio::sync::mpsc::channel(128);
         engine.connections.insert(
             player_id,
             Connection {
@@ -1687,7 +1687,7 @@ mod tests {
             name: Arc::from("Test Set"),
         };
 
-        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let (tx, _rx) = tokio::sync::mpsc::channel(128);
         connections.insert(
             admin_id,
             Connection {
@@ -1711,7 +1711,7 @@ mod tests {
         engine.add_player(admin_id, "Admin".to_string()).unwrap();
 
         // Create channel to capture admin messages
-        let (admin_tx, mut admin_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (admin_tx, mut admin_rx) = tokio::sync::mpsc::channel(128);
         engine.connections.insert(
             admin_id,
             Connection {
@@ -1752,7 +1752,7 @@ mod tests {
         engine.state.current_question = Some(test_question.clone());
 
         // Create new channel for clean message capture
-        let (admin_tx2, mut admin_rx2) = tokio::sync::mpsc::unbounded_channel();
+        let (admin_tx2, mut admin_rx2) = tokio::sync::mpsc::channel(128);
         engine.connections.insert(
             admin_id,
             Connection {
@@ -1804,7 +1804,7 @@ mod tests {
         let admin_id = Uuid::new_v4();
         let admin_lobby_id = Uuid::new_v4();
         let connections = Arc::new(DashMap::new());
-        let (admin_tx, _admin_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (admin_tx, _admin_rx) = tokio::sync::mpsc::channel(128);
 
         // Add admin connection
         connections.insert(
@@ -1830,7 +1830,7 @@ mod tests {
 
         // Add a player
         let player_id = Uuid::new_v4();
-        let (player_tx, mut player_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (player_tx, mut player_rx) = tokio::sync::mpsc::channel(128);
 
         // Add player connection with same lobby id as admin
         engine.connections.insert(
@@ -2225,7 +2225,7 @@ mod tests {
 
         // Add a player with message capture
         let player_id = Uuid::new_v4();
-        let (player_tx, mut player_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (player_tx, mut player_rx) = tokio::sync::mpsc::channel(128);
         engine.connections.insert(
             player_id,
             Connection {
@@ -2280,7 +2280,7 @@ mod tests {
         let admin_id = Uuid::new_v4();
         let admin_lobby_id = Uuid::new_v4();
         let connections = Arc::new(DashMap::new());
-        let (admin_tx, mut admin_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (admin_tx, mut admin_rx) = tokio::sync::mpsc::channel(128);
 
         // Create game engine with admin
         let mut engine = GameEngine::new(
@@ -2408,7 +2408,7 @@ mod tests {
         let admin_id = Uuid::new_v4();
         let admin_lobby_id = Uuid::new_v4();
         let connections = Arc::new(DashMap::new());
-        let (admin_tx, _admin_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (admin_tx, _admin_rx) = tokio::sync::mpsc::channel(128);
 
         connections.insert(
             admin_id,
@@ -2432,7 +2432,7 @@ mod tests {
 
         // Add a player and capture their messages
         let player_id = Uuid::new_v4();
-        let (player_tx, mut player_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (player_tx, mut player_rx) = tokio::sync::mpsc::channel(128);
         engine.connections.insert(
             player_id,
             Connection {
@@ -2476,7 +2476,7 @@ mod tests {
         let admin_lobby_id = Uuid::new_v4();
         let connections = Arc::new(DashMap::new());
         // Create channel to capture admin messages
-        let (admin_tx, mut admin_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (admin_tx, mut admin_rx) = tokio::sync::mpsc::channel(128);
         // Add admin connection
         connections.insert(
             admin_id,
