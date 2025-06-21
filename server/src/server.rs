@@ -27,9 +27,11 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
-use tracing::{error, trace, warn};
+use tracing::{error, info, trace, warn};
 
 const HEARTBEAT_BYTE: u8 = 0x42;
+
+type LobbyStats = (usize, usize, Vec<(Arc<str>, i32)>);
 
 #[derive(Error, Debug)]
 pub enum ApiError {
@@ -287,6 +289,16 @@ pub async fn create_lobby_handler(
 
     // Insert the new engine into the global lobbies map.
     state.lobbies.insert(lobby_id, engine);
+
+    info!(
+        "Lobby created: {} with join code: {} (round_duration: {}s, set: {})",
+        lobby_id,
+        join_code,
+        round_duration,
+        selected_set
+            .map(|s| s.name.as_ref())
+            .unwrap_or("all questions")
+    );
 
     Ok(Json(CreateLobbyResponse {
         player_id: admin_id,
@@ -825,16 +837,32 @@ async fn cleanup_lobbies(
     loop {
         tick.tick().await;
 
-        let finished_lobby_ids: Vec<Uuid> = lobbies
+        let finished_lobbies: Vec<(Uuid, LobbyStats)> = lobbies
             .iter()
             .filter(|entry| entry.value().is_finished())
-            .map(|entry| *entry.key())
+            .map(|entry| (*entry.key(), entry.value().get_lobby_stats()))
             .collect();
 
-        for lobby_id in &finished_lobby_ids {
+        for (lobby_id, (total_players, questions_played, player_scores)) in &finished_lobbies {
+            let players_info: Vec<String> = player_scores
+                .iter()
+                .map(|(name, score)| format!("{}:{}", name, score))
+                .collect();
+            info!(
+                "Lobby closed: {} with {} players, {} questions played, players [{}]",
+                lobby_id,
+                total_players,
+                questions_played,
+                players_info.join(", ")
+            );
+        }
+
+        for (lobby_id, _) in &finished_lobbies {
             trace!("Removing finished lobby {}", lobby_id);
             lobbies.remove(lobby_id);
         }
+
+        let finished_lobby_ids: Vec<Uuid> = finished_lobbies.iter().map(|(id, _)| *id).collect();
 
         let join_codes_to_remove: Vec<String> = join_codes
             .iter()

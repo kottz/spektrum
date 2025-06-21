@@ -302,6 +302,18 @@ impl GameEngine {
         self.state.players.len() >= 1024
     }
 
+    pub fn get_lobby_stats(&self) -> (usize, usize, Vec<(Arc<str>, i32)>) {
+        let total_players = self.state.players.len();
+        let questions_played = self.state.current_question_index;
+        let player_scores: Vec<(Arc<str>, i32)> = self
+            .state
+            .players
+            .values()
+            .map(|p| (p.name.clone(), p.score))
+            .collect();
+        (total_players, questions_played, player_scores)
+    }
+
     pub fn get_consecutive_misses(&self) -> Vec<(Arc<str>, u32)> {
         self.state
             .players
@@ -512,6 +524,7 @@ impl GameEngine {
     fn handle_leave(&mut self, ctx: EventContext) {
         if let Some(player) = self.state.players.remove(&ctx.sender_id) {
             if ctx.sender_id == self.state.admin_id {
+                self.state.phase = GamePhase::GameClosed;
                 self.push_update(
                     Recipients::All,
                     GameUpdate::GameClosed {
@@ -900,7 +913,8 @@ impl GameEngine {
         );
     }
 
-    fn handle_close_game(&self, _ctx: EventContext, reason: Arc<str>) {
+    fn handle_close_game(&mut self, _ctx: EventContext, reason: Arc<str>) {
+        self.state.phase = GamePhase::GameClosed;
         self.push_update(Recipients::All, GameUpdate::GameClosed { reason });
     }
 

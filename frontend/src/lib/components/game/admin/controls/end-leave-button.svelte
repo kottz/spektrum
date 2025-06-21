@@ -11,7 +11,7 @@
 <Button
 	variant="destructive"
 	class="w-full"
-	on:click={() => (isGameOver || isLobby ? gameActions.leaveGame() : gameActions.endGame())}
+	on:click={() => (isGameOver || isLobby ? gameActions.closeGame() : gameActions.endGame())}
 >
 	{isGameOver || isLobby ? 'Leave Game' : 'End Game'}
 </Button>
