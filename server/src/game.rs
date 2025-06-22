@@ -3,7 +3,7 @@ use crate::question::GameQuestion;
 use crate::server::Connection;
 use crate::uuid::Uuid;
 use axum::extract::ws::Utf8Bytes;
-use bytes::Bytes;
+use bytes::{BufMut, BytesMut};
 use dashmap::DashMap;
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -340,15 +340,14 @@ impl GameEngine {
     }
 
     fn push_update(&self, recipients: Recipients, update: GameUpdate) {
-        let vec = match serde_json::to_vec(&update) {
-            Ok(v) => v,
-            Err(e) => {
-                error!("Failed to serialize game update: {}", e);
-                return;
-            }
-        };
+        let mut writer = BytesMut::with_capacity(2048).writer();
 
-        let bytes = Bytes::from(vec);
+        if let Err(e) = serde_json::to_writer(&mut writer, &update) {
+            error!("Failed to serialize game update to writer: {}", e);
+            return;
+        }
+
+        let bytes = writer.into_inner().freeze();
         let payload = match Utf8Bytes::try_from(bytes) {
             Ok(payload) => payload,
             Err(e) => {
