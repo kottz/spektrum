@@ -14,7 +14,6 @@ use serde::Deserialize;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::signal;
 use tokio::time::Duration as TokioDuration;
 use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};
@@ -149,7 +148,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             http::header::ACCEPT,
         ]);
 
-    // Configure rate limiting with 30 message burst and 500 ms recharge
     let governor_conf = Arc::new(
         GovernorConfigBuilder::default()
             .per_millisecond(500)
@@ -158,10 +156,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .unwrap(),
     );
 
-    // Clone the limiter for the cleanup task
     let governor_limiter = governor_conf.limiter().clone();
-
-    // Create a task to clean up old rate limiting entries
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(TokioDuration::from_secs(60)).await;
@@ -208,23 +203,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = SocketAddr::from(([0, 0, 0, 0], app_config.server.port));
     info!("Starting server on {}", addr);
 
-    // Create server handle for shutdown.
-    let handle = axum_server::Handle::new();
-    let handle_clone = handle.clone();
-
-    tokio::spawn(async move {
-        shutdown_signal().await;
-        info!("Shutdown signal received, starting graceful shutdown");
-        handle_clone.graceful_shutdown(Some(Duration::from_secs(3)));
-    });
-
-    let mut server = axum_server::bind(addr);
-    server.http_builder().http2().enable_connect_protocol();
-
-    server
-        .handle(handle)
-        .serve(app.into_make_service_with_connect_info::<SocketAddr>())
-        .await?;
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await?;
 
     info!("Server shutdown complete");
     Ok(())
