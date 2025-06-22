@@ -599,7 +599,7 @@ fn spawn_sender_task(
                     }
                 }
                 Some(msg) = rx.recv() => {
-                    if let Err(e) = ws_tx.send(Message::Text(msg.clone())).await {
+                    if let Err(e) = ws_tx.send(Message::Text(msg)).await {
                         error!("Failed to send message: {}", e);
                         break;
                     }
