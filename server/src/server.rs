@@ -191,8 +191,6 @@ impl AppState {
     }
 }
 
-// --- HTTP Handler Logic (Business Logic) ---
-
 #[derive(Debug, Serialize)]
 pub struct SetInfo {
     pub id: i64,
@@ -568,7 +566,6 @@ pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> 
 async fn handle_socket(socket: WebSocket, state: AppState) {
     let (ws_tx, mut ws_rx) = socket.split();
 
-    // FIX: Create two channels: one for text (game updates, errors) and one for binary (heartbeats).
     let (text_tx, text_rx) = channel::<Utf8Bytes>(128);
     let (bin_tx, bin_rx) = channel::<Bytes>(128);
 
@@ -577,7 +574,6 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     let send_task = spawn_sender_task(ws_tx, text_rx, bin_rx);
 
     while let Some(Ok(msg)) = ws_rx.next().await {
-        // FIX: Pass both transmitters to the message handler.
         let result = handle_message(msg, &mut conn, &state, &text_tx, &bin_tx).await;
         if result.is_err() {
             break;
@@ -588,7 +584,6 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     send_task.abort();
 }
 
-// FIX: `spawn_sender_task` now accepts two receivers and selects on both.
 fn spawn_sender_task(
     mut ws_tx: SplitSink<WebSocket, Message>,
     mut text_rx: Receiver<Utf8Bytes>,
@@ -613,7 +608,6 @@ fn spawn_sender_task(
     })
 }
 
-// FIX: `handle_message` now accepts the binary channel transmitter.
 async fn handle_message(
     msg: Message,
     conn: &mut WsConnection,
@@ -644,7 +638,6 @@ async fn handle_message(
             }
         }
         Message::Binary(payload) if payload.as_ref() == [HEARTBEAT_BYTE] => {
-            // FIX: Use the dedicated binary channel to send the heartbeat response.
             let _ = bin_tx.try_send(payload);
         }
         Message::Pong(_) => trace!("Received pong from client"),
@@ -668,7 +661,6 @@ async fn handle_connect(
     if let Some(mut c) = state.connections.get_mut(&player_id) {
         let lobby_id = c.lobby_id;
         conn.player_id = Some(player_id);
-        // The `Connection` struct stores the text channel transmitter for game updates.
         c.tx = Some(tx.clone());
         c.connection_id = Some(conn.connection_id);
         drop(c);
@@ -693,7 +685,10 @@ async fn handle_connect(
 }
 
 async fn dispatch_game_action(msg: ClientMessage, conn: &WsConnection, state: &AppState) {
-    let player_id = conn.player_id.unwrap(); // Assumes player_id is Some
+    let Some(player_id) = conn.player_id else {
+        error!("dispatch_game_action called without player_id");
+        return;
+    };
     if let Some(c) = state.connections.get(&player_id) {
         let lobby_id = c.lobby_id;
         drop(c);
