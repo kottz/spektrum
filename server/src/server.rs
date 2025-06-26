@@ -1,6 +1,8 @@
 use crate::db::{DbError, StoredData};
-use crate::game::{EventContext, GameAction, GameEngine, GameEvent, GameUpdate};
-use crate::question::QuestionStore;
+use crate::game::{
+    EventContext, GameAction, GameEngine, GameEvent, GameUpdate, NameValidationError,
+};
+use crate::question::{QuestionError, QuestionStore};
 use crate::uuid::Uuid;
 use axum::extract::ws::Utf8Bytes;
 use axum::extract::Path;
@@ -16,17 +18,15 @@ use axum::{
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
-use futures_util::stream::{SplitSink, SplitStream};
+use futures_util::stream::SplitSink;
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
-use std::time::SystemTime;
-use std::{sync::Arc, time::Instant};
+use std::sync::Arc;
+use std::time::{Duration, Instant, SystemTime};
 use thiserror::Error;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
-use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
-use tokio::time::Duration;
-use tracing::{error, info, trace, warn};
+use tracing::{error, info, trace};
 
 const HEARTBEAT_BYTE: u8 = 0x42;
 
@@ -36,22 +36,16 @@ type LobbyStats = (usize, usize, Vec<(Arc<str>, i32)>);
 pub enum ApiError {
     #[error("Validation error: {0}")]
     Validation(String),
-
     #[error("Unauthorized")]
     Unauthorized,
-
     #[error("Database error: {0}")]
     Database(String),
-
     #[error("Lobby error: {0}")]
     Lobby(String),
-
     #[error("No more join codes error")]
     OutOfJoinCodes,
-
     #[error("Unsupported media type")]
     UnsupportedMediaType,
-
     #[error("Bad request: {0}")]
     BadRequest(String),
 }
@@ -100,6 +94,18 @@ impl IntoResponse for ApiError {
 
 impl From<DbError> for ApiError {
     fn from(err: DbError) -> Self {
+        ApiError::Database(err.to_string())
+    }
+}
+
+impl From<NameValidationError> for ApiError {
+    fn from(err: NameValidationError) -> Self {
+        ApiError::Validation(err.to_string())
+    }
+}
+
+impl From<QuestionError> for ApiError {
+    fn from(err: QuestionError) -> Self {
         ApiError::Database(err.to_string())
     }
 }
@@ -185,6 +191,8 @@ impl AppState {
     }
 }
 
+// --- HTTP Handler Logic (Business Logic) ---
+
 #[derive(Debug, Serialize)]
 pub struct SetInfo {
     pub id: i64,
@@ -198,9 +206,7 @@ pub struct ListSetsResponse {
     pub sets: Vec<SetInfo>,
 }
 
-pub async fn list_sets_handler(
-    State(state): State<AppState>,
-) -> Result<Json<ListSetsResponse>, ApiError> {
+pub async fn list_sets(state: &AppState) -> Result<ListSetsResponse, ApiError> {
     let num_questions = state.store.questions.read().await.len();
     let sets = state.store.sets.read().await;
 
@@ -213,10 +219,10 @@ pub async fn list_sets_handler(
         })
         .collect();
 
-    Ok(Json(ListSetsResponse {
+    Ok(ListSetsResponse {
         num_questions,
         sets: sets_info,
-    }))
+    })
 }
 
 #[derive(Debug, Deserialize)]
@@ -225,16 +231,16 @@ pub struct CreateLobbyRequest {
     pub set_id: Option<i64>,
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, PartialEq)]
 pub struct CreateLobbyResponse {
     pub player_id: Uuid,
     pub join_code: String,
 }
 
-pub async fn create_lobby_handler(
-    State(state): State<crate::server::AppState>,
-    Json(req): Json<CreateLobbyRequest>,
-) -> Result<Json<CreateLobbyResponse>, ApiError> {
+pub async fn create_lobby(
+    state: &AppState,
+    req: CreateLobbyRequest,
+) -> Result<CreateLobbyResponse, ApiError> {
     let round_duration = req.round_duration.unwrap_or(60);
     if round_duration < 10 {
         return Err(ApiError::Validation(
@@ -242,11 +248,8 @@ pub async fn create_lobby_handler(
         ));
     }
 
-    // Read questions and sets from the QuestionStore.
     let questions = state.store.questions.read().await;
     let sets = state.store.sets.read().await;
-
-    // Validate and select a set if requested.
     let selected_set = if let Some(set_id) = req.set_id {
         Some(
             sets.iter()
@@ -257,12 +260,10 @@ pub async fn create_lobby_handler(
         None
     };
 
-    // Generate new IDs and a join code.
     let lobby_id = Uuid::new_v4();
     let admin_id = Uuid::new_v4();
     let join_code = state.generate_join_code(lobby_id)?;
 
-    // Create a new game engine.
     let mut engine = GameEngine::new(
         admin_id,
         Arc::clone(&questions),
@@ -270,11 +271,7 @@ pub async fn create_lobby_handler(
         round_duration,
         state.connections.clone(),
     );
-
-    engine
-        .add_player(admin_id, "Admin".into())
-        .map_err(|e| ApiError::Lobby(e.to_string()))?;
-
+    engine.add_player(admin_id, "Admin".into())?;
     trace!("Creating new lobby {}", lobby_id);
 
     state.connections.insert(
@@ -285,8 +282,6 @@ pub async fn create_lobby_handler(
             connection_id: None,
         },
     );
-
-    // Insert the new engine into the global lobbies map.
     state.lobbies.insert(lobby_id, engine);
 
     info!(
@@ -299,10 +294,10 @@ pub async fn create_lobby_handler(
             .unwrap_or("all questions")
     );
 
-    Ok(Json(CreateLobbyResponse {
+    Ok(CreateLobbyResponse {
         player_id: admin_id,
         join_code,
-    }))
+    })
 }
 
 #[derive(Debug, Deserialize)]
@@ -311,54 +306,44 @@ pub struct JoinLobbyRequest {
     pub name: String,
 }
 
-// New response type that returns the new player’s UUID.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, PartialEq)]
 pub struct JoinLobbyResponse {
     pub player_id: Uuid,
 }
 
-/// This handler accepts a join code and a name. It uses the join_codes map
-/// to look up the lobby ID, retrieves the GameEngine for that lobby, creates a new
-/// player ID, tells the engine to add the player, and returns the new player ID.
-pub async fn join_lobby_handler(
-    State(state): State<AppState>,
-    Json(req): Json<JoinLobbyRequest>,
-) -> Result<Json<JoinLobbyResponse>, ApiError> {
-    // Look up the lobby ID using the join code.
+pub async fn join_lobby(
+    state: &AppState,
+    req: JoinLobbyRequest,
+) -> Result<JoinLobbyResponse, ApiError> {
     let lobby_id = state
         .join_codes
-        .get(&req.join_code)
-        .ok_or_else(|| ApiError::Lobby("Lobby not found".into()))?;
+        .get(req.join_code.trim())
+        .ok_or_else(|| ApiError::Lobby("Invalid join code.".into()))?
+        .value()
+        .clone();
 
-    // Retrieve the game engine corresponding to that lobby.
     let mut engine = state
         .lobbies
-        .get_mut(lobby_id.value())
-        .ok_or_else(|| ApiError::Lobby("Lobby engine not found".into()))?;
+        .get_mut(&lobby_id)
+        .ok_or_else(|| ApiError::Lobby("Lobby not found. It may have been closed.".into()))?;
 
     if engine.is_full() {
-        return Err(ApiError::Lobby("Lobby is full".into()));
+        return Err(ApiError::Lobby("Lobby is full.".into()));
     }
 
     let new_player_id = Uuid::new_v4();
-
-    engine
-        .add_player(new_player_id, req.name)
-        .map_err(|e| ApiError::Validation(e.to_string()))?;
-
+    engine.add_player(new_player_id, req.name)?;
     state.connections.insert(
         new_player_id,
         Connection {
-            lobby_id: *lobby_id,
+            lobby_id,
             tx: None,
             connection_id: None,
         },
     );
-
-    // Return the new player's id.
-    Ok(Json(JoinLobbyResponse {
+    Ok(JoinLobbyResponse {
         player_id: new_player_id,
-    }))
+    })
 }
 
 #[derive(Debug, Deserialize)]
@@ -366,21 +351,15 @@ pub struct GetStoredDataRequest {
     password: String,
 }
 
-pub async fn get_stored_data_handler(
-    State(state): State<AppState>,
-    Json(req): Json<GetStoredDataRequest>,
-) -> Result<impl IntoResponse, ApiError> {
+pub async fn get_stored_data(
+    state: &AppState,
+    req: GetStoredDataRequest,
+) -> Result<StoredData, ApiError> {
     if !state.admin_passwords.contains(&req.password) {
         return Err(ApiError::Unauthorized);
     }
-
-    let stored_data = state
-        .store
-        .get_stored_data()
-        .await
-        .map_err(|e| ApiError::Database(e.to_string()))?;
-
-    Ok(Json(stored_data))
+    let stored_data = state.store.get_stored_data().await?;
+    Ok(stored_data)
 }
 
 #[derive(Debug, Deserialize)]
@@ -389,85 +368,41 @@ pub struct SetStoredDataRequest {
     stored_data: StoredData,
 }
 
-pub async fn set_stored_data_handler(
-    State(state): State<AppState>,
-    Json(req): Json<SetStoredDataRequest>,
-) -> Result<impl IntoResponse, ApiError> {
+pub async fn set_stored_data(
+    state: &AppState,
+    req: SetStoredDataRequest,
+) -> Result<StoredData, ApiError> {
     if !state.admin_passwords.contains(&req.password) {
         return Err(ApiError::Unauthorized);
     }
-
-    if let Err(e) = state.store.backup_stored_data().await {
-        return Err(ApiError::Database(e.to_string()));
-    }
-
-    if let Err(e) = state.store.set_stored_data(req.stored_data).await {
-        return Err(ApiError::Database(e.to_string()));
-    }
-
-    state
-        .store
-        .load_questions()
-        .await
-        .map_err(|e| ApiError::Database(e.to_string()))?;
-    match state.store.get_stored_data().await {
-        Ok(data) => Ok(Json(data)),
-        Err(e) => Err(ApiError::Database(e.to_string())),
-    }
+    state.store.backup_stored_data().await?;
+    state.store.set_stored_data(req.stored_data).await?;
+    state.store.load_questions().await?;
+    let data = state.store.get_stored_data().await?;
+    Ok(data)
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, PartialEq)]
 pub struct UploadCharacterImageResponse {
     image_url: String,
 }
 
-pub async fn upload_character_image_handler(
-    State(state): State<AppState>,
-    Path(character_name): Path<String>,
-    mut multipart: Multipart,
-) -> Result<impl IntoResponse, ApiError> {
-    let mut password = None;
-    let mut image_data = None;
-    while let Some(field) = multipart
-        .next_field()
-        .await
-        .map_err(|e| ApiError::BadRequest(format!("Failed to read multipart field: {}", e)))?
-    {
-        match field.name().unwrap_or_default() {
-            "password" => {
-                password =
-                    Some(field.text().await.map_err(|e| {
-                        ApiError::BadRequest(format!("Failed to read password: {}", e))
-                    })?)
-            }
-            "image" => {
-                if !field
-                    .content_type()
-                    .unwrap_or("")
-                    .eq_ignore_ascii_case("image/avif")
-                {
-                    return Err(ApiError::UnsupportedMediaType);
-                }
-                image_data = Some(field.bytes().await.map_err(|e| {
-                    ApiError::BadRequest(format!("Failed to read image data: {}", e))
-                })?);
-            }
-            _ => continue,
-        }
-    }
+pub async fn upload_character_image(
+    state: &AppState,
+    character_name: String,
+    password: Option<String>,
+    image_data: Option<Bytes>,
+) -> Result<UploadCharacterImageResponse, ApiError> {
     let password = password.ok_or(ApiError::Unauthorized)?;
     if !state.admin_passwords.contains(&password) {
         return Err(ApiError::Unauthorized);
     }
     let image_data = image_data.ok_or(ApiError::BadRequest("Missing image file".to_string()))?;
-
-    // Get the store from state and use it to store the image
     let url = state
         .store
         .store_character_image(&character_name, &image_data)
         .await?;
-
-    Ok(Json(UploadCharacterImageResponse { image_url: url }))
+    Ok(UploadCharacterImageResponse { image_url: url })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -480,70 +415,144 @@ pub struct CheckSessionsRequest {
     pub sessions: Vec<SessionInfo>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct ValidSessionInfo {
     pub player_id: Uuid,
-    pub last_update: String, // ISO formatted timestamp
+    pub last_update: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, PartialEq)]
 pub struct CheckSessionsResponse {
     pub valid_sessions: Vec<ValidSessionInfo>,
 }
 
-pub async fn check_sessions_handler(
-    State(state): State<AppState>,
-    Json(req): Json<CheckSessionsRequest>,
-) -> Result<Json<CheckSessionsResponse>, ApiError> {
+pub async fn check_sessions(
+    state: &AppState,
+    req: CheckSessionsRequest,
+) -> Result<CheckSessionsResponse, ApiError> {
     let mut valid_sessions = Vec::new();
-    let now = std::time::Instant::now();
-
+    let now = Instant::now();
     for session in req.sessions.iter() {
         if let Some(conn) = state.connections.get(&session.player_id) {
             if let Some(lobby) = state.lobbies.get(&conn.lobby_id) {
                 if !lobby.is_finished() {
                     if let Some(last_update) = lobby.last_update() {
                         let duration = now.duration_since(last_update);
-
                         if let Some(system_time) = SystemTime::now().checked_sub(duration) {
-                            let timestamp = system_time
-                                .duration_since(SystemTime::UNIX_EPOCH)
-                                .ok()
-                                .and_then(|d| {
-                                    DateTime::<Utc>::from_timestamp(
-                                        d.as_secs() as i64,
-                                        d.subsec_nanos(),
-                                    )
-                                })
-                                .map(|dt| dt.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string());
-
-                            if let Some(timestamp) = timestamp {
-                                valid_sessions.push(ValidSessionInfo {
-                                    player_id: session.player_id,
-                                    last_update: timestamp,
-                                });
-                            }
+                            let dt = DateTime::<Utc>::from(system_time);
+                            valid_sessions.push(ValidSessionInfo {
+                                player_id: session.player_id,
+                                last_update: dt.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string(),
+                            });
                         }
                     }
                 }
             }
         }
     }
-
-    Ok(Json(CheckSessionsResponse { valid_sessions }))
+    Ok(CheckSessionsResponse { valid_sessions })
 }
 
-pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_socket(socket, state))
+// --- Axum Handlers (Thin Wrappers) ---
+
+pub async fn list_sets_handler(
+    State(state): State<AppState>,
+) -> Result<Json<ListSetsResponse>, ApiError> {
+    let response = list_sets(&state).await?;
+    Ok(Json(response))
 }
 
-/// Simplified connection state - only tracks player ID
-struct WSConnectionState {
+pub async fn create_lobby_handler(
+    State(state): State<AppState>,
+    Json(req): Json<CreateLobbyRequest>,
+) -> Result<Json<CreateLobbyResponse>, ApiError> {
+    let response = create_lobby(&state, req).await?;
+    Ok(Json(response))
+}
+
+pub async fn join_lobby_handler(
+    State(state): State<AppState>,
+    Json(req): Json<JoinLobbyRequest>,
+) -> Result<Json<JoinLobbyResponse>, ApiError> {
+    let response = join_lobby(&state, req).await?;
+    Ok(Json(response))
+}
+
+pub async fn get_stored_data_handler(
+    State(state): State<AppState>,
+    Json(req): Json<GetStoredDataRequest>,
+) -> Result<Json<StoredData>, ApiError> {
+    let response = get_stored_data(&state, req).await?;
+    Ok(Json(response))
+}
+
+pub async fn set_stored_data_handler(
+    State(state): State<AppState>,
+    Json(req): Json<SetStoredDataRequest>,
+) -> Result<Json<StoredData>, ApiError> {
+    let response = set_stored_data(&state, req).await?;
+    Ok(Json(response))
+}
+
+pub async fn upload_character_image_handler(
+    State(state): State<AppState>,
+    Path(character_name): Path<String>,
+    mut multipart: Multipart,
+) -> Result<Json<UploadCharacterImageResponse>, ApiError> {
+    let mut password = None;
+    let mut image_data = None;
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| ApiError::BadRequest(e.to_string()))?
+    {
+        match field.name().unwrap_or_default() {
+            "password" => {
+                password = Some(
+                    field
+                        .text()
+                        .await
+                        .map_err(|e| ApiError::BadRequest(e.to_string()))?,
+                )
+            }
+            "image" => {
+                if !field
+                    .content_type()
+                    .unwrap_or("")
+                    .eq_ignore_ascii_case("image/avif")
+                {
+                    return Err(ApiError::UnsupportedMediaType);
+                }
+                image_data = Some(
+                    field
+                        .bytes()
+                        .await
+                        .map_err(|e| ApiError::BadRequest(e.to_string()))?,
+                );
+            }
+            _ => continue,
+        }
+    }
+    let response = upload_character_image(&state, character_name, password, image_data).await?;
+    Ok(Json(response))
+}
+
+pub async fn check_sessions_handler(
+    State(state): State<AppState>,
+    Json(req): Json<CheckSessionsRequest>,
+) -> Result<Json<CheckSessionsResponse>, ApiError> {
+    let response = check_sessions(&state, req).await?;
+    Ok(Json(response))
+}
+
+// --- WebSocket Handling ---
+
+struct WsConnection {
     player_id: Option<Uuid>,
     connection_id: Uuid,
 }
 
-impl WSConnectionState {
+impl WsConnection {
     fn new() -> Self {
         Self {
             player_id: None,
@@ -552,69 +561,51 @@ impl WSConnectionState {
     }
 }
 
-pub async fn handle_socket(socket: WebSocket, state: AppState) {
+pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| handle_socket(socket, state))
+}
+
+async fn handle_socket(socket: WebSocket, state: AppState) {
     let (ws_tx, mut ws_rx) = socket.split();
-    let (tx, rx) = channel::<Utf8Bytes>(128);
-    let (pong_tx, pong_rx) = channel::<Bytes>(128);
-    let (heartbeat_tx, heartbeat_rx) = channel::<Bytes>(128);
 
-    let conn_state = Arc::new(RwLock::new(WSConnectionState::new()));
+    // FIX: Create two channels: one for text (game updates, errors) and one for binary (heartbeats).
+    let (text_tx, text_rx) = channel::<Utf8Bytes>(128);
+    let (bin_tx, bin_rx) = channel::<Bytes>(128);
 
-    // Spawn the sender task
-    let send_task = spawn_sender_task(ws_tx, rx, pong_rx, heartbeat_rx);
+    let mut conn = WsConnection::new();
 
-    // Process incoming messages
-    process_incoming_messages(
-        &mut ws_rx,
-        conn_state.clone(),
-        &state,
-        tx.clone(),
-        pong_tx,
-        heartbeat_tx,
-    )
-    .await;
+    let send_task = spawn_sender_task(ws_tx, text_rx, bin_rx);
 
-    // Cleanup
-    handle_disconnect(conn_state, &state).await;
+    while let Some(Ok(msg)) = ws_rx.next().await {
+        // FIX: Pass both transmitters to the message handler.
+        let result = handle_message(msg, &mut conn, &state, &text_tx, &bin_tx).await;
+        if result.is_err() {
+            break;
+        }
+    }
+
+    handle_disconnect(&conn, &state).await;
     send_task.abort();
 }
 
-/// Spawns a task to handle sending messages to the client
+// FIX: `spawn_sender_task` now accepts two receivers and selects on both.
 fn spawn_sender_task(
     mut ws_tx: SplitSink<WebSocket, Message>,
-    mut rx: Receiver<Utf8Bytes>,
-    mut pong_rx: Receiver<Bytes>,
-    mut heartbeat_rx: Receiver<Bytes>,
+    mut text_rx: Receiver<Utf8Bytes>,
+    mut bin_rx: Receiver<Bytes>,
 ) -> JoinHandle<()> {
-    let mut ping_interval = tokio::time::interval(Duration::from_secs(30));
-
     tokio::spawn(async move {
+        let mut ping_interval = tokio::time::interval(Duration::from_secs(30));
         loop {
             tokio::select! {
                 _ = ping_interval.tick() => {
-                    let ping_payload: Bytes = Bytes::new();
-                    if let Err(e) = ws_tx.send(Message::Ping(ping_payload)).await {
-                        error!("Failed to send ping: {}", e);
-                        break;
-                    }
+                    if ws_tx.send(Message::Ping(vec![].into())).await.is_err() { break; }
                 }
-                Some(msg) = rx.recv() => {
-                    if let Err(e) = ws_tx.send(Message::Text(msg)).await {
-                        error!("Failed to send message: {}", e);
-                        break;
-                    }
+                Some(msg) = text_rx.recv() => {
+                    if ws_tx.send(Message::Text(msg)).await.is_err() { break; }
                 }
-                Some(payload) = pong_rx.recv() => {
-                    if let Err(e) = ws_tx.send(Message::Pong(payload)).await {
-                        error!("Failed to send pong: {}", e);
-                        break;
-                    }
-                }
-                Some(payload) = heartbeat_rx.recv() => {
-                    if let Err(e) = ws_tx.send(Message::Binary(payload)).await {
-                        error!("Failed to send heartbeat: {}", e);
-                        break;
-                    }
+                Some(msg) = bin_rx.recv() => {
+                    if ws_tx.send(Message::Binary(msg)).await.is_err() { break; }
                 }
                 else => break,
             }
@@ -622,207 +613,144 @@ fn spawn_sender_task(
     })
 }
 
-async fn process_incoming_messages(
-    ws_rx: &mut SplitStream<WebSocket>,
-    conn_state: Arc<RwLock<WSConnectionState>>,
+// FIX: `handle_message` now accepts the binary channel transmitter.
+async fn handle_message(
+    msg: Message,
+    conn: &mut WsConnection,
     state: &AppState,
-    tx: Sender<Utf8Bytes>,
-    pong_tx: Sender<Bytes>,
-    hb_tx: Sender<Bytes>,
+    text_tx: &Sender<Utf8Bytes>,
+    bin_tx: &Sender<Bytes>,
+) -> Result<(), ()> {
+    match msg {
+        Message::Text(text) => {
+            let client_msg: ClientMessage = match serde_json::from_str(&text) {
+                Ok(msg) => msg,
+                Err(e) => {
+                    send_error_to_client(
+                        text_tx,
+                        format!("Invalid message format: {}", e),
+                        "json_parse",
+                    );
+                    return Ok(());
+                }
+            };
+
+            if let ClientMessage::Connect { player_id } = client_msg {
+                handle_connect(player_id, conn, state, text_tx).await;
+            } else if conn.player_id.is_some() {
+                dispatch_game_action(client_msg, conn, state).await;
+            } else {
+                send_error_to_client(text_tx, "Must connect first.".to_string(), "not_connected");
+            }
+        }
+        Message::Binary(payload) if payload.as_ref() == [HEARTBEAT_BYTE] => {
+            // FIX: Use the dedicated binary channel to send the heartbeat response.
+            let _ = bin_tx.try_send(payload);
+        }
+        Message::Pong(_) => trace!("Received pong from client"),
+        Message::Close(_) => {
+            if let Some(pid) = conn.player_id {
+                trace!("Client initiated close for player {}", pid);
+            }
+            return Err(());
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+async fn handle_connect(
+    player_id: Uuid,
+    conn: &mut WsConnection,
+    state: &AppState,
+    tx: &Sender<Utf8Bytes>,
 ) {
-    while let Some(result) = ws_rx.next().await {
-        match result {
-            Ok(msg) => match msg {
-                Message::Text(text) => {
-                    match serde_json::from_str::<ClientMessage>(&text) {
-                        Ok(ClientMessage::Connect { player_id }) => {
-                            // Look up existing connection info
-                            if let Some(conn) = state.connections.get(&player_id) {
-                                let lobby_id = conn.lobby_id;
-                                drop(conn);
-                                // Store player_id in connection state.
-                                conn_state.write().await.player_id = Some(player_id);
-                                let local_conn_id = conn_state.read().await.connection_id;
-                                // Update sender in connections map.
-                                state.connections.insert(
-                                    player_id,
-                                    Connection {
-                                        lobby_id,
-                                        tx: Some(tx.clone()),
-                                        connection_id: Some(local_conn_id),
-                                    },
-                                );
-                                // Send Connect action to the engine
-                                if let Some(mut engine) = state.lobbies.get_mut(&lobby_id) {
-                                    let event = GameEvent {
-                                        context: EventContext {
-                                            sender_id: player_id,
-                                            timestamp: Instant::now(),
-                                        },
-                                        action: GameAction::Connect,
-                                    };
-                                    engine.process_event(event);
-                                }
-                            } else {
-                                send_error_to_client(
-                                    &tx,
-                                    "ID not in lobby. Must join lobby first".into(),
-                                    "connect_id_not_found",
-                                );
-                            }
-                        }
-                        Ok(msg) => {
-                            // Handle all other messages.
-                            let state_read = conn_state.read().await;
-                            if let Some(player_id) = state_read.player_id {
-                                if let Some(conn) = state.connections.get(&player_id) {
-                                    let lobby_id = conn.lobby_id;
-                                    drop(conn);
-                                    if let Some(mut engine) = state.lobbies.get_mut(&lobby_id) {
-                                        let event = GameEvent {
-                                            context: EventContext {
-                                                sender_id: player_id,
-                                                timestamp: Instant::now(),
-                                            },
-                                            action: match msg {
-                                                ClientMessage::Leave => GameAction::Leave,
-                                                ClientMessage::Answer { answer } => {
-                                                    GameAction::Answer { answer }
-                                                }
-                                                ClientMessage::AdminAction { action } => {
-                                                    match action {
-                                                        AdminAction::StartGame => {
-                                                            GameAction::StartGame
-                                                        }
-                                                        AdminAction::StartRound => {
-                                                            GameAction::StartRound
-                                                        }
-                                                        AdminAction::EndRound => {
-                                                            GameAction::EndRound
-                                                        }
-                                                        AdminAction::SkipQuestion => {
-                                                            GameAction::SkipQuestion
-                                                        }
-                                                        AdminAction::KickPlayer { player_name } => {
-                                                            GameAction::KickPlayer {
-                                                                player_name: Arc::from(player_name),
-                                                            }
-                                                        }
-                                                        AdminAction::EndGame { reason } => {
-                                                            GameAction::EndGame {
-                                                                reason: Arc::from(reason),
-                                                            }
-                                                        }
-                                                        AdminAction::CloseGame { reason } => {
-                                                            GameAction::CloseGame {
-                                                                reason: Arc::from(reason),
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                                _ => {
-                                                    error!(
-                                                        "Unexpected message after join: {:?}",
-                                                        msg
-                                                    );
-                                                    continue;
-                                                }
-                                            },
-                                        };
-                                        engine.process_event(event);
-                                    }
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            send_error_to_client(
-                                &tx,
-                                format!("Invalid message format: {}", e),
-                                "Failed to parse client message",
-                            );
-                        }
-                    }
-                }
-                Message::Binary(payload) => {
-                    // Only respond if the payload exactly matches our heartbeat value.
-                    if payload == Bytes::from_static(&[HEARTBEAT_BYTE]) {
-                        if let Err(e) = hb_tx.try_send(Bytes::from_static(&[HEARTBEAT_BYTE])) {
-                            error!("Failed to send heartbeat response: {}", e);
-                            break;
-                        }
-                    } else {
-                        // Handle other binary messages or log unexpected payloads.
-                        warn!("Received unexpected binary payload: {:?}", payload);
-                    }
-                }
-                Message::Ping(payload) => {
-                    if let Err(e) = pong_tx.try_send(payload) {
-                        error!("Failed to send pong: {}", e);
-                        break;
-                    }
-                }
-                Message::Pong(_) => {
-                    trace!("Received pong from client");
-                }
-                Message::Close(_) => {
-                    let state_read = conn_state.read().await;
-                    if let Some(pid) = state_read.player_id {
-                        trace!("Client initiated close for player {}", pid);
-                    }
-                    break;
-                }
-            },
-            Err(e) => {
-                error!("WebSocket error: {}", e);
-                break;
+    if let Some(mut c) = state.connections.get_mut(&player_id) {
+        let lobby_id = c.lobby_id;
+        conn.player_id = Some(player_id);
+        // The `Connection` struct stores the text channel transmitter for game updates.
+        c.tx = Some(tx.clone());
+        c.connection_id = Some(conn.connection_id);
+        drop(c);
+
+        if let Some(mut engine) = state.lobbies.get_mut(&lobby_id) {
+            let event = GameEvent {
+                context: EventContext {
+                    sender_id: player_id,
+                    timestamp: Instant::now(),
+                },
+                action: GameAction::Connect,
+            };
+            engine.process_event(event);
+        }
+    } else {
+        send_error_to_client(
+            tx,
+            "ID not in lobby. Must join lobby first.".to_string(),
+            "connect_id_not_found",
+        );
+    }
+}
+
+async fn dispatch_game_action(msg: ClientMessage, conn: &WsConnection, state: &AppState) {
+    let player_id = conn.player_id.unwrap(); // Assumes player_id is Some
+    if let Some(c) = state.connections.get(&player_id) {
+        let lobby_id = c.lobby_id;
+        drop(c);
+        if let Some(mut engine) = state.lobbies.get_mut(&lobby_id) {
+            let action = match msg {
+                ClientMessage::Leave => GameAction::Leave,
+                ClientMessage::Answer { answer } => GameAction::Answer { answer },
+                ClientMessage::AdminAction { action } => match action {
+                    AdminAction::StartGame => GameAction::StartGame,
+                    AdminAction::StartRound => GameAction::StartRound,
+                    AdminAction::EndRound => GameAction::EndRound,
+                    AdminAction::SkipQuestion => GameAction::SkipQuestion,
+                    AdminAction::KickPlayer { player_name } => GameAction::KickPlayer {
+                        player_name: Arc::from(player_name),
+                    },
+                    AdminAction::EndGame { reason } => GameAction::EndGame {
+                        reason: Arc::from(reason),
+                    },
+                    AdminAction::CloseGame { reason } => GameAction::CloseGame {
+                        reason: Arc::from(reason),
+                    },
+                },
+                _ => return, // Connect is handled separately
+            };
+            let event = GameEvent {
+                context: EventContext {
+                    sender_id: player_id,
+                    timestamp: Instant::now(),
+                },
+                action,
+            };
+            engine.process_event(event);
+        }
+    }
+}
+
+async fn handle_disconnect(conn: &WsConnection, state: &AppState) {
+    if let Some(player_id) = conn.player_id {
+        if let Some(mut c) = state.connections.get_mut(&player_id) {
+            if c.connection_id == Some(conn.connection_id) {
+                trace!("Disconnect: Nullifying tx for player {}", player_id);
+                c.tx = None;
+                c.connection_id = None;
+            } else {
+                trace!("Disconnect: Stale disconnect for player {}", player_id);
             }
         }
     }
 }
 
-/// Helper to create, serialize, wrap, and send a GameUpdate::Error to a specific client's channel.
 fn send_error_to_client(tx: &Sender<Utf8Bytes>, message: String, context: &str) {
     let error_update = GameUpdate::Error {
         message: Arc::from(message),
     };
-    match serde_json::to_string(&error_update) {
-        Ok(error_json_string) => {
-            if let Err(e) = tx.try_send(Utf8Bytes::from(error_json_string)) {
-                // Log context about where the error occurred
-                error!(
-                    "Failed to send '{}' error message back to client: {}",
-                    context, e
-                );
-            }
-        }
-        Err(e) => {
-            // Log context about where the serialization failed
-            error!("Failed to serialize '{}' error message: {}", context, e);
-        }
-    }
-}
-
-/// Handles cleanup when a connection is closed
-async fn handle_disconnect(conn_state: Arc<RwLock<WSConnectionState>>, state: &AppState) {
-    let state_read = conn_state.read().await;
-    if let Some(player_id) = state_read.player_id {
-        let local_conn_id = state_read.connection_id; // Get the ID of the connection that is disconnecting
-
-        // Check the shared map entry
-        if let Some(mut conn_entry) = state.connections.get_mut(&player_id) {
-            // Only nullify if the stored connection ID matches the one we are disconnecting
-            if conn_entry.connection_id == Some(local_conn_id) {
-                trace!(
-                    "Disconnect cleanup: Nullifying tx for player {} (conn_id {})",
-                    player_id,
-                    local_conn_id
-                );
-                conn_entry.value_mut().tx = None;
-                conn_entry.value_mut().connection_id = None; // Also clear the ID
-            } else {
-                trace!("Disconnect cleanup: Stale disconnect for player {} (conn_id {}), newer connection exists.", player_id, local_conn_id);
-                // Do nothing, a newer connection has already updated the map
-            }
+    if let Ok(json) = serde_json::to_string(&error_update) {
+        if tx.try_send(Utf8Bytes::from(json)).is_err() {
+            error!("Failed to send '{}' error to client channel", context);
         }
     }
 }
@@ -836,53 +764,194 @@ async fn cleanup_lobbies(
     loop {
         tick.tick().await;
 
-        let finished_lobbies: Vec<(Uuid, LobbyStats)> = lobbies
+        let finished_lobby_ids: Vec<Uuid> = lobbies
             .iter()
             .filter(|entry| entry.value().is_finished())
-            .map(|entry| (*entry.key(), entry.value().get_lobby_stats()))
+            .map(|entry| *entry.key())
             .collect();
 
-        for (lobby_id, (total_players, questions_played, player_scores)) in &finished_lobbies {
-            let players_info: Vec<String> = player_scores
-                .iter()
-                .map(|(name, score)| format!("{}:{}", name, score))
-                .collect();
-            info!(
-                "Lobby closed: {} with {} players, {} questions played, players [{}]",
-                lobby_id,
-                total_players,
-                questions_played,
-                players_info.join(", ")
-            );
+        for lobby_id in &finished_lobby_ids {
+            if let Some((_, engine)) = lobbies.remove(lobby_id) {
+                let (total_players, questions_played, player_scores) = engine.get_lobby_stats();
+                let players_info: Vec<String> = player_scores
+                    .iter()
+                    .map(|(name, score)| format!("{}:{}", name, score))
+                    .collect();
+                info!(
+                    "Lobby closed: {} with {} players, {} questions played, players [{}]",
+                    lobby_id,
+                    total_players,
+                    questions_played,
+                    players_info.join(", ")
+                );
+            }
         }
 
-        for (lobby_id, _) in &finished_lobbies {
-            trace!("Removing finished lobby {}", lobby_id);
-            lobbies.remove(lobby_id);
-        }
+        join_codes.retain(|_, v| !finished_lobby_ids.contains(v));
+        connections.retain(|_, v| !finished_lobby_ids.contains(&v.lobby_id));
+    }
+}
 
-        let finished_lobby_ids: Vec<Uuid> = finished_lobbies.iter().map(|(id, _)| *id).collect();
+// --- Unit Tests ---
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::QuestionDatabase;
+    use crate::StorageConfig;
+    use std::fs::File;
+    use std::io::Write;
+    use tempfile::tempdir;
 
-        let join_codes_to_remove: Vec<String> = join_codes
-            .iter()
-            .filter(|pair| finished_lobby_ids.contains(pair.value()))
-            .map(|pair| pair.key().clone())
-            .collect();
+    async fn setup_test_state() -> (AppState, tempfile::TempDir) {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("questions.json");
 
-        for key in join_codes_to_remove {
-            trace!("Removing join code {}", key);
-            join_codes.remove(&key);
-        }
+        // Create a dummy questions file
+        let dummy_data = StoredData {
+            media: vec![],
+            characters: vec![],
+            questions: vec![],
+            options: vec![],
+            sets: vec![],
+        };
+        let mut file = File::create(&file_path).unwrap();
+        writeln!(file, "{}", serde_json::to_string(&dummy_data).unwrap()).unwrap();
 
-        let connections_to_remove: Vec<Uuid> = connections
-            .iter()
-            .filter(|conn| finished_lobby_ids.contains(&conn.value().lobby_id))
-            .map(|conn| *conn.key())
-            .collect();
+        let storage_config = StorageConfig::Filesystem {
+            base_path: dir.path().to_path_buf(),
+            file_path: "questions.json".to_string(),
+        };
+        let db = QuestionDatabase::new(&storage_config).unwrap();
+        // Manually load empty data to avoid NoQuestions error on init
+        db.set_stored_data(dummy_data).await.unwrap();
 
-        for key in connections_to_remove {
-            trace!("Removing connection for player {}", key);
-            connections.remove(&key);
-        }
+        let store = QuestionStore::new(&storage_config).await.unwrap();
+        let state = AppState::new(store, vec!["password".to_string()]);
+        (state, dir)
+    }
+
+    #[tokio::test]
+    async fn test_create_lobby_logic() {
+        let (state, _dir) = setup_test_state().await;
+        let req = CreateLobbyRequest {
+            round_duration: Some(120),
+            set_id: None,
+        };
+
+        let res = create_lobby(&state, req).await.unwrap();
+
+        assert_eq!(state.lobbies.len(), 1);
+        assert_eq!(state.join_codes.len(), 1);
+        assert!(state.join_codes.contains_key(&res.join_code));
+
+        let lobby_id = *state.join_codes.get(&res.join_code).unwrap();
+        let lobby = state.lobbies.get(&lobby_id).unwrap();
+
+        assert_eq!(lobby.state.admin_id, res.player_id);
+        assert_eq!(lobby.state.round_duration, 120);
+    }
+
+    #[tokio::test]
+    async fn test_create_lobby_invalid_duration() {
+        let (state, _dir) = setup_test_state().await;
+        let req = CreateLobbyRequest {
+            round_duration: Some(5), // Too short
+            set_id: None,
+        };
+
+        let res = create_lobby(&state, req).await;
+        assert!(matches!(res, Err(ApiError::Validation(_))));
+    }
+
+    #[tokio::test]
+    async fn test_join_lobby_logic() {
+        let (state, _dir) = setup_test_state().await;
+        // First, create a lobby to get a join code
+        let create_req = CreateLobbyRequest {
+            round_duration: None,
+            set_id: None,
+        };
+        let create_res = create_lobby(&state, create_req).await.unwrap();
+
+        // Now, try to join it
+        let join_req = JoinLobbyRequest {
+            join_code: create_res.join_code,
+            name: "Player1".to_string(),
+        };
+        let join_res = join_lobby(&state, join_req).await.unwrap();
+
+        // Assertions
+        assert_eq!(state.connections.len(), 2); // Admin + Player1
+        assert!(state.connections.contains_key(&join_res.player_id));
+
+        let lobby_id = *state.join_codes.get(&create_res.join_code).unwrap();
+        let lobby = state.lobbies.get(&lobby_id).unwrap();
+        assert_eq!(lobby.state.players.len(), 2); // Admin + Player1
+        assert!(lobby.state.players.contains_key(&join_res.player_id));
+    }
+
+    #[tokio::test]
+    async fn test_join_lobby_invalid_code() {
+        let (state, _dir) = setup_test_state().await;
+        let join_req = JoinLobbyRequest {
+            join_code: "123456".to_string(),
+            name: "Player1".to_string(),
+        };
+
+        let res = join_lobby(&state, join_req).await;
+        assert!(matches!(res, Err(ApiError::Lobby(msg)) if msg == "Invalid join code."));
+    }
+
+    #[tokio::test]
+    async fn test_join_lobby_invalid_name() {
+        let (state, _dir) = setup_test_state().await;
+        let create_req = CreateLobbyRequest {
+            round_duration: None,
+            set_id: None,
+        };
+        let create_res = create_lobby(&state, create_req).await.unwrap();
+
+        // Try to join with a name that is too short
+        let join_req = JoinLobbyRequest {
+            join_code: create_res.join_code.clone(),
+            name: "a".to_string(),
+        };
+
+        let res = join_lobby(&state, join_req).await;
+        assert!(matches!(res, Err(ApiError::Validation(_))));
+    }
+
+    #[tokio::test]
+    async fn test_check_sessions_logic() {
+        let (state, _dir) = setup_test_state().await;
+        let create_res = create_lobby(
+            &state,
+            CreateLobbyRequest {
+                round_duration: None,
+                set_id: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        // Check a valid session (the admin)
+        let check_req = CheckSessionsRequest {
+            sessions: vec![SessionInfo {
+                player_id: create_res.player_id,
+            }],
+        };
+
+        let res = check_sessions(&state, check_req).await.unwrap();
+        assert_eq!(res.valid_sessions.len(), 1);
+        assert_eq!(res.valid_sessions[0].player_id, create_res.player_id);
+
+        // Check an invalid session
+        let check_req_invalid = CheckSessionsRequest {
+            sessions: vec![SessionInfo {
+                player_id: Uuid::new_v4(),
+            }],
+        };
+        let res_invalid = check_sessions(&state, check_req_invalid).await.unwrap();
+        assert_eq!(res_invalid.valid_sessions.len(), 0);
     }
 }
