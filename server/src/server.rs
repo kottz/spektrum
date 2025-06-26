@@ -30,8 +30,6 @@ use tracing::{error, info, trace};
 
 const HEARTBEAT_BYTE: u8 = 0x42;
 
-type LobbyStats = (usize, usize, Vec<(Arc<str>, i32)>);
-
 #[derive(Error, Debug)]
 pub enum ApiError {
     #[error("Validation error: {0}")]
@@ -313,12 +311,11 @@ pub async fn join_lobby(
     state: &AppState,
     req: JoinLobbyRequest,
 ) -> Result<JoinLobbyResponse, ApiError> {
-    let lobby_id = state
+    let lobby_id = *state
         .join_codes
         .get(req.join_code.trim())
         .ok_or_else(|| ApiError::Lobby("Invalid join code.".into()))?
-        .value()
-        .clone();
+        .value();
 
     let mut engine = state
         .lobbies
@@ -451,8 +448,6 @@ pub async fn check_sessions(
     Ok(CheckSessionsResponse { valid_sessions })
 }
 
-// --- Axum Handlers (Thin Wrappers) ---
-
 pub async fn list_sets_handler(
     State(state): State<AppState>,
 ) -> Result<Json<ListSetsResponse>, ApiError> {
@@ -542,8 +537,6 @@ pub async fn check_sessions_handler(
     let response = check_sessions(&state, req).await?;
     Ok(Json(response))
 }
-
-// --- WebSocket Handling ---
 
 struct WsConnection {
     player_id: Option<Uuid>,
@@ -787,7 +780,6 @@ async fn cleanup_lobbies(
     }
 }
 
-// --- Unit Tests ---
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -875,7 +867,6 @@ mod tests {
         };
         let join_res = join_lobby(&state, join_req).await.unwrap();
 
-        // Assertions
         assert_eq!(state.connections.len(), 2); // Admin + Player1
         assert!(state.connections.contains_key(&join_res.player_id));
 
