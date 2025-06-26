@@ -74,7 +74,7 @@ pub struct QuestionSet {
     pub question_ids: Vec<i64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct StoredData {
     media: Vec<Media>,
     characters: Vec<Character>,

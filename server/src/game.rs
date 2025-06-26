@@ -330,6 +330,26 @@ impl GameEngine {
             .collect()
     }
 
+    #[cfg(test)]
+    pub fn get_admin_id(&self) -> Uuid {
+        self.state.admin_id
+    }
+
+    #[cfg(test)]
+    pub fn get_round_duration(&self) -> u64 {
+        self.state.round_duration
+    }
+
+    #[cfg(test)]
+    pub fn get_player_count(&self) -> usize {
+        self.state.players.len()
+    }
+
+    #[cfg(test)]
+    pub fn has_player(&self, player_id: &Uuid) -> bool {
+        self.state.players.contains_key(player_id)
+    }
+
     fn get_scoreboard(&self) -> Vec<(Arc<str>, i32)> {
         self.state
             .players

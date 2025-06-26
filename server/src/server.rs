@@ -783,7 +783,6 @@ async fn cleanup_lobbies(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::QuestionDatabase;
     use crate::StorageConfig;
     use std::fs::File;
     use std::io::Write;
@@ -793,24 +792,21 @@ mod tests {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("questions.json");
 
-        // Create a dummy questions file
-        let dummy_data = StoredData {
-            media: vec![],
-            characters: vec![],
-            questions: vec![],
-            options: vec![],
-            sets: vec![],
-        };
+        // Create a dummy questions file with minimal data to avoid NoQuestions error
+        let dummy_json = r#"{
+            "media": [{"id": 1, "title": "Test Song", "artist": "Test Artist", "release_year": null, "spotify_uri": null, "youtube_id": "test123"}],
+            "characters": [],
+            "questions": [{"id": 1, "media_id": 1, "question_type": "color", "question_text": null, "image_url": null, "is_active": true}],
+            "options": [{"id": 1, "question_id": 1, "option_text": "Red", "is_correct": true}],
+            "sets": []
+        }"#;
         let mut file = File::create(&file_path).unwrap();
-        writeln!(file, "{}", serde_json::to_string(&dummy_data).unwrap()).unwrap();
+        writeln!(file, "{}", dummy_json).unwrap();
 
         let storage_config = StorageConfig::Filesystem {
             base_path: dir.path().to_path_buf(),
             file_path: "questions.json".to_string(),
         };
-        let db = QuestionDatabase::new(&storage_config).unwrap();
-        // Manually load empty data to avoid NoQuestions error on init
-        db.set_stored_data(dummy_data).await.unwrap();
 
         let store = QuestionStore::new(&storage_config).await.unwrap();
         let state = AppState::new(store, vec!["password".to_string()]);
@@ -834,8 +830,8 @@ mod tests {
         let lobby_id = *state.join_codes.get(&res.join_code).unwrap();
         let lobby = state.lobbies.get(&lobby_id).unwrap();
 
-        assert_eq!(lobby.state.admin_id, res.player_id);
-        assert_eq!(lobby.state.round_duration, 120);
+        assert_eq!(lobby.get_admin_id(), res.player_id);
+        assert_eq!(lobby.get_round_duration(), 120);
     }
 
     #[tokio::test]
@@ -861,6 +857,7 @@ mod tests {
         let create_res = create_lobby(&state, create_req).await.unwrap();
 
         // Now, try to join it
+        let join_code = create_res.join_code.clone();
         let join_req = JoinLobbyRequest {
             join_code: create_res.join_code,
             name: "Player1".to_string(),
@@ -870,10 +867,10 @@ mod tests {
         assert_eq!(state.connections.len(), 2); // Admin + Player1
         assert!(state.connections.contains_key(&join_res.player_id));
 
-        let lobby_id = *state.join_codes.get(&create_res.join_code).unwrap();
+        let lobby_id = *state.join_codes.get(&join_code).unwrap();
         let lobby = state.lobbies.get(&lobby_id).unwrap();
-        assert_eq!(lobby.state.players.len(), 2); // Admin + Player1
-        assert!(lobby.state.players.contains_key(&join_res.player_id));
+        assert_eq!(lobby.get_player_count(), 2); // Admin + Player1
+        assert!(lobby.has_player(&join_res.player_id));
     }
 
     #[tokio::test]
