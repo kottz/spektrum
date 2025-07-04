@@ -10,7 +10,6 @@
 
 	const gameState = $derived(streamStore.state.gameState);
 	const phase = $derived(gameState?.phase);
-	const showScoreboard = $derived(phase === GamePhase.Score || phase === GamePhase.GameOver);
 	const joinCode = $derived(gameState?.joinCode || 'N/A');
 
 	let leftPanelWidth = $state(0); // Default: 0% (full width for content)
@@ -43,9 +42,11 @@
 		isDraggingAnswers = true;
 		event.preventDefault();
 
-		const answerContainer = event.currentTarget
-			.closest('.answer-resize-container')
-			.querySelector('.min-h-0.flex.flex-1');
+		const target = event.currentTarget as HTMLElement;
+		const containerElement = target.closest('.answer-resize-container');
+		if (!containerElement) return;
+
+		const answerContainer = containerElement.querySelector('.min-h-0.flex.flex-1') as HTMLElement;
 		if (!answerContainer) return;
 
 		const handleMouseMove = (e: MouseEvent) => {
@@ -105,16 +106,15 @@
 				</div>
 
 				<!-- Draggable Divider -->
-				<div
+				<button
 					class="flex w-2 cursor-col-resize items-center justify-center bg-border/50 transition-colors hover:bg-border {isDragging
 						? 'bg-primary'
 						: ''}"
 					onmousedown={startDrag}
-					role="separator"
-					tabindex="0"
+					aria-label="Resize left panel"
 				>
 					<div class="h-12 w-0.5 bg-muted-foreground/30"></div>
-				</div>
+				</button>
 
 				<!-- Content Area -->
 				<div class="flex min-h-0 flex-1 flex-col">
@@ -142,16 +142,15 @@
 								</div>
 
 								<!-- Vertical Draggable Divider -->
-								<div
+								<button
 									class="flex w-2 cursor-col-resize items-center justify-center bg-border/50 transition-colors hover:bg-border {isDraggingAnswers
 										? 'bg-primary'
 										: ''}"
 									onmousedown={startAnswerDrag}
-									role="separator"
-									tabindex="0"
+									aria-label="Resize answer progress panel"
 								>
 									<div class="h-12 w-0.5 bg-muted-foreground/30"></div>
-								</div>
+								</button>
 
 								<!-- Answer Progress (right) -->
 								<div class="min-w-0 flex-1" style="width: {answerProgressWidth}%">

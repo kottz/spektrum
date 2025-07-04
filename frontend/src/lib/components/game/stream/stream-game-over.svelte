@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
+	import { Card } from '$lib/components/ui/card';
 	import { streamStore } from '$lib/stores/stream.store.svelte';
 	import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
 

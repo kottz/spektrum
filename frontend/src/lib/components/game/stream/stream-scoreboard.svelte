@@ -39,10 +39,6 @@
 		return `${(score / maxScore) * 100}%`;
 	}
 
-	function hasAnswered(playerName: string): boolean {
-		return playerAnswers.has(playerName);
-	}
-
 	function getAnswerStatus(playerName: string): 'correct' | 'incorrect' | 'none' {
 		const answer = playerAnswers.get(playerName);
 		if (!answer) return 'none';

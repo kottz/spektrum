@@ -11,7 +11,7 @@
 		try {
 			await navigator.clipboard.writeText(joinCode);
 			notifications.add('Join code copied to clipboard', 'success');
-		} catch (err) {
+		} catch {
 			notifications.add('Failed to copy join code', 'destructive');
 		}
 	}
@@ -22,7 +22,7 @@
 			const joinLink = `${window.location.origin}/join/${joinCode}`;
 			await navigator.clipboard.writeText(joinLink);
 			notifications.add('Join link copied to clipboard', 'success');
-		} catch (err) {
+		} catch {
 			notifications.add('Failed to copy join link', 'destructive');
 		}
 	}

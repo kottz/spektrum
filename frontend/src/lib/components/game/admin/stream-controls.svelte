@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
-	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
+	import { Card, CardContent } from '$lib/components/ui/card';
 	import { uiStore } from '$lib/stores/ui.store.svelte';
 	import { gameStore } from '$lib/stores/game.svelte';
 	import { broadcastService } from '$lib/services/broadcast.service';
@@ -52,7 +52,7 @@
 		broadcastService.addListener(handleBroadcastMessage);
 	}
 
-	function handleBroadcastMessage(message: any) {
+	function handleBroadcastMessage(message: { type: string; [key: string]: unknown }) {
 		if (message.type === 'STREAM_READY') {
 			info('StreamControls: Received stream ready signal');
 			broadcastService.setHasActiveStreams(true);
@@ -87,12 +87,6 @@
 			broadcastService.broadcastStreamControl('show');
 		}
 		isStreamContentVisible = !isStreamContentVisible;
-	}
-
-	function handleFocusStream(): void {
-		if (streamWindowState.window && !streamWindowState.window.closed) {
-			streamWindowState.window.focus();
-		}
 	}
 </script>
 

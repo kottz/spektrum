@@ -289,16 +289,6 @@ function createStreamStore() {
 		}
 	}
 
-	function addStreamEvent(event: StreamEvent): void {
-		state.activeEvents = [...state.activeEvents, event];
-
-		if (event.duration && event.duration > 0) {
-			setTimeout(() => {
-				removeStreamEvent(event.id);
-			}, event.duration);
-		}
-	}
-
 	function removeStreamEvent(eventId: string): void {
 		state.activeEvents = state.activeEvents.filter((event) => event.id !== eventId);
 	}
