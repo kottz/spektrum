@@ -3,6 +3,7 @@
 	import LightSwitch from '$lib/components/ui/light-switch.svelte';
 	import NotificationList from '$lib/components/NotificationList.svelte';
 	import { Separator } from '$lib/components/ui/separator';
+	import QuestionExample from '$lib/components/question-example.svelte';
 	import { House } from 'lucide-svelte';
 	import { goto } from '$app/navigation';
 </script>
@@ -29,6 +30,10 @@
 			with each song. Quick answers score more points.
 		</p>
 		<p>Some questions have multiple correct answers.</p>
+
+		<p>Try a few practice questions to get a feel for how the game works.</p>
+
+		<QuestionExample />
 		<h1 class="text-3xl font-bold">FAQ</h1>
 		<Separator />
 		<h2 class="text-l font-bold">
