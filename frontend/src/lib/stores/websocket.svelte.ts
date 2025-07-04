@@ -95,7 +95,7 @@ function createWebSocketStore() {
 			return;
 		}
 
-		const playerId = $derived(gameStore.state.playerId);
+		const playerId = gameStore.state.playerId;
 		if (!playerId) {
 			warn('No player ID available for reconnection');
 			return;
@@ -285,9 +285,15 @@ function createWebSocketStore() {
 		disconnect,
 		send,
 		clearError: () => (state.error = null),
-		timeUntilReconnect,
-		isReconnecting,
-		canReconnect
+		get timeUntilReconnect() {
+			return timeUntilReconnect;
+		},
+		get isReconnecting() {
+			return isReconnecting;
+		},
+		get canReconnect() {
+			return canReconnect;
+		}
 	};
 }
 
