@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { PUBLIC_TITLE } from '$env/static/public';
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Separator } from '$lib/components/ui/separator';
@@ -50,7 +51,7 @@
 <div class="container flex min-h-screen flex-col items-center justify-center gap-8 py-8">
 	<div class="flex items-center gap-3">
 		<span class="text-2xl">🎵</span>
-		<h1 class="text-3xl font-bold">Music Quiz</h1>
+		<h1 class="text-3xl font-bold">{PUBLIC_TITLE}</h1>
 		<LightSwitch />
 	</div>
 	<div class="grid w-full max-w-lg gap-6">

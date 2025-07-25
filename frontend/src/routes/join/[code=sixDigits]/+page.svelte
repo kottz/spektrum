@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { PUBLIC_TITLE } from '$env/static/public';
 	import { Button } from '$lib/components/ui/button';
 	import LightSwitch from '$lib/components/ui/light-switch.svelte';
 	import JoinLobbyByCode from '$lib/components/join-lobby-by-code.svelte';
@@ -22,7 +23,7 @@
 		<!-- Centered title group -->
 		<div class="flex items-center justify-center gap-3">
 			<span class="text-2xl">🎵</span>
-			<h1 class="text-3xl font-bold">Music Quiz</h1>
+			<h1 class="text-3xl font-bold">{PUBLIC_TITLE}</h1>
 			<LightSwitch />
 		</div>
 	</div>
