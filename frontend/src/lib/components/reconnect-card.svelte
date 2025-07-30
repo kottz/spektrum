@@ -45,7 +45,9 @@
 			Last lobby update: {timeAgoString}
 		</div>
 		<div class="space-y-2">
-			<Button class="w-full" on:click={props.onReconnect}>Reconnect to Lobby</Button>
+			<Button class="w-full" on:click={props.onReconnect}
+				>Reconnect as {props.session.playerName}</Button
+			>
 			<Button variant="outline" class="w-full" on:click={props.onNewLobby}>
 				Join Different Lobby
 			</Button>
