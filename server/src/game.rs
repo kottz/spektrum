@@ -15,7 +15,7 @@ use tracing::{error, warn};
 
 lazy_static! {
     pub(crate) static ref NAME_VALIDATION_REGEX: Regex =
-        Regex::new(r"^[a-zA-Z0-9_\-\. ]+$").expect("Failed to compile player name regex");
+        Regex::new(r"^[\p{L}\p{N}_\-\. ]+$").expect("Failed to compile player name regex");
 }
 
 #[derive(Debug)]

@@ -13,7 +13,7 @@
 	let isJoining = $state(false);
 	let hasAttemptedSubmit = $state(false);
 
-	const NAME_VALIDATION_REGEX = /^[a-zA-Z0-9\s._-]+$/;
+	const NAME_VALIDATION_REGEX = /^[\p{L}\p{N}\s._-]+$/u;
 	const LOBBY_CODE_REGEX = /^\d+$/;
 
 	const isValidLobbyCode = $derived(LOBBY_CODE_REGEX.test(lobbyCode));

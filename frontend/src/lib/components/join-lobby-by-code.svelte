@@ -20,7 +20,7 @@
 	// Use the prop directly for validation and submission
 	const lobbyCode = initialJoinCode;
 
-	const NAME_VALIDATION_REGEX = /^[a-zA-Z0-9\s._-]+$/;
+	const NAME_VALIDATION_REGEX = /^[\p{L}\p{N}\s._-]+$/u;
 	// Basic validation for the passed code (optional, API should handle robustly)
 	const LOBBY_CODE_REGEX = /^\d+$/;
 	const isValidLobbyCode = LOBBY_CODE_REGEX.test(lobbyCode);
