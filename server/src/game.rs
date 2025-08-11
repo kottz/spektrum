@@ -141,12 +141,6 @@ pub enum Recipients {
     All,
 }
 
-#[derive(Clone, Debug, Serialize)]
-pub struct GameUpdatePacket {
-    pub recipients: Recipients,
-    pub update: GameUpdate,
-}
-
 #[derive(Clone, Debug)]
 pub struct EventContext {
     pub sender_id: Uuid,
