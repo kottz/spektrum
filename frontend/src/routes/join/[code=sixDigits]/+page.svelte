@@ -63,7 +63,7 @@
 		</div>
 	</div>
 	<div class="grid w-full max-w-lg gap-6">
-		{#if currentSession}
+		{#if currentSession && !currentSession.isAdmin}
 			<ReconnectCard
 				session={currentSession}
 				onReconnect={reconnectToSession}
