@@ -14,7 +14,7 @@ Players will hear a piece of music and must identify the correct color or charac
 
 ## Current Questions
 
-The quiz at https://quiz.kottz.se features a mix of Anglosphere and Swedish music. If you'd prefer to use your own question set, you can host your own instance following the instructions below.
+The quiz at https://melodiquiz.se features a mix of Anglosphere and Swedish music. If you'd prefer to use your own question set, you can host your own instance following the instructions below.
 
 ## Host Your Own
 
@@ -26,7 +26,7 @@ cp config.example.toml config.toml  # Edit as needed
 cargo run --release
 ```
 
-If you want to deploy your own instance there is a provided Dockerfile that pairs well with fly.io. Create a Backblaze B2 bucket, look at the `server/env.example` for the environment variables you have to set in fly.io. Make a `env.prod` and apply the keys with `cat env.prod | fly secrets import`.
+If you want to deploy your own instance there is a provided Dockerfile that pairs well with fly.io. Create a Backblaze B2 bucket, look at the `server/env.example` for the environment variables you have to set in fly.io.
 
 ### Frontend Setup
 ```bash
