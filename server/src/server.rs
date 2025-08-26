@@ -16,7 +16,7 @@ use axum::{
     Json,
 };
 use bytes::Bytes;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, SecondsFormat, Utc};
 use dashmap::DashMap;
 use futures_util::stream::SplitSink;
 use futures_util::{SinkExt, StreamExt};
@@ -425,26 +425,31 @@ pub async fn check_sessions(
     state: &AppState,
     req: CheckSessionsRequest,
 ) -> Result<CheckSessionsResponse, ApiError> {
-    let mut valid_sessions = Vec::new();
-    let now = Instant::now();
-    for session in req.sessions.iter() {
-        if let Some(conn) = state.connections.get(&session.player_id) {
-            if let Some(lobby) = state.lobbies.get(&conn.lobby_id) {
-                if !lobby.is_finished() {
-                    if let Some(last_update) = lobby.last_update() {
-                        let duration = now.duration_since(last_update);
-                        if let Some(system_time) = SystemTime::now().checked_sub(duration) {
-                            let dt = DateTime::<Utc>::from(system_time);
-                            valid_sessions.push(ValidSessionInfo {
-                                player_id: session.player_id,
-                                last_update: dt.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string(),
-                            });
-                        }
-                    }
-                }
+    let mono_now = Instant::now();
+    let sys_now = SystemTime::now();
+
+    let valid_sessions: Vec<ValidSessionInfo> = req
+        .sessions
+        .into_iter()
+        .filter_map(|session| {
+            let conn = state.connections.get(&session.player_id)?;
+            let lobby = state.lobbies.get(&conn.lobby_id)?;
+            if lobby.is_finished() {
+                return None;
             }
-        }
-    }
+            let last_update = lobby.last_update()?;
+            let duration = mono_now.duration_since(last_update);
+            let system_time = sys_now.checked_sub(duration)?;
+            let last_update_iso =
+                DateTime::<Utc>::from(system_time).to_rfc3339_opts(SecondsFormat::Millis, true);
+
+            Some(ValidSessionInfo {
+                player_id: session.player_id,
+                last_update: last_update_iso,
+            })
+        })
+        .collect();
+
     Ok(CheckSessionsResponse { valid_sessions })
 }
 
