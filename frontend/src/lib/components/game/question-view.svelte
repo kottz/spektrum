@@ -194,7 +194,7 @@
 									<img
 										src={`${imageBaseUrl}/${alternative}.avif`}
 										alt={alternative}
-										class="h-full w-full object-contain"
+										class="h-full w-full object-contain text-transparent"
 										oncontextmenu={preventContextMenu}
 									/>
 								{/if}

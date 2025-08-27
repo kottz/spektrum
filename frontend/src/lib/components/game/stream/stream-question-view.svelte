@@ -98,7 +98,11 @@
 										playsinline
 									></video>
 								{:else}
-									<img src="{imageBaseUrl}/{alt}.avif" {alt} class="h-full w-full object-contain" />
+									<img
+										src="{imageBaseUrl}/{alt}.avif"
+										{alt}
+										class="h-full w-full object-contain text-transparent"
+									/>
 								{/if}
 							</div>
 						{:else if questionType === 'color'}
