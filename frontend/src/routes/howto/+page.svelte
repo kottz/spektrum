@@ -31,6 +31,11 @@
 		</p>
 		<p>Some questions have multiple correct answers.</p>
 
+		<p>
+			The host does not need to interact with the embedded YouTube player manually. Clicking the
+			start/end round button will start and stop the music automatically.
+		</p>
+
 		<p>Try a few practice questions to get a feel for how the game works.</p>
 
 		<QuestionExample />
