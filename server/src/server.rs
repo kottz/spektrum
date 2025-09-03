@@ -546,6 +546,8 @@ pub async fn check_sessions_handler(
 struct WsConnection {
     player_id: Option<Uuid>,
     connection_id: Uuid,
+    recent_message_count: usize,
+    count_reset_time: Instant,
 }
 
 impl WsConnection {
@@ -553,6 +555,8 @@ impl WsConnection {
         Self {
             player_id: None,
             connection_id: Uuid::new_v4(),
+            recent_message_count: 0,
+            count_reset_time: Instant::now(),
         }
     }
 }
@@ -613,6 +617,29 @@ async fn handle_message(
     text_tx: &Sender<Utf8Bytes>,
     bin_tx: &Sender<Bytes>,
 ) -> Result<(), ()> {
+    // Rate limit check
+    let now = Instant::now();
+
+    if now.duration_since(conn.count_reset_time) > Duration::from_secs(1) {
+        conn.recent_message_count = 0;
+        conn.count_reset_time = now;
+    }
+
+    conn.recent_message_count += 1;
+    if conn.recent_message_count > 30 {
+        error!(
+            "Websocket client {:?} rate limit exceeded. Closing connection",
+            conn.player_id
+        );
+        send_error_to_client(
+            text_tx,
+            "Rate limit exceeded. Closing connection".to_string(),
+            "rate_limit",
+        );
+        return Err(());
+    }
+
+    // Handle Message
     match msg {
         Message::Text(text) => {
             let client_msg: ClientMessage = match serde_json::from_str(&text) {
