@@ -138,11 +138,6 @@ class SpotifyPlaylistConverter:
         print(f"✔︎ CSV written to '{outfile}'")
 
 
-# ---------------------------------------------------------------------------
-# CLI entry point
-# ---------------------------------------------------------------------------
-
-
 def _cli() -> None:
     parser = argparse.ArgumentParser(
         description="Export a Spotify playlist to CSV enriched with YouTube video IDs",
