@@ -631,7 +631,7 @@ impl QuestionDatabase {
                     .iter()
                     .filter(|o| o.question_id == question.id)
                     .map(|opt| GameQuestionOption {
-                        option: Arc::from(&*opt.option_text),
+                        option: opt.option_text.clone(),
                         is_correct: opt.is_correct,
                     })
                     .collect();
@@ -639,10 +639,10 @@ impl QuestionDatabase {
                 Some(GameQuestion {
                     id: question.id.try_into().ok()?,
                     question_type: question.question_type,
-                    question_text: question.question_text.as_ref().map(|s| Arc::from(&**s)),
-                    title: Arc::from(&*media.title),
-                    artist: Some(Arc::from(&*media.artist)),
-                    youtube_id: Arc::from(&*media.youtube_id),
+                    question_text: question.question_text.clone(),
+                    title: media.title.clone(),
+                    artist: Some(media.artist.clone()),
+                    youtube_id: media.youtube_id.clone(),
                     options,
                 })
             })
