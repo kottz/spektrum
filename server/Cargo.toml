@@ -1,30 +1,30 @@
 [package]
 name = "spektrum"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [dependencies]
-tokio = { version = "1.42.0", features = ["full"] }
-axum = { version = "0.8.4", features = ["ws", "http2", "multipart", "macros"] }
-serde = { version = "1.0.216", features = ["derive", "rc"] }
-serde_json = "1.0.133"
-tower-http = { version = "0.6.2", features = ["fs", "trace", "cors", "compression-gzip"] }
+tokio = { version = "1.48.0", features = ["full"] }
+axum = { version = "0.8.6", features = ["ws", "http2", "multipart", "macros"] }
+serde = { version = "1.0.228", features = ["derive", "rc"] }
+serde_json = "1.0.145"
+tower-http = { version = "0.6.6", features = ["fs", "trace", "cors", "compression-gzip"] }
 tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.19", features = ["env-filter", "json"] }
-clap = { version = "4.5.23", features = ["derive"] }
+tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json"] }
+clap = { version = "4.5.50", features = ["derive"] }
 fastrand = "2.3.0"
 futures-util = "0.3.31"
-thiserror = "2.0.7"
-regex = "1.11.1"
+thiserror = "2.0.17"
+regex = "1.12.2"
 lazy_static = "1.5.0"
-http = "1.2.0"
-config = "0.15.4"
-bytes = "1.9.0"
-chrono = "0.4.39"
-flate2 = "1.0.35"
-aws-sdk-s3 = "1.71.0"
+http = "1.3.1"
+config = "0.15.18"
+bytes = "1.10.1"
+chrono = "0.4.42"
+flate2 = "1.1.5"
+aws-sdk-s3 = "1.109.0"
 dashmap = "6.1.0"
 tower_governor = "0.7.0"
 
 [dev-dependencies]
-tempfile = "3.20.0"
+tempfile = "3.23.0"
