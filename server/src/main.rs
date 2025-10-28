@@ -195,9 +195,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .quality(CompressionLevel::Default)
                 .gzip(true),
         )
-        .layer(GovernorLayer {
-            config: governor_conf,
-        })
+        .layer(GovernorLayer::new(governor_conf))
         .layer(cors);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], app_config.server.port));
