@@ -54,6 +54,33 @@ impl Uuid {
     }
 
     pub const _NIL: Self = Uuid([0; 16]);
+
+    /// Encodes the UUID into a fixed 36-byte hyphenated lowercase representation.
+    /// This function is allocation-free and designed for efficient serialization.
+    #[inline]
+    fn encode_hyphenated_lower(&self) -> [u8; 36] {
+        const HEX: &[u8; 16] = b"0123456789abcdef";
+        let b = self.0;
+        let mut out = [0u8; 36];
+
+        #[inline(always)]
+        fn put(out: &mut [u8], i: usize, byte: u8) {
+            out[i] = HEX[(byte >> 4) as usize];
+            out[i + 1] = HEX[(byte & 0x0f) as usize];
+        }
+
+        let mut i = 0usize;
+        for (idx, &byte) in b.iter().enumerate() {
+            if idx == 4 || idx == 6 || idx == 8 || idx == 10 {
+                out[i] = b'-';
+                i += 1;
+            }
+            put(&mut out, i, byte);
+            i += 2;
+        }
+
+        out
+    }
 }
 
 /// Formats the UUID in the standard hyphenated lowercase form.
@@ -89,7 +116,7 @@ impl fmt::Debug for Uuid {
 ///
 /// - A simple string of 32 hexadecimal digits
 /// - A hyphenated string (e.g. "67e55044-10b1-426f-9247-bb680e5fe0c8")
-/// - With optional braces `{...}` or the prefix `"urn:uuid:"` (case‑insensitive)
+/// - With optional braces `{...}` or the prefix `"urn:uuid:"` (case-insensitive)
 ///
 /// After removing these optional parts and any hyphens, the remaining string
 /// must be exactly 32 hexadecimal digits. Then the code parses two characters
@@ -145,11 +172,13 @@ impl From<[u8; 16]> for Uuid {
     }
 }
 
-/// Serialize the UUID as a hyphenated lowercase string.
+/// Serialize the UUID as a hyphenated lowercase string without any heap allocation.
 impl Serialize for Uuid {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        // Serialize as a string in the standard hyphenated format.
-        serializer.serialize_str(&self.to_string())
+        let buf = self.encode_hyphenated_lower();
+        // SAFETY: only ASCII hex digits and '-' are written, all valid UTF-8.
+        let s = unsafe { std::str::from_utf8_unchecked(&buf) };
+        serializer.serialize_str(s)
     }
 }
 
@@ -202,6 +231,18 @@ mod tests {
         assert_eq!(s.chars().nth(13), Some('-'));
         assert_eq!(s.chars().nth(18), Some('-'));
         assert_eq!(s.chars().nth(23), Some('-'));
+    }
+
+    #[test]
+    fn test_encode_hyphenated_lower_matches_display() {
+        let uuid = Uuid::new_v4();
+        let buf = uuid.encode_hyphenated_lower();
+        let encoded = std::str::from_utf8(&buf).unwrap();
+        let display_str = uuid.to_string();
+        assert_eq!(
+            encoded, display_str,
+            "encode_hyphenated_lower() should match Display output"
+        );
     }
 
     #[test]
@@ -275,6 +316,7 @@ mod tests {
         let parsed: Uuid = serde_json::from_str(&json).expect("Deserialization should succeed");
         assert_eq!(uuid, parsed);
     }
+
     #[test]
     fn test_uuid_error_display() {
         // Test display formatting for each variant of UuidError
