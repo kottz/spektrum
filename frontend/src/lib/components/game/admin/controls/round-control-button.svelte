@@ -11,7 +11,7 @@
 
 {#if isGameRunning}
 	<Button
-		class="w-full"
+		class="flex-1"
 		disabled={outOfQuestions}
 		onclick={() => (isInQuestion ? gameActions.endRound() : gameActions.startRound())}
 	>

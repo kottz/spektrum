@@ -12,7 +12,7 @@
 {#if isGameRunning}
 	<Button
 		variant="outline"
-		class="w-full"
+		class="flex-1"
 		disabled={isInQuestion || !isGameRunning || outOfQuestions}
 		onclick={() => gameActions.skipQuestion()}
 	>
