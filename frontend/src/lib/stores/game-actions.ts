@@ -53,9 +53,13 @@ class GameActions {
 	/**
 	 * Attempt to reconnect using any credentials stored in localStorage.
 	 */
-	public reconnectGame(playerId: string) {
-		info('Attempting to reconnect...');
-		websocketStore.connect(playerId);
+	public async reconnectGame(playerId: string) {
+		try {
+			info('Attempting to reconnect...');
+			await websocketStore.connect(playerId);
+		} catch (error) {
+			warn('Failed to reconnect:', error);
+		}
 	}
 
 	/**
