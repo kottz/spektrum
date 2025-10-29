@@ -14,7 +14,7 @@
 		variant="outline"
 		class="w-full"
 		disabled={isInQuestion || !isGameRunning || outOfQuestions}
-		on:click={() => gameActions.skipQuestion()}
+		onclick={() => gameActions.skipQuestion()}
 	>
 		Skip Question
 	</Button>

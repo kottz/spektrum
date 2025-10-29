@@ -67,7 +67,7 @@
 					<p class="text-muted-foreground text-sm">
 						Automatic reconnection failed. Try to reconnect manually.
 					</p>
-					<Button variant="default" on:click={handleManualReconnect}>Reconnect</Button>
+					<Button variant="default" onclick={handleManualReconnect}>Reconnect</Button>
 				</div>
 			{/if}
 		</div>

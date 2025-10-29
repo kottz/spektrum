@@ -25,7 +25,7 @@
 			</Card>
 		{/if}
 		<div class="flex gap-4">
-			<Button variant="outline" on:click={() => gameActions.leaveGame()}>Leave Game</Button>
+			<Button variant="outline" onclick={() => gameActions.leaveGame()}>Leave Game</Button>
 			<LightSwitch />
 		</div>
 	</div>

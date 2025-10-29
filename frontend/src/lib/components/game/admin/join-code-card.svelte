@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Card } from '$lib/components/ui/card';
 	import { gameStore } from '$lib/stores/game.svelte';
-	import { Copy, Link } from 'lucide-svelte';
+	import { Copy, Link } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { notifications } from '$lib/stores/notification-store';
 	const joinCode = $derived(gameStore.state.joinCode);
@@ -39,7 +39,7 @@
 					variant="ghost"
 					size="icon"
 					class="h-8 w-8 flex-none"
-					on:click={copyLinkToClipboard}
+					onclick={copyLinkToClipboard}
 					title="Copy join link"
 				>
 					<Link class="h-4 w-4" />
@@ -56,7 +56,7 @@
 					variant="ghost"
 					size="icon"
 					class="h-8 w-8 flex-none"
-					on:click={copyCodeToClipboard}
+					onclick={copyCodeToClipboard}
 					title="Copy join code"
 				>
 					<Copy class="h-4 w-4" />

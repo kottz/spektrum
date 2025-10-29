@@ -13,6 +13,6 @@
 			The code you entered doesn’t match the valid 6 digit format.
 		</p>
 
-		<Button on:click={() => goto('/')} class="mx-auto">Back to home</Button>
+		<Button onclick={() => goto('/')} class="mx-auto">Back to home</Button>
 	</div>
 </div>

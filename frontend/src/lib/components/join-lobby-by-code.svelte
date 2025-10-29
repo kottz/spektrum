@@ -106,7 +106,7 @@
 				placeholder="Enter your name"
 				bind:value={playerName}
 				on:input={handleNameInput}
-				maxlength="16"
+				maxlength={16}
 				disabled={isJoining}
 				class={hasNameValidationError || (isNameTooShort && hasAttemptedSubmit)
 					? 'border-red-500'
@@ -121,7 +121,7 @@
 			{/if}
 		</div>
 
-		<Button on:click={handleJoinGame} disabled={isJoining || !playerName}>
+		<Button onclick={handleJoinGame} disabled={isJoining || !playerName}>
 			{isJoining ? 'Joining...' : 'Join Game'}
 		</Button>
 	</CardContent>

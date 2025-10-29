@@ -56,3 +56,5 @@ declare namespace YT {
 		data: number;
 	}
 }
+
+declare const YT: YT;

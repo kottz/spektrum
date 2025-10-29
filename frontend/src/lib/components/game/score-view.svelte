@@ -18,7 +18,7 @@
 
 	<div class="mt-6 flex-none">
 		{#if isAdmin}
-			<Button class="w-full" on:click={() => gameActions.startRound()}>Start Next Round</Button>
+			<Button class="w-full" onclick={() => gameActions.startRound()}>Start Next Round</Button>
 		{:else}
 			<div class="text-muted-foreground text-center">Waiting for next round...</div>
 		{/if}

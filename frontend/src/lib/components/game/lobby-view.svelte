@@ -37,7 +37,7 @@
 			</div>
 			<div class="text-muted-foreground text-center">Waiting for admin to start the game...</div>
 			<!-- Leave button -->
-			<Button variant="outline" class="w-full" on:click={handleLeaveGame}>Leave Game</Button>
+			<Button variant="outline" class="w-full" onclick={handleLeaveGame}>Leave Game</Button>
 		</CardContent>
 	</Card>
 </div>

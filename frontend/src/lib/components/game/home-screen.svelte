@@ -3,7 +3,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Separator } from '$lib/components/ui/separator';
-	import { Github } from 'lucide-svelte';
+	import { Github } from '@lucide/svelte';
 	import SetSelector from '$lib/components/set-selector.svelte';
 	import LightSwitch from '$lib/components/ui/light-switch.svelte';
 	import JoinLobbyCard from '$lib/components/join-lobby-card.svelte';
@@ -59,7 +59,7 @@
 			<CardHeader class="mb-2">
 				<div class="flex items-center gap-4">
 					{#if showSetSelector}
-						<Button variant="outline" size="sm" on:click={() => (showSetSelector = false)}>
+						<Button variant="outline" size="sm" onclick={() => (showSetSelector = false)}>
 							Back
 						</Button>
 					{/if}
@@ -70,7 +70,7 @@
 				{#if showSetSelector}
 					<SetSelector />
 				{:else}
-					<Button size="lg" class="w-full" on:click={() => (showSetSelector = true)}>
+					<Button size="lg" class="w-full" onclick={() => (showSetSelector = true)}>
 						Create Lobby
 					</Button>
 				{/if}

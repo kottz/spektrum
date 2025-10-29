@@ -4,7 +4,8 @@
 	import { uiStore } from '$lib/stores/ui.store.svelte';
 	import { gameStore } from '$lib/stores/game.svelte';
 	import { broadcastService } from '$lib/services/broadcast.service';
-	import { MonitorPlay, Eye, EyeOff, ExternalLink } from 'lucide-svelte';
+	import type { BroadcastMessage } from '$lib/services/broadcast.service';
+	import { MonitorPlay, Eye, EyeOff, ExternalLink } from '@lucide/svelte';
 	import { info } from '$lib/utils/logger';
 
 	const streamWindowState = $derived(uiStore.streamWindow);
@@ -52,7 +53,7 @@
 		broadcastService.addListener(handleBroadcastMessage);
 	}
 
-	function handleBroadcastMessage(message: { type: string; [key: string]: unknown }) {
+	function handleBroadcastMessage(message: BroadcastMessage) {
 		if (message.type === 'STREAM_READY') {
 			info('StreamControls: Received stream ready signal');
 			broadcastService.setHasActiveStreams(true);

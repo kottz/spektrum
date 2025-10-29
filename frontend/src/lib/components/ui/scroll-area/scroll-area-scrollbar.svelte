@@ -2,9 +2,7 @@
 	import { ScrollArea as ScrollAreaPrimitive } from 'bits-ui';
 	import { cn } from '$lib/utils.js';
 
-	type $$Props = ScrollAreaPrimitive.ScrollbarProps & {
-		orientation?: 'vertical' | 'horizontal';
-	};
+	type $$Props = ScrollAreaPrimitive.ScrollbarProps;
 
 	let className: $$Props['class'] = undefined;
 	export let orientation: $$Props['orientation'] = 'vertical';
@@ -19,6 +17,7 @@
 		orientation === 'horizontal' && 'h-2.5 w-full border-t border-t-transparent p-px',
 		className
 	)}
+	{...$$restProps}
 >
 	<slot />
 	<ScrollAreaPrimitive.Thumb

@@ -13,7 +13,7 @@
 	<Button
 		class="w-full"
 		disabled={outOfQuestions}
-		on:click={() => (isInQuestion ? gameActions.endRound() : gameActions.startRound())}
+		onclick={() => (isInQuestion ? gameActions.endRound() : gameActions.startRound())}
 	>
 		{isInQuestion ? 'End Round' : 'Start Round'}
 	</Button>

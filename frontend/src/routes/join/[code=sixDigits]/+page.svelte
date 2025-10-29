@@ -5,7 +5,7 @@
 	import JoinLobbyByCode from '$lib/components/join-lobby-by-code.svelte';
 	import ReconnectCard from '$lib/components/reconnect-card.svelte';
 	import NotificationList from '$lib/components/NotificationList.svelte';
-	import { House } from 'lucide-svelte';
+	import { House } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { gameStore } from '$lib/stores/game.svelte';
 	import { gameActions } from '$lib/stores/game-actions';

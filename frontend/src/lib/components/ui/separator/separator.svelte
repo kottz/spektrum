@@ -2,11 +2,11 @@
 	import { Separator as SeparatorPrimitive } from 'bits-ui';
 	import { cn } from '$lib/utils.js';
 
-	type $$Props = SeparatorPrimitive.Props;
+	type $$Props = SeparatorPrimitive.RootProps;
 
 	let className: $$Props['class'] = undefined;
 	export let orientation: $$Props['orientation'] = 'horizontal';
-	export let decorative: $$Props['decorative'] = undefined;
+	export let decorative: $$Props['decorative'] = false;
 	export { className as class };
 </script>
 

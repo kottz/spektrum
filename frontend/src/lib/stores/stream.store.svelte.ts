@@ -2,7 +2,8 @@ import { browser } from '$app/environment';
 import { broadcastService } from '$lib/services/broadcast.service';
 import type { BroadcastMessage } from '$lib/services/broadcast.service';
 import type { StreamEvent, DisplayConfig } from '$lib/types/stream.types';
-import type { GameUpdate, GamePhase, PlayerAnswer } from '$lib/types/game';
+import type { GameUpdate, PlayerAnswer } from '$lib/types/game';
+import { GamePhase } from '$lib/types/game';
 import { DEFAULT_DISPLAY_CONFIG } from '$lib/types/stream.types';
 import { info, warn } from '$lib/utils/logger';
 import { streamTimerStore } from './stream-timer.store.svelte';
@@ -26,8 +27,6 @@ interface StreamStoreState {
 	gameState: StreamGameState | null;
 	activeEvents: StreamEvent[];
 }
-
-import { GamePhase } from '$lib/types/game';
 
 const initialStreamGameState: StreamGameState = {
 	phase: GamePhase.Lobby,

@@ -4,7 +4,7 @@
 	import NotificationList from '$lib/components/NotificationList.svelte';
 	import { Separator } from '$lib/components/ui/separator';
 	import QuestionExample from '$lib/components/question-example.svelte';
-	import { House } from 'lucide-svelte';
+	import { House } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 </script>
 

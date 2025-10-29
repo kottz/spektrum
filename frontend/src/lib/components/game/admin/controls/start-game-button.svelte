@@ -12,7 +12,7 @@
 	variant="default"
 	class="w-full"
 	disabled={!(isLobby || isGameOver)}
-	on:click={() => gameActions.startGame()}
+	onclick={() => gameActions.startGame()}
 >
 	{isGameOver ? 'Restart Game' : 'Start Game'}
 </Button>

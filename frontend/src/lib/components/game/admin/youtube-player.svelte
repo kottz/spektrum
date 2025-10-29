@@ -12,6 +12,11 @@
 
 		const initializePlayer = () => {
 			info('YouTube API Ready');
+			if (typeof YT === 'undefined') {
+				warn('YouTube API not available');
+				return null;
+			}
+
 			return new YT.Player(playerId, {
 				height: '360',
 				width: '640',
@@ -21,11 +26,11 @@
 					enablejsapi: 1
 				},
 				events: {
-					onReady: (event) => {
+					onReady: (event: YT.PlayerEvent) => {
 						info('Player ready');
 						youtubeStore.setPlayer(event.target);
 					},
-					onError: (event) => {
+					onError: (event: YT.OnErrorEvent) => {
 						warn('YouTube player error:', event);
 					}
 				}
