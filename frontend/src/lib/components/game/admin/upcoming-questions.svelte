@@ -5,16 +5,16 @@
 
 <div class="space-y-1">
 	{#each upcomingQuestions as question, i}
-		<div class="space-y-1 rounded bg-secondary p-2">
+		<div class="bg-secondary space-y-1 rounded p-2">
 			<div class="flex justify-between text-sm">
 				<span class="flex-1 truncate font-medium">{question.title}</span>
-				<span class="ml-2 text-muted-foreground">#{i + 1}</span>
+				<span class="text-muted-foreground ml-2">#{i + 1}</span>
 			</div>
-			<div class="truncate text-sm text-muted-foreground">
+			<div class="text-muted-foreground truncate text-sm">
 				{question.artist || 'n/a'}
 			</div>
-			<div class="flex items-center gap-2 text-xs text-muted-foreground/70">
-				<span class="rounded bg-muted-foreground/10 px-1.5 py-0.5">
+			<div class="text-muted-foreground/70 flex items-center gap-2 text-xs">
+				<span class="bg-muted-foreground/10 rounded px-1.5 py-0.5">
 					{question.question_type}
 				</span>
 				{#if question.question_type === 'character'}

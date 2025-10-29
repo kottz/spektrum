@@ -69,15 +69,15 @@
 </script>
 
 {#if gameState}
-	<div class="flex h-[100dvh] flex-col">
+	<div class="flex h-dvh flex-col">
 		<!-- Header section: App Name, Join Code and Timer -->
 		<header class="flex-none p-3">
-			<div class="flex items-center justify-between rounded-lg bg-card p-4 shadow">
+			<div class="bg-card flex items-center justify-between rounded-lg p-4 shadow-sm">
 				<div class="flex flex-1">
 					<span class="text-4xl font-bold">Melodiquiz.se</span>
 				</div>
 				<div class="flex items-center gap-2">
-					<span class="text-lg text-muted-foreground">Join Code:</span>
+					<span class="text-muted-foreground text-lg">Join Code:</span>
 					<span class="font-mono text-4xl font-bold">{joinCode}</span>
 				</div>
 				<div class="flex flex-1 justify-end">
@@ -89,7 +89,7 @@
 		<!-- Main Content Area -->
 		{#if phase === GamePhase.Lobby}
 			<!-- Full-screen lobby view -->
-			<div class="flex min-h-0 flex-1 flex-1">
+			<div class="flex min-h-0 flex-1">
 				<StreamLobbyView />
 			</div>
 		{:else if phase === GamePhase.GameOver}
@@ -107,13 +107,13 @@
 
 				<!-- Draggable Divider -->
 				<button
-					class="flex w-2 cursor-col-resize items-center justify-center bg-border/50 transition-colors hover:bg-border {isDragging
+					class="bg-border/50 hover:bg-border flex w-2 cursor-col-resize items-center justify-center transition-colors {isDragging
 						? 'bg-primary'
 						: ''}"
 					onmousedown={startDrag}
 					aria-label="Resize left panel"
 				>
-					<div class="h-12 w-0.5 bg-muted-foreground/30"></div>
+					<div class="bg-muted-foreground/30 h-12 w-0.5"></div>
 				</button>
 
 				<!-- Content Area -->
@@ -129,7 +129,7 @@
 									<StreamQuestionView />
 								{:else}
 									<div
-										class="flex h-96 items-center justify-center rounded-lg bg-card p-4 shadow"
+										class="bg-card flex h-96 items-center justify-center rounded-lg p-4 shadow-sm"
 									></div>
 								{/if}
 							</div>
@@ -143,13 +143,13 @@
 
 								<!-- Vertical Draggable Divider -->
 								<button
-									class="flex w-2 cursor-col-resize items-center justify-center bg-border/50 transition-colors hover:bg-border {isDraggingAnswers
+									class="bg-border/50 hover:bg-border flex w-2 cursor-col-resize items-center justify-center transition-colors {isDraggingAnswers
 										? 'bg-primary'
 										: ''}"
 									onmousedown={startAnswerDrag}
 									aria-label="Resize answer progress panel"
 								>
-									<div class="h-12 w-0.5 bg-muted-foreground/30"></div>
+									<div class="bg-muted-foreground/30 h-12 w-0.5"></div>
 								</button>
 
 								<!-- Answer Progress (right) -->

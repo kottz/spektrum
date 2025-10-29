@@ -13,7 +13,7 @@
 	const joinCode = $derived(gameStore.state.joinCode);
 </script>
 
-<div class="flex h-[100dvh] flex-col">
+<div class="flex h-dvh flex-col">
 	<!-- Top bar with join code and leave button - now flex-none -->
 	<div class="flex flex-none items-center justify-between p-4">
 		{#if joinCode}

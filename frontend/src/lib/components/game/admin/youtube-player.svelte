@@ -52,7 +52,7 @@
 
 <Card>
 	<CardContent class="p-1">
-		<div class="aspect-video w-full bg-muted">
+		<div class="bg-muted aspect-video w-full">
 			<div id={playerId}></div>
 		</div>
 	</CardContent>

@@ -41,7 +41,7 @@
 		<CardTitle>Rejoin Previous Lobby</CardTitle>
 	</CardHeader>
 	<CardContent class="space-y-4">
-		<div class="text-sm text-muted-foreground">
+		<div class="text-muted-foreground text-sm">
 			Last lobby update: {timeAgoString}
 		</div>
 		<div class="space-y-2">

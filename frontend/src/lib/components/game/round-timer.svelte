@@ -39,17 +39,17 @@
 		<span class="w-24 text-right text-sm font-medium">{points().toFixed(0)}</span>
 	</div>
 	<div class="flex items-center gap-4">
-		<div class="relative h-2 flex-1 overflow-hidden rounded-full bg-secondary">
+		<div class="bg-secondary relative h-2 flex-1 overflow-hidden rounded-full">
 			{#if timerStore.state.answeredTimeSnapshot !== null}
 				<div
-					class="absolute left-0 top-0 z-10 h-full bg-gray-700"
+					class="absolute top-0 left-0 z-10 h-full bg-gray-700"
 					style:width="{answeredBarProgress}%"
 					title="Answered at this time"
 				></div>
 			{/if}
 
 			<div
-				class="absolute left-0 top-0 z-20 h-full bg-primary transition-transform duration-100 ease-linear"
+				class="bg-primary absolute top-0 left-0 z-20 h-full transition-transform duration-100 ease-linear"
 				style:width="{mainBarProgress}%"
 			></div>
 		</div>

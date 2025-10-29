@@ -154,9 +154,9 @@
 	<CardContent>
 		<div class="space-y-4">
 			<div class="text-center">
-				<p class="mb-2 text-sm text-muted-foreground">Imagine this song is playing</p>
+				<p class="text-muted-foreground mb-2 text-sm">Imagine this song is playing</p>
 				<p class="mb-2 text-lg font-semibold">{currentQuestion.text}</p>
-				<p class="text-sm text-muted-foreground">
+				<p class="text-muted-foreground text-sm">
 					then which {currentQuestion.type === 'character' ? 'image' : 'color'} should you click?
 				</p>
 			</div>
@@ -190,15 +190,15 @@
 				<div class="space-y-2 text-center">
 					{#if clickedAnswer === currentQuestion.correctAnswer}
 						<p class="font-semibold text-green-600 dark:text-green-400">Correct! 🎉</p>
-						<p class="text-sm text-muted-foreground">Fast answers score more points!</p>
+						<p class="text-muted-foreground text-sm">Fast answers score more points!</p>
 					{:else}
 						<p class="font-semibold text-red-600 dark:text-red-400">Wrong answer</p>
-						<p class="text-sm text-muted-foreground">
+						<p class="text-muted-foreground text-sm">
 							The correct answer was {currentQuestion.correctAnswer}
 						</p>
 					{/if}
 					<button
-						class="mt-2 rounded bg-primary px-3 py-1 text-sm text-primary-foreground hover:bg-primary/90"
+						class="bg-primary text-primary-foreground hover:bg-primary/90 mt-2 rounded px-3 py-1 text-sm"
 						onclick={resetExample}
 					>
 						Try Again

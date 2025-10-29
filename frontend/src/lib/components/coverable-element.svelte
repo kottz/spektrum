@@ -1,11 +1,11 @@
 <script>
-	let { covered = false, coverColor = 'bg-background/100', coverText = '', children } = $props();
+	let { covered = false, coverColor = 'bg-background', coverText = '', children } = $props();
 </script>
 
 <div class="relative h-full w-full overflow-hidden rounded">
 	<div
 		class="transition-filter relative h-full w-full duration-300 ease-in-out {covered
-			? 'blur-sm'
+			? 'blur-xs'
 			: ''}"
 	>
 		{@render children()}
@@ -16,7 +16,7 @@
 			class="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded {coverColor} motion-safe:animate-fade-in transition-opacity duration-300 ease-in-out"
 		>
 			{#if coverText}
-				<span class="font-bold text-foreground/80">{coverText}</span>
+				<span class="text-foreground/80 font-bold">{coverText}</span>
 			{/if}
 		</div>
 	{/if}

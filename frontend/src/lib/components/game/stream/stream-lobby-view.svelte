@@ -15,13 +15,13 @@
 		<CardContent class="space-y-8">
 			<!-- Connected players list -->
 			<div class="space-y-4">
-				<h3 class="text-center text-2xl font-semibold text-muted-foreground">
+				<h3 class="text-muted-foreground text-center text-2xl font-semibold">
 					Connected Players ({players.length})
 				</h3>
 				<ScrollArea class="h-96 rounded-md border p-6">
 					<div class="flex flex-wrap gap-3">
 						{#each players as player (player.name)}
-							<div class="flex items-center rounded-lg bg-muted p-4">
+							<div class="bg-muted flex items-center rounded-lg p-4">
 								<span class="text-xl font-semibold">
 									{player.name}
 								</span>
@@ -32,7 +32,7 @@
 			</div>
 
 			<div class="text-center">
-				<p class="text-2xl text-muted-foreground">Waiting for admin to start the game...</p>
+				<p class="text-muted-foreground text-2xl">Waiting for admin to start the game...</p>
 			</div>
 		</CardContent>
 	</Card>

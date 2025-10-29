@@ -21,9 +21,9 @@
 
 {#if shouldShow}
 	<div class="flex items-center gap-4">
-		<div class="relative h-4 w-[20vw] overflow-hidden rounded-full bg-secondary">
+		<div class="bg-secondary relative h-4 w-[20vw] overflow-hidden rounded-full">
 			<div
-				class="absolute left-0 top-0 h-full bg-primary transition-all duration-100 ease-linear"
+				class="bg-primary absolute top-0 left-0 h-full transition-all duration-100 ease-linear"
 				style="width: {progress}%"
 			></div>
 		</div>

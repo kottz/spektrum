@@ -49,7 +49,7 @@
 	<NotificationList />
 	<div class="relative w-full max-w-lg">
 		<!-- House button absolutely positioned on the left -->
-		<div class="absolute left-0 top-1/2 -translate-y-1/2">
+		<div class="absolute top-1/2 left-0 -translate-y-1/2">
 			<Button class="ml-2" variant="outline" size="icon" onclick={() => goto('/')}>
 				<House class="h-[1.2rem] w-[1.2rem]" />
 				<span class="sr-only">Go home</span>

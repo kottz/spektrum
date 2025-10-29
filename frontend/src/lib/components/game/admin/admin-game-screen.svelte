@@ -21,7 +21,7 @@
 	let hideGameContent = $state(false);
 </script>
 
-<div class="container mx-auto flex h-[100dvh] flex-col p-3 pb-24 lg:pb-3">
+<div class="container mx-auto flex h-dvh flex-col p-3 pb-24 lg:pb-3">
 	<div
 		class="flex min-h-0 flex-1 flex-col space-y-4 overflow-y-auto lg:grid lg:grid-cols-12 lg:gap-4 lg:space-y-0"
 	>
@@ -52,12 +52,12 @@
 						{/snippet}
 					</CoverableElement>
 					<div class="hidden lg:block">
-						<div class="mb-2 flex select-none items-center gap-2 rounded">
+						<div class="mb-2 flex items-center gap-2 rounded select-none">
 							<input
 								type="checkbox"
 								id="spoiler-mode"
 								bind:checked={hideGameContent}
-								class="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+								class="text-primary focus:ring-primary h-4 w-4 rounded border-gray-300"
 							/>
 							<label for="spoiler-mode" class="cursor-pointer text-sm font-medium"
 								>No Spoiler Mode</label
@@ -132,13 +132,13 @@
 	</div>
 
 	<!-- Mobile-only bottom controls (fixed position) -->
-	<div class="fixed bottom-0 left-0 right-0 z-10 bg-background/95 p-3 backdrop-blur-sm lg:hidden">
-		<div class="mb-3 flex select-none items-center justify-start gap-2 rounded text-xs">
+	<div class="bg-background/95 fixed right-0 bottom-0 left-0 z-10 p-3 backdrop-blur-xs lg:hidden">
+		<div class="mb-3 flex items-center justify-start gap-2 rounded text-xs select-none">
 			<input
 				type="checkbox"
 				id="spoiler-mode-mobile"
 				bind:checked={hideGameContent}
-				class="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+				class="text-primary focus:ring-primary h-4 w-4 rounded border-gray-300"
 			/>
 			<label for="spoiler-mode-mobile" class="cursor-pointer font-medium">No Spoiler Mode</label>
 		</div>

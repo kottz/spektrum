@@ -12,7 +12,7 @@
 
 <ModeWatcher defaultMode={'dark'} />
 
-<div class="stream-window-container h-[100dvh] bg-background text-foreground">
+<div class="stream-window-container bg-background text-foreground h-dvh">
 	{@render children()}
 </div>
 

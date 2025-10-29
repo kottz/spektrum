@@ -49,7 +49,7 @@
 		<span class="text-muted-foreground">Answers</span>
 		<span>{answeredCount}/{totalPlayerCount}</span>
 	</div>
-	<Progress value={progress} class="h-2 bg-muted" />
+	<Progress value={progress} class="bg-muted h-2" />
 	<ScrollArea orientation="horizontal" class="min-h-[32px] whitespace-nowrap">
 		<div class="flex w-max items-center gap-1.5">
 			{#each renderedDisplayItems as item (item.name)}

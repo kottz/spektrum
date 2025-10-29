@@ -19,11 +19,11 @@
 		<CardContent class="space-y-6">
 			<!-- Connected players list -->
 			<div class="space-y-2">
-				<h3 class="text-sm text-muted-foreground">Connected Players ({players.length})</h3>
+				<h3 class="text-muted-foreground text-sm">Connected Players ({players.length})</h3>
 				<ScrollArea class="h-72 h-[50vh] rounded-md border p-4">
 					<div class="flex flex-wrap gap-2">
 						{#each players as player}
-							<div class="flex items-center rounded bg-muted p-2">
+							<div class="bg-muted flex items-center rounded p-2">
 								<span class="font-medium">
 									{player.name}
 									{#if player.name === gameStore.state.playerName}
@@ -35,7 +35,7 @@
 					</div>
 				</ScrollArea>
 			</div>
-			<div class="text-center text-muted-foreground">Waiting for admin to start the game...</div>
+			<div class="text-muted-foreground text-center">Waiting for admin to start the game...</div>
 			<!-- Leave button -->
 			<Button variant="outline" class="w-full" on:click={handleLeaveGame}>Leave Game</Button>
 		</CardContent>

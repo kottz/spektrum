@@ -97,7 +97,7 @@
 <Card>
 	<CardContent class="grid gap-4">
 		<div class="text-center">
-			<p class="text-sm text-muted-foreground">You are joining lobby:</p>
+			<p class="text-muted-foreground text-sm">You are joining lobby:</p>
 			<p class="text-2xl font-semibold tracking-wider">{lobbyCode}</p>
 		</div>
 		<div class="mt-2">

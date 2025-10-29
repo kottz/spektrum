@@ -80,13 +80,13 @@
 	});
 </script>
 
-<div class="flex h-full w-full flex-col overflow-hidden rounded-lg bg-card shadow">
-	<div class="flex-none border-b border-border bg-muted/50 px-4 py-3">
+<div class="bg-card flex h-full w-full flex-col overflow-hidden rounded-lg shadow-sm">
+	<div class="border-border bg-muted/50 flex-none border-b px-4 py-3">
 		{#if gameOver}
 			<h2 class="text-4xl font-bold">Final Scores</h2>
 		{:else if playingQuestion}
 			<div class="flex items-center justify-between">
-				<Progress value={answerProgress} class="h-6 flex-1 bg-muted" />
+				<Progress value={answerProgress} class="bg-muted h-6 flex-1" />
 				<span class="ml-4 text-4xl">{answeredCount}/{totalPlayers}</span>
 			</div>
 		{:else}
@@ -110,7 +110,7 @@
 						<!-- Background score bar -->
 						{#if !gameOver && maxScore > 0}
 							<div
-								class="absolute inset-0 bg-primary/20 transition-all duration-500"
+								class="bg-primary/20 absolute inset-0 transition-all duration-500"
 								style="width: {getScoreWidth(player.score)}"
 							></div>
 						{/if}
@@ -118,7 +118,7 @@
 						<!-- Content -->
 						<div class="relative flex items-center gap-4 p-3">
 							<!-- Rank -->
-							<div class="flex-none text-4xl font-semibold text-muted-foreground">
+							<div class="text-muted-foreground flex-none text-4xl font-semibold">
 								{index + 1}.
 							</div>
 
@@ -142,7 +142,7 @@
 
 				{#if currentPage < maxPages}
 					<div bind:this={loaderElement} class="flex justify-center py-4">
-						<div class="text-sm text-muted-foreground">Loading more players...</div>
+						<div class="text-muted-foreground text-sm">Loading more players...</div>
 					</div>
 				{/if}
 			</div>

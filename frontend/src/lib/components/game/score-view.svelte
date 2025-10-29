@@ -20,7 +20,7 @@
 		{#if isAdmin}
 			<Button class="w-full" on:click={() => gameActions.startRound()}>Start Next Round</Button>
 		{:else}
-			<div class="text-center text-muted-foreground">Waiting for next round...</div>
+			<div class="text-muted-foreground text-center">Waiting for next round...</div>
 		{/if}
 	</div>
 </div>

@@ -49,22 +49,22 @@
 
 {#if shouldShow}
 	<div
-		class="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
+		class="bg-background/80 fixed inset-0 z-50 flex items-center justify-center backdrop-blur-xs"
 		transition:fade={{ duration: 150 }}
 	>
 		<div
-			class="flex flex-col items-center space-y-4 rounded-lg border bg-background/95 p-6 shadow-lg"
+			class="bg-background/95 flex flex-col items-center space-y-4 rounded-lg border p-6 shadow-lg"
 		>
 			{#if isReconnecting()}
-				<div class="h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
+				<div class="border-primary h-8 w-8 animate-spin rounded-full border-b-2"></div>
 			{/if}
-			<p class="text-lg font-medium text-foreground">{title()}</p>
+			<p class="text-foreground text-lg font-medium">{title()}</p>
 			{#if message()}
-				<p class="text-sm text-muted-foreground">{message()}</p>
+				<p class="text-muted-foreground text-sm">{message()}</p>
 			{/if}
 			{#if showManualReconnect}
 				<div class="flex flex-col items-center gap-2 pt-2">
-					<p class="text-sm text-muted-foreground">
+					<p class="text-muted-foreground text-sm">
 						Automatic reconnection failed. Try to reconnect manually.
 					</p>
 					<Button variant="default" on:click={handleManualReconnect}>Reconnect</Button>

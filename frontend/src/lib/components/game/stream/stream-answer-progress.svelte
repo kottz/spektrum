@@ -40,7 +40,7 @@
 	const remainingHiddenPlayersCount = $derived(Math.max(0, totalPlayerCount - MAX_DISPLAYED_NAMES));
 </script>
 
-<div class="flex h-full flex-col overflow-hidden rounded-lg bg-card shadow">
+<div class="bg-card flex h-full flex-col overflow-hidden rounded-lg shadow-sm">
 	<ScrollArea class="flex-1 p-2">
 		<div class="flex flex-wrap gap-1.5">
 			{#each renderedDisplayItems as item (item.name)}

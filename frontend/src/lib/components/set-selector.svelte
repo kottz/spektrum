@@ -52,19 +52,19 @@
 	<ScrollArea class="min-h-0 flex-1">
 		<div class="space-y-4 p-4">
 			{#if isLoading}
-				<div class="text-center text-muted-foreground">Loading question sets...</div>
+				<div class="text-muted-foreground text-center">Loading question sets...</div>
 			{:else}
 				<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
 					{#each sets as set (set.id)}
 						<Card
-							class={`cursor-pointer transition-colors hover:bg-accent/50 ${
-								selectedSet === set.id ? 'border-2 !border-primary' : ''
+							class={`hover:bg-accent/50 cursor-pointer transition-colors ${
+								selectedSet === set.id ? 'border-primary! border-2' : ''
 							}`}
 							onclick={() => (selectedSet = set.id)}
 						>
 							<CardContent class="p-4">
 								<h3 class="font-semibold">{set.name}</h3>
-								<p class="text-sm text-muted-foreground">
+								<p class="text-muted-foreground text-sm">
 									{set.question_count}
 									{set.question_count === 1 ? 'question' : 'questions'}
 								</p>
@@ -75,7 +75,7 @@
 			{/if}
 		</div>
 	</ScrollArea>
-	<div class="border-t bg-card p-4">
+	<div class="bg-card border-t p-4">
 		<div class="flex justify-end gap-2">
 			<Button onclick={handleCreate} disabled={isLoading}>Create Lobby</Button>
 		</div>

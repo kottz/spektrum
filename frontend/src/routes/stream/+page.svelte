@@ -24,7 +24,7 @@
 	});
 </script>
 
-<div class="h-[100dvh] w-[100dvw] overflow-hidden">
+<div class="h-dvh w-dvw overflow-hidden">
 	{#if !state.isVisible}
 		<div class="flex h-full items-center justify-center bg-black text-white">
 			<p>Stream Hidden by Admin</p>

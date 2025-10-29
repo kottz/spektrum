@@ -88,7 +88,7 @@
 				<div class="relative">
 					<div class="absolute inset-0 rounded-lg"></div>
 					<div
-						class="absolute inset-0 rounded-lg bg-primary/20 transition-all duration-500 ease-out"
+						class="bg-primary/20 absolute inset-0 rounded-lg transition-all duration-500 ease-out"
 						style="width: {getScoreWidth(player.score)}"
 					></div>
 					<div class="relative flex items-center justify-between px-4 py-2">
@@ -97,10 +97,10 @@
 							<span class="font-medium">
 								{player.name}
 								{#if player.name === myName}
-									<span class="ml-1 text-xs text-muted-foreground">(You)</span>
+									<span class="text-muted-foreground ml-1 text-xs">(You)</span>
 								{/if}
 								{#if player.consecutiveMisses >= 3}
-									<span class="ml-1 text-xs text-muted-foreground"
+									<span class="text-muted-foreground ml-1 text-xs"
 										>(AFK: {player.consecutiveMisses})</span
 									>
 								{/if}

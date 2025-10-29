@@ -65,7 +65,7 @@
 				<div class="mb-3 text-5xl font-bold">
 					Winner: {winner.name}
 				</div>
-				<div class="text-3xl text-muted-foreground">
+				<div class="text-muted-foreground text-3xl">
 					Final Score: {winner.score.toLocaleString()} points
 				</div>
 			{/if}
@@ -73,7 +73,7 @@
 	</Card>
 
 	<!-- Final Scoreboard - working height structure with original styling -->
-	<Card class="flex h-full w-full flex-col overflow-hidden shadow">
+	<Card class="flex h-full w-full flex-col overflow-hidden shadow-sm">
 		<div class="flex-none px-6 py-6">
 			<h2 class="mb-6 text-center text-4xl font-bold">Final Leaderboard</h2>
 		</div>
@@ -90,7 +90,7 @@
 							<!-- Background score bar for visual appeal -->
 							{#if allSortedPlayers[0]?.score > 0}
 								<div
-									class="absolute inset-0 bg-primary/10 transition-all duration-500"
+									class="bg-primary/10 absolute inset-0 transition-all duration-500"
 									style="width: {(player.score / allSortedPlayers[0].score) * 100}%"
 								></div>
 							{/if}
@@ -136,7 +136,7 @@
 
 					{#if currentPage < maxPages}
 						<div bind:this={loaderElement} class="flex justify-center py-4">
-							<div class="text-sm text-muted-foreground">Loading more players...</div>
+							<div class="text-muted-foreground text-sm">Loading more players...</div>
 						</div>
 					{/if}
 				</div>
