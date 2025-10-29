@@ -4,7 +4,7 @@
 	import { goto } from '$app/navigation';
 </script>
 
-<div class="container flex min-h-screen flex-col items-center justify-center gap-8 py-8">
+<div class="flex min-h-screen flex-col items-center justify-center gap-8 py-8">
 	<NotificationList />
 
 	<div class="grid w-full max-w-lg gap-6 text-center">

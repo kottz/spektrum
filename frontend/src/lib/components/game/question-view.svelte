@@ -148,7 +148,7 @@
 	}
 </script>
 
-<div class="container mx-auto max-w-2xl p-4">
+<div class="mx-auto max-w-2xl p-4">
 	<Card class="mb-4">
 		<CardContent class="p-4">
 			<AnswerProgress />
@@ -214,9 +214,3 @@
 		</CardContent>
 	</Card>
 </div>
-
-<style>
-	.container {
-		/* Optional container styling */
-	}
-</style>

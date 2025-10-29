@@ -7,7 +7,7 @@
 	const players = $derived(gameState?.realtimeScoreboard || []);
 </script>
 
-<div class="container mx-auto max-w-4xl space-y-8 p-8">
+<div class="mx-auto max-w-4xl space-y-8 p-8">
 	<Card>
 		<CardHeader class="text-center">
 			<CardTitle class="text-5xl font-bold">Waiting for Game to Start</CardTitle>

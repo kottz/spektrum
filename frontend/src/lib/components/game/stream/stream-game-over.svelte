@@ -56,7 +56,7 @@
 	});
 </script>
 
-<div class="container mx-auto flex h-full w-full max-w-6xl flex-col overflow-hidden p-8">
+<div class="mx-auto flex h-full w-full max-w-6xl flex-col overflow-hidden p-8">
 	<!-- Winner announcement -->
 	<Card class="mb-12">
 		<div class="px-6 py-8 text-center">

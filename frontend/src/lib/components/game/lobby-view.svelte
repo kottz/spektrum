@@ -11,7 +11,7 @@
 	}
 </script>
 
-<div class="container mx-auto max-w-2xl space-y-6 p-6">
+<div class="mx-auto max-w-2xl space-y-6 p-6">
 	<Card>
 		<CardHeader>
 			<CardTitle>Waiting for Game to Start</CardTitle>
