@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { PUBLIC_DEV_ADMIN_PASSWORD, PUBLIC_SPEKTRUM_SERVER_URL } from '$env/static/public';
+	import { PUBLIC_SPEKTRUM_SERVER_URL } from '$env/static/public';
+	import { env } from '$env/dynamic/public';
 	import { adminStore } from '$lib/stores/data-manager.svelte';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
@@ -38,8 +39,8 @@
 		fetchData(state.password);
 	}
 
-	if (isDev) {
-		fetchData(PUBLIC_DEV_ADMIN_PASSWORD);
+	if (isDev && env.PUBLIC_DEV_ADMIN_PASSWORD) {
+		fetchData(env.PUBLIC_DEV_ADMIN_PASSWORD);
 	}
 </script>
 
