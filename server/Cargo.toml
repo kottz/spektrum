@@ -11,7 +11,6 @@ serde_json = "1.0.145"
 tower-http = { version = "0.6.6", features = ["fs", "trace", "cors", "compression-gzip"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json"] }
-clap = { version = "4.5.50", features = ["derive"] }
 fastrand = "2.3.0"
 futures-util = "0.3.31"
 thiserror = "2.0.17"
@@ -22,7 +21,7 @@ config = "0.15.18"
 bytes = "1.10.1"
 chrono = "0.4.42"
 flate2 = "1.1.5"
-aws-sdk-s3 = "1.109.0"
+aws-sdk-s3 = "1.115.0"
 dashmap = "6.1.0"
 tower_governor = "0.8.0"
 
