@@ -1003,10 +1003,12 @@ mod tests {
             .await
             .expect("Test failed: Channel closed unexpectedly or failed to receive message.");
         let json = payload.as_str();
-        serde_json::from_str::<T>(json).expect(&format!(
-            "Test failed: Failed to deserialize received JSON: '{}'",
-            json
-        ))
+        serde_json::from_str::<T>(json).unwrap_or_else(|_| {
+            panic!(
+                "Test failed: Failed to deserialize received JSON: '{}'",
+                json
+            )
+        })
     }
 
     fn create_test_questions() -> Vec<GameQuestion> {
