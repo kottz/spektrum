@@ -1372,87 +1372,86 @@ mod tests {
         });
     }
 
-    // #[tokio::test]
-    // async fn test_player_reconnect_lobby() {
-    //     let (mut engine, admin_id) = setup_test_game();
-    //     let player_id = add_test_player(&mut engine, "Player1");
-    //     //do not start the game, stay in lobby
-    //     let player_initial_state = engine.state.players.get(&player_id).unwrap().clone();
-    //     // Simulate disconnection (remove the connection)
-    //     engine.connections.remove(&player_id);
-    //     // Re-add the player with a new connection
-    //     let (player_tx, mut player_rx) = tokio::sync::mpsc::unbounded_channel();
-    //     engine.connections.insert(
-    //         player_id,
-    //         Connection {
-    //             lobby_id: engine
-    //                 .connections
-    //                 .get(&engine.state.admin_id)
-    //                 .unwrap()
-    //                 .lobby_id,
-    //             tx: Some(player_tx),
-    //         },
-    //     );
-    //     // Reconnect
-    //     engine.process_event(GameEvent {
-    //         context: EventContext {
-    //             sender_id: player_id,
-    //             timestamp: Instant::now(),
-    //         },
-    //         action: GameAction::Connect,
-    //     });
-    //     // Verify Connected message
-    //     match receive_and_deserialize(&mut player_rx).await {
-    //         GameUpdate::Connected { player_id: pid, .. } => {
-    //             assert_eq!(pid, player_id, "Correct player ID in Connected");
-    //         }
-    //         other => panic!("Expected Connected, got {:?}", other),
-    //     }
-    //     // Verify StateDelta message
-    //     match receive_and_deserialize(&mut player_rx).await {
-    //         GameUpdate::StateDelta {
-    //             phase,
-    //             scoreboard,
-    //             admin_extra,
-    //             ..
-    //         } => {
-    //             assert_eq!(phase, Some(GamePhase::Lobby), "Correct phase");
-    //             assert!(scoreboard.is_some(), "Scoreboard should be present");
-    //             assert!(admin_extra.is_none(), "Admin extra should not be present");
-    //             // Additional checks for player state (important!)
-    //             let player_state = engine.state.players.get(&player_id).unwrap();
-    //             assert_eq!(
-    //                 player_state.has_answered, player_initial_state.has_answered,
-    //                 "has_answered should be preserved"
-    //             );
-    //             assert_eq!(
-    //                 player_state.score, player_initial_state.score,
-    //                 "Score should be preserved"
-    //             );
-    //             assert_eq!(
-    //                 player_state.round_score, player_initial_state.round_score,
-    //                 "Round score should be preserved"
-    //             );
-    //             assert_eq!(
-    //                 player_state.answer, player_initial_state.answer,
-    //                 "Answer should be preserved"
-    //             );
-    //         }
-    //         other => panic!("Expected StateDelta, got {:?}", other),
-    //     }
-    //
-    //     // If you're expecting another StateDelta message, consume it outside the match
-    //     // Instead of nesting it inside the previous match
-    //     match receive_and_deserialize::<GameUpdate>(&mut player_rx).await {
-    //         GameUpdate::StateDelta { scoreboard, .. } => {
-    //             assert!(scoreboard.is_some(), "Expected scoreboard to be Some");
-    //         }
-    //         other => panic!("Expected another StateDelta, got {:?}", other),
-    //     }
-    //
-    //     engine.connections.clear();
-    //     player_rx.close();
-    // }
+    #[tokio::test]
+    async fn test_player_reconnect_lobby() {
+        let (mut engine, admin_id) = setup_test_game();
+        let player_id = add_test_player(&mut engine, "Player1");
+        // Stay in lobby; do not start the game
+        let player_initial_state = engine.state.players.get(&player_id).unwrap().clone();
+        let initial_conn_id = player_initial_state
+            .connection_id
+            .expect("connection id should be set");
+
+        // Simulate disconnection (remove the connection)
+        engine.clear_player_connection(player_id, initial_conn_id);
+
+        // Re-add the player with a new connection
+        let (player_tx, mut player_rx) = tokio::sync::mpsc::channel(128);
+        let reconnect_conn_id = Uuid::new_v4();
+        engine.update_player_connection(player_id, player_tx, reconnect_conn_id);
+
+        // Reconnect
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: player_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::Connect,
+        });
+
+        // Verify Connected message
+        match receive_and_deserialize(&mut player_rx).await {
+            GameUpdate::Connected { player_id: pid, .. } => {
+                assert_eq!(pid, player_id, "Correct player ID in Connected");
+            }
+            other => panic!("Expected Connected, got {:?}", other),
+        }
+        // Verify StateDelta message
+        match receive_and_deserialize(&mut player_rx).await {
+            GameUpdate::StateDelta {
+                phase,
+                scoreboard,
+                admin_extra,
+                ..
+            } => {
+                assert_eq!(phase, Some(GamePhase::Lobby), "Correct phase");
+                assert!(scoreboard.is_some(), "Scoreboard should be present");
+                assert!(admin_extra.is_none(), "Admin extra should not be present");
+                // Additional checks for player state (important!)
+                let player_state = engine.state.players.get(&player_id).unwrap();
+                assert_eq!(
+                    player_state.has_answered, player_initial_state.has_answered,
+                    "has_answered should be preserved"
+                );
+                assert_eq!(
+                    player_state.score, player_initial_state.score,
+                    "Score should be preserved"
+                );
+                assert_eq!(
+                    player_state.round_score, player_initial_state.round_score,
+                    "Round score should be preserved"
+                );
+                assert_eq!(
+                    player_state.answer, player_initial_state.answer,
+                    "Answer should be preserved"
+                );
+            }
+            other => panic!("Expected StateDelta, got {:?}", other),
+        }
+
+        player_rx.close();
+
+        // Ensure admin connection is unaffected
+        assert!(
+            engine
+                .state
+                .players
+                .get(&admin_id)
+                .and_then(|p| p.tx.clone())
+                .is_some(),
+            "Admin connection should remain intact"
+        );
+    }
 
     #[tokio::test]
     async fn test_player_reconnect_score() {
@@ -2233,57 +2232,26 @@ mod tests {
         admin_rx.close();
     }
 
-    // #[tokio::test]
-    // async fn test_connect_unregistered_player() {
-    //     // Setup
-    //     let admin_id = Uuid::new_v4();
-    //     let admin_lobby_id = Uuid::new_v4();
-    //     let connections = Arc::new(DashMap::new());
-    //
-    //     // Create game engine
-    //     let mut engine = GameEngine::new(
-    //         admin_id,
-    //         Arc::new(create_test_questions()),
-    //         None,
-    //         30,
-    //         connections.clone(),
-    //     );
-    //
-    //     // Test unregistered player connect
-    //     let invalid_id = Uuid::new_v4();
-    //     let (invalid_tx, mut invalid_rx) = tokio::sync::mpsc::unbounded_channel();
-    //     connections.insert(
-    //         invalid_id,
-    //         Connection {
-    //             lobby_id: admin_lobby_id,
-    //             tx: Some(invalid_tx),
-    //         },
-    //     );
-    //
-    //     engine.process_event(GameEvent {
-    //         context: EventContext {
-    //             sender_id: invalid_id,
-    //             timestamp: Instant::now(),
-    //         },
-    //         action: GameAction::Connect,
-    //     });
-    //
-    //     // Verify error message
-    //     match invalid_rx
-    //         .recv()
-    //         .await
-    //         .expect("Should receive Error message")
-    //     {
-    //         GameUpdate::Error { message } => {
-    //             assert_eq!(
-    //                 message,
-    //                 "Player not found. Please register before connecting."
-    //             );
-    //         }
-    //         other => panic!("Expected Error message, got {:?}", other),
-    //     }
-    //     engine.connections.clear();
-    // }
+    #[tokio::test]
+    async fn test_connect_unregistered_player() {
+        let (mut engine, admin_id) = setup_test_game();
+        let initial_player_count = engine.get_player_count();
+
+        // Attempt to connect with an unknown player id
+        let invalid_id = Uuid::new_v4();
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: invalid_id,
+                timestamp: Instant::now(),
+            },
+            action: GameAction::Connect,
+        });
+
+        // Ensure state is unchanged and admin remains present
+        assert_eq!(engine.get_player_count(), initial_player_count);
+        assert!(engine.state.players.contains_key(&admin_id));
+        assert!(!engine.state.players.contains_key(&invalid_id));
+    }
 
     #[tokio::test]
     async fn test_admin_leave() {
@@ -2466,145 +2434,127 @@ mod tests {
         assert_eq!(engine.state.current_question_index, 0);
     }
 
-    // #[tokio::test]
-    // async fn test_admin_kick_player() {
-    //     let (mut engine, admin_id) = setup_test_game();
-    //     let player1_id = add_test_player(&mut engine, "Player1");
-    //     let player2_id = add_test_player(&mut engine, "Player2");
-    //
-    //     // Capture messages for player 1
-    //     let (_player1_tx, mut player1_rx) = tokio::sync::mpsc::unbounded_channel();
-    //     engine
-    //         .connections
-    //         .entry(player1_id)
-    //         .and_modify(|c| c.tx = Some(_player1_tx));
-    //
-    //     let now = Instant::now();
-    //
-    //     // Admin kicks Player1
-    //     engine.process_event(GameEvent {
-    //         context: EventContext {
-    //             sender_id: admin_id,
-    //             timestamp: now,
-    //         },
-    //         action: GameAction::KickPlayer {
-    //             player_name: "Player1".to_string(),
-    //         },
-    //     });
-    //
-    //     // Verify Player1 is removed from state
-    //     assert!(!engine.state.players.contains_key(&player1_id));
-    //     assert!(engine.state.players.contains_key(&player2_id)); // Player2 should remain
-    //
-    //     // Verify Player1's connection is removed from the shared map
-    //     assert!(!engine.connections.contains_key(&player1_id));
-    //
-    //     // Verify Player1 received the Kicked message
-    //     match player1_rx
-    //         .recv()
-    //         .await
-    //         .expect("Player1 should receive a message")
-    //     {
-    //         GameUpdate::PlayerKicked { reason } => {
-    //             assert_eq!(reason, "Kicked by admin");
-    //         }
-    //         other => panic!("Player1 expected PlayerKicked, got {:?}", other),
-    //     }
-    //
-    //     // Verify scoreboard update sent to remaining players (Player2 and Admin)
-    //     // (Need to capture messages for Player2 and Admin to fully verify)
-    //
-    //     engine.connections.clear(); // Cleanup
-    //     player1_rx.close();
-    // }
-    //
-    // #[tokio::test]
-    // async fn test_admin_kick_nonexistent_player() {
-    //     let (mut engine, admin_id) = setup_test_game();
-    //     add_test_player(&mut engine, "Player1");
-    //
-    //     // Capture messages for admin
-    //     let (_admin_tx, mut admin_rx) = tokio::sync::mpsc::unbounded_channel();
-    //     engine
-    //         .connections
-    //         .entry(admin_id)
-    //         .and_modify(|c| c.tx = Some(_admin_tx));
-    //
-    //     let initial_player_count = engine.state.players.len();
-    //     let now = Instant::now();
-    //
-    //     // Admin tries to kick a player who doesn't exist
-    //     engine.process_event(GameEvent {
-    //         context: EventContext {
-    //             sender_id: admin_id,
-    //             timestamp: now,
-    //         },
-    //         action: GameAction::KickPlayer {
-    //             player_name: "Ghost".to_string(),
-    //         },
-    //     });
-    //
-    //     // Verify no players were removed
-    //     assert_eq!(engine.state.players.len(), initial_player_count);
-    //
-    //     // Verify admin received an error message
-    //     match admin_rx
-    //         .recv()
-    //         .await
-    //         .expect("Admin should receive a message")
-    //     {
-    //         GameUpdate::Error { message } => {
-    //             assert!(message.contains("Player 'Ghost' not found"));
-    //         }
-    //         other => panic!("Admin expected Error, got {:?}", other),
-    //     }
-    //     engine.connections.clear(); // Cleanup
-    //     admin_rx.close();
-    // }
-    //
-    // #[tokio::test]
-    // async fn test_admin_kick_self() {
-    //     let (mut engine, admin_id) = setup_test_game();
-    //     engine.add_player(admin_id, "Admin".to_string()).unwrap(); // Ensure admin is in players map
-    //
-    //     // Capture messages for admin
-    //     let (_admin_tx, mut admin_rx) = tokio::sync::mpsc::unbounded_channel();
-    //     engine
-    //         .connections
-    //         .entry(admin_id)
-    //         .and_modify(|c| c.tx = Some(_admin_tx));
-    //
-    //     let initial_player_count = engine.state.players.len();
-    //     let now = Instant::now();
-    //
-    //     // Admin tries to kick themselves
-    //     engine.process_event(GameEvent {
-    //         context: EventContext {
-    //             sender_id: admin_id,
-    //             timestamp: now,
-    //         },
-    //         action: GameAction::KickPlayer {
-    //             player_name: "Admin".to_string(),
-    //         },
-    //     });
-    //
-    //     // Verify admin was not removed
-    //     assert!(engine.state.players.contains_key(&admin_id));
-    //     assert_eq!(engine.state.players.len(), initial_player_count);
-    //
-    //     // Verify admin received an error message
-    //     match admin_rx
-    //         .recv()
-    //         .await
-    //         .expect("Admin should receive a message")
-    //     {
-    //         GameUpdate::Error { message } => {
-    //             assert!(message.contains("Admin cannot kick themselves"));
-    //         }
-    //         other => panic!("Admin expected Error, got {:?}", other),
-    //     }
-    //
-    //     engine.connections.clear(); // Cleanup
-    //     admin_rx.close();
-    // }
+    #[tokio::test]
+    async fn test_admin_kick_player() {
+        let (mut engine, admin_id) = setup_test_game();
+        let (player1_id, mut player1_rx) = add_test_player_with_channel(&mut engine, "Player1");
+        let (player2_id, mut player2_rx) = add_test_player_with_channel(&mut engine, "Player2");
+
+        let now = Instant::now();
+
+        // Admin kicks Player1
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: now,
+            },
+            action: GameAction::KickPlayer {
+                player_name: Arc::from("Player1"),
+            },
+        });
+
+        // Verify Player1 is removed; Player2 remains
+        assert!(!engine.state.players.contains_key(&player1_id));
+        assert!(engine.state.players.contains_key(&player2_id));
+
+        // Verify Player1 received the Kicked message
+        match receive_and_deserialize(&mut player1_rx).await {
+            GameUpdate::PlayerKicked { reason } => {
+                assert_eq!(reason.as_ref(), "Kicked by admin");
+            }
+            other => panic!("Player1 expected PlayerKicked, got {:?}", other),
+        }
+
+        // Player2 should be notified that Player1 left and receive updated scoreboard
+        match receive_and_deserialize(&mut player2_rx).await {
+            GameUpdate::PlayerLeft { name } => {
+                assert_eq!(name.as_ref(), "Player1");
+            }
+            other => panic!("Player2 expected PlayerLeft, got {:?}", other),
+        }
+        match receive_and_deserialize(&mut player2_rx).await {
+            GameUpdate::StateDelta { scoreboard, .. } => {
+                assert!(scoreboard.is_some(), "Scoreboard update should be sent");
+            }
+            other => panic!("Player2 expected StateDelta, got {:?}", other),
+        }
+
+        player1_rx.close();
+        player2_rx.close();
+    }
+
+    #[tokio::test]
+    async fn test_admin_kick_nonexistent_player() {
+        let (mut engine, admin_id) = setup_test_game();
+        add_test_player(&mut engine, "Player1");
+
+        // Capture messages for admin
+        let (admin_tx, mut admin_rx) = tokio::sync::mpsc::channel(128);
+        let admin_conn_id = Uuid::new_v4();
+        engine.update_player_connection(admin_id, admin_tx, admin_conn_id);
+
+        let initial_player_count = engine.state.players.len();
+        let now = Instant::now();
+
+        // Admin tries to kick a player who doesn't exist
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: now,
+            },
+            action: GameAction::KickPlayer {
+                player_name: Arc::from("Ghost"),
+            },
+        });
+
+        // Verify no players were removed
+        assert_eq!(engine.state.players.len(), initial_player_count);
+
+        // Verify admin received an error message
+        match receive_and_deserialize(&mut admin_rx).await {
+            GameUpdate::Error { message } => {
+                assert!(message.contains("Player 'Ghost' not found"));
+            }
+            other => panic!("Admin expected Error, got {:?}", other),
+        }
+        admin_rx.close();
+    }
+
+    #[tokio::test]
+    async fn test_admin_kick_self() {
+        let (mut engine, admin_id) = setup_test_game();
+
+        // Capture messages for admin
+        let (admin_tx, mut admin_rx) = tokio::sync::mpsc::channel(128);
+        let admin_conn_id = Uuid::new_v4();
+        engine.update_player_connection(admin_id, admin_tx, admin_conn_id);
+
+        let initial_player_count = engine.state.players.len();
+        let now = Instant::now();
+
+        // Admin tries to kick themselves
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: now,
+            },
+            action: GameAction::KickPlayer {
+                player_name: Arc::from("Admin"),
+            },
+        });
+
+        // Verify admin was not removed
+        assert!(engine.state.players.contains_key(&admin_id));
+        assert_eq!(engine.state.players.len(), initial_player_count);
+
+        // Verify admin received an error message
+        match receive_and_deserialize(&mut admin_rx).await {
+            GameUpdate::Error { message } => {
+                assert!(message.contains("Admin cannot kick themselves"));
+            }
+            other => panic!("Admin expected Error, got {:?}", other),
+        }
+
+        admin_rx.close();
+    }
 }
