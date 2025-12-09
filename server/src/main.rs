@@ -1,12 +1,12 @@
 use crate::question::QuestionStore;
 use crate::server::{
-    check_sessions_handler, create_lobby_handler, get_stored_data_handler, join_lobby_handler,
-    list_sets_handler, set_stored_data_handler, upload_character_image_handler, ws_handler,
-    AppState,
+    AppState, check_sessions_handler, create_lobby_handler, get_stored_data_handler,
+    join_lobby_handler, list_sets_handler, set_stored_data_handler, upload_character_image_handler,
+    ws_handler,
 };
 use axum::{
-    routing::{any, get, post},
     Router,
+    routing::{any, get, post},
 };
 use config::Config;
 use http::HeaderValue;
@@ -16,7 +16,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::signal;
 use tokio::time::Duration as TokioDuration;
-use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};
+use tower_governor::{GovernorLayer, governor::GovernorConfigBuilder};
 use tower_http::compression::{CompressionLayer, CompressionLevel};
 use tower_http::cors::CorsLayer;
 use tower_http::trace::{DefaultMakeSpan, TraceLayer};

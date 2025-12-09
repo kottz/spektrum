@@ -289,16 +289,16 @@ impl GameEngine {
         if self.state.phase == GamePhase::GameClosed {
             return true;
         }
-        if let Some(last_msg) = self.state.last_lobby_message {
-            if Instant::now().duration_since(last_msg) > Duration::from_secs(3600) {
-                self.push_update(
-                    Recipients::All,
-                    GameUpdate::GameClosed {
-                        reason: "Lobby closed due to inactivity".into(),
-                    },
-                );
-                return true;
-            }
+        if let Some(last_msg) = self.state.last_lobby_message
+            && Instant::now().duration_since(last_msg) > Duration::from_secs(3600)
+        {
+            self.push_update(
+                Recipients::All,
+                GameUpdate::GameClosed {
+                    reason: "Lobby closed due to inactivity".into(),
+                },
+            );
+            return true;
         }
         false
     }
@@ -382,27 +382,27 @@ impl GameEngine {
 
         match recipients {
             Recipients::Single(target) => {
-                if let Some(player) = self.state.players.get(&target) {
-                    if let Some(tx) = &player.tx {
-                        let _ = tx.try_send(payload.clone());
-                    }
+                if let Some(player) = self.state.players.get(&target)
+                    && let Some(tx) = &player.tx
+                {
+                    let _ = tx.try_send(payload.clone());
                 }
             }
             Recipients::Multiple(targets) => {
                 for target in targets {
-                    if let Some(player) = self.state.players.get(&target) {
-                        if let Some(tx) = &player.tx {
-                            let _ = tx.try_send(payload.clone());
-                        }
+                    if let Some(player) = self.state.players.get(&target)
+                        && let Some(tx) = &player.tx
+                    {
+                        let _ = tx.try_send(payload.clone());
                     }
                 }
             }
             Recipients::_AllExcept(exclusions) => {
                 for (player_id, player) in self.state.players.iter() {
-                    if !exclusions.contains(player_id) {
-                        if let Some(tx) = &player.tx {
-                            let _ = tx.try_send(payload.clone());
-                        }
+                    if !exclusions.contains(player_id)
+                        && let Some(tx) = &player.tx
+                    {
+                        let _ = tx.try_send(payload.clone());
                     }
                 }
             }
@@ -516,15 +516,14 @@ impl GameEngine {
             if ctx.sender_id == self.state.admin_id
                 && self.state.phase == GamePhase::Question
                 && self.state.current_question.is_some()
+                && let Some(question) = &self.state.current_question
             {
-                if let Some(question) = &self.state.current_question {
-                    self.push_update(
-                        Recipients::Single(self.state.admin_id),
-                        GameUpdate::AdminInfo {
-                            current_question: question.clone(),
-                        },
-                    );
-                }
+                self.push_update(
+                    Recipients::Single(self.state.admin_id),
+                    GameUpdate::AdminInfo {
+                        current_question: question.clone(),
+                    },
+                );
             }
         } else {
             self.push_update(
@@ -1217,19 +1216,23 @@ mod tests {
             {
                 QuestionType::Color => {
                     assert_eq!(engine.state.current_alternatives.len(), 6);
-                    assert!(engine
-                        .state
-                        .current_alternatives
-                        .iter()
-                        .all(|c| c.parse::<Color>().is_ok()));
+                    assert!(
+                        engine
+                            .state
+                            .current_alternatives
+                            .iter()
+                            .all(|c| c.parse::<Color>().is_ok())
+                    );
                 }
                 QuestionType::Year => {
                     assert_eq!(engine.state.current_alternatives.len(), 5);
-                    assert!(engine
-                        .state
-                        .current_alternatives
-                        .iter()
-                        .all(|y| y.parse::<i32>().is_ok()));
+                    assert!(
+                        engine
+                            .state
+                            .current_alternatives
+                            .iter()
+                            .all(|y| y.parse::<i32>().is_ok())
+                    );
                 }
                 _ => {
                     assert!(!engine.state.current_alternatives.is_empty());
@@ -2425,11 +2428,13 @@ mod tests {
         assert_eq!(engine.state.phase, GamePhase::Score);
 
         // every player’s score must be back to zero
-        assert!(engine
-            .state
-            .players
-            .values()
-            .all(|p| p.score == 0 && p.round_score == 0));
+        assert!(
+            engine
+                .state
+                .players
+                .values()
+                .all(|p| p.score == 0 && p.round_score == 0)
+        );
 
         // fresh question sequence
         assert_eq!(engine.state.current_question_index, 0);

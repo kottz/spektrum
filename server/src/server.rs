@@ -4,16 +4,16 @@ use crate::game::{
 };
 use crate::question::{QuestionError, QuestionStore};
 use crate::uuid::Uuid;
-use axum::extract::ws::Utf8Bytes;
 use axum::extract::Path;
+use axum::extract::ws::Utf8Bytes;
 use axum::http::StatusCode;
 use axum::{
-    extract::ws::{Message, WebSocket},
+    Json,
     extract::Multipart,
     extract::State,
     extract::WebSocketUpgrade,
+    extract::ws::{Message, WebSocket},
     response::IntoResponse,
-    Json,
 };
 use bytes::Bytes;
 use chrono::{DateTime, SecondsFormat, Utc};
@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 use thiserror::Error;
-use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::sync::mpsc::{Receiver, Sender, channel};
 use tokio::task::JoinHandle;
 use tracing::{error, info, trace};
 
@@ -758,8 +758,7 @@ async fn handle_disconnect(conn: &WsConnection, state: &AppState) {
     if let (Some(player_id), Some(lobby_key)) = (conn.player_id, conn.lobby_key.as_ref()) {
         trace!(
             "Disconnecting player {} from lobby {}",
-            player_id,
-            lobby_key
+            player_id, lobby_key
         );
         if let Some(mut engine) = state.lobbies.get_mut(lobby_key) {
             engine.clear_player_connection(player_id);
@@ -771,10 +770,10 @@ fn send_error_to_client(tx: &Sender<Utf8Bytes>, message: String, context: &str) 
     let error_update = GameUpdate::Error {
         message: Arc::from(message),
     };
-    if let Ok(json) = serde_json::to_string(&error_update) {
-        if tx.try_send(Utf8Bytes::from(json)).is_err() {
-            error!("Failed to send '{}' error to client channel", context);
-        }
+    if let Ok(json) = serde_json::to_string(&error_update)
+        && tx.try_send(Utf8Bytes::from(json)).is_err()
+    {
+        error!("Failed to send '{}' error to client channel", context);
     }
 }
 

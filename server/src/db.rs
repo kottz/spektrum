@@ -1,11 +1,11 @@
-use crate::question::{Color, GameQuestion, GameQuestionOption, QuestionType, COLOR_WEIGHTS};
 use crate::StorageConfig;
+use crate::question::{COLOR_WEIGHTS, Color, GameQuestion, GameQuestionOption, QuestionType};
+use aws_sdk_s3::Client;
 use aws_sdk_s3::config::{
     Credentials, Region, RequestChecksumCalculation, ResponseChecksumValidation,
 };
 use aws_sdk_s3::error::SdkError;
 use aws_sdk_s3::primitives::ByteStream;
-use aws_sdk_s3::Client;
 use chrono::Utc;
 use flate2::Compression;
 use flate2::{read::GzDecoder, write::GzEncoder};
@@ -1156,11 +1156,13 @@ mod tests {
                 image_url: None,
                 is_active: true,
             }],
-            options: vec![GameQuestionOption {
-                option: Arc::from("Red"),
-                is_correct: true,
-            }
-            .into_stored(1)],
+            options: vec![
+                GameQuestionOption {
+                    option: Arc::from("Red"),
+                    is_correct: true,
+                }
+                .into_stored(1),
+            ],
             sets: vec![],
         };
         assert!(data.validate_stored_data().is_ok());
@@ -1190,11 +1192,13 @@ mod tests {
                 image_url: None,
                 is_active: true,
             }],
-            options: vec![GameQuestionOption {
-                option: Arc::from("CharacterName"),
-                is_correct: true,
-            }
-            .into_stored(1)],
+            options: vec![
+                GameQuestionOption {
+                    option: Arc::from("CharacterName"),
+                    is_correct: true,
+                }
+                .into_stored(1),
+            ],
             sets: vec![],
         };
         assert!(data.validate_stored_data().is_ok());
