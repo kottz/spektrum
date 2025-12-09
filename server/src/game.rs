@@ -1775,7 +1775,7 @@ mod tests {
         let (mut engine, admin_id) = setup_test_game();
 
         // Add a player
-        let (player_id, mut player_rx) = add_test_player_with_channel(&mut engine, "TestPlayer");
+        let (_player_id, mut player_rx) = add_test_player_with_channel(&mut engine, "TestPlayer");
 
         // Admin leaves
         engine.process_event(GameEvent {
@@ -2290,7 +2290,7 @@ mod tests {
         let (mut engine, admin_id) = setup_test_game();
 
         // Add a player and capture their messages
-        let (player_id, mut player_rx) = add_test_player_with_channel(&mut engine, "Player1");
+        let (_player_id, mut player_rx) = add_test_player_with_channel(&mut engine, "Player1");
 
         // Test admin disconnect
         engine.process_event(GameEvent {
