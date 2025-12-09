@@ -1,15 +1,14 @@
 use clap::{Parser, ValueEnum};
 use futures_util::{SinkExt, StreamExt};
-use rand::seq::SliceRandom;
 use rand::Rng;
 use rand::SeedableRng;
+use rand::seq::SliceRandom;
 use serde_json::json;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 use tokio::net::TcpStream;
-use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
-use uuid::Uuid;
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async, tungstenite::Message};
 
 type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
@@ -182,13 +181,11 @@ impl TestPlayer {
                             // Simulate thinking time before answering.
                             let delay = self.rng.gen_range(0.0..40.0);
                             tokio::time::sleep(Duration::from_secs_f32(delay)).await;
-                            if let Some(alternatives) = data["alternatives"].as_array() {
-                                if let Some(answer_val) = alternatives.choose(&mut self.rng) {
-                                    if let Some(answer_str) = answer_val.as_str() {
+                            if let Some(alternatives) = data["alternatives"].as_array()
+                                && let Some(answer_val) = alternatives.choose(&mut self.rng)
+                                    && let Some(answer_str) = answer_val.as_str() {
                                         self.submit_answer(answer_str.to_string()).await?;
                                     }
-                                }
-                            }
                         }
                     }
                     Some("GameOver") | Some("GameClosed") => break,
