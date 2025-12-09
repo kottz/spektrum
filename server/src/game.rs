@@ -192,6 +192,8 @@ pub struct PlayerState {
     pub consecutive_misses: u32,
     #[serde(skip)]
     pub tx: Option<Sender<Utf8Bytes>>,
+    #[serde(skip)]
+    pub connection_id: Option<Uuid>,
 }
 
 impl PlayerState {
@@ -204,6 +206,7 @@ impl PlayerState {
             answer: None,
             consecutive_misses: 0,
             tx: None,
+            connection_id: None,
         }
     }
 }
@@ -259,15 +262,24 @@ impl GameEngine {
         }
     }
 
-    pub fn update_player_connection(&mut self, player_id: Uuid, tx: Sender<Utf8Bytes>) {
+    pub fn update_player_connection(
+        &mut self,
+        player_id: Uuid,
+        tx: Sender<Utf8Bytes>,
+        connection_id: Uuid,
+    ) {
         if let Some(player) = self.state.players.get_mut(&player_id) {
             player.tx = Some(tx);
+            player.connection_id = Some(connection_id);
         }
     }
 
-    pub fn clear_player_connection(&mut self, player_id: Uuid) {
-        if let Some(player) = self.state.players.get_mut(&player_id) {
+    pub fn clear_player_connection(&mut self, player_id: Uuid, connection_id: Uuid) {
+        if let Some(player) = self.state.players.get_mut(&player_id)
+            && player.connection_id == Some(connection_id)
+        {
             player.tx = None;
+            player.connection_id = None;
         }
     }
 
@@ -1068,9 +1080,10 @@ mod tests {
         let admin_id = Uuid::new_v4();
         let questions = Arc::new(create_test_questions());
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
+        let admin_conn_id = Uuid::new_v4();
         let mut engine = GameEngine::new(admin_id, questions, None, 30);
         engine.add_player(admin_id, "Admin".into()).unwrap();
-        engine.update_player_connection(admin_id, tx);
+        engine.update_player_connection(admin_id, tx, admin_conn_id);
 
         (engine, admin_id)
     }
@@ -1078,8 +1091,9 @@ mod tests {
     fn add_test_player(engine: &mut GameEngine, name: &str) -> Uuid {
         let player_id = Uuid::new_v4();
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
+        let conn_id = Uuid::new_v4();
         engine.add_player(player_id, name.to_string()).unwrap();
-        engine.update_player_connection(player_id, tx);
+        engine.update_player_connection(player_id, tx, conn_id);
         player_id
     }
 
@@ -1089,7 +1103,8 @@ mod tests {
     ) -> (Uuid, Receiver<Utf8Bytes>) {
         let player_id = add_test_player(engine, name);
         let (tx, rx) = tokio::sync::mpsc::channel(128);
-        engine.update_player_connection(player_id, tx);
+        let conn_id = Uuid::new_v4();
+        engine.update_player_connection(player_id, tx, conn_id);
         (player_id, rx)
     }
 
@@ -1454,13 +1469,17 @@ mod tests {
         });
 
         let player_initial_state = engine.state.players.get(&player_id).unwrap().clone();
+        let initial_conn_id = player_initial_state
+            .connection_id
+            .expect("connection id should be set");
 
         // Simulate disconnection (remove the connection)
-        engine.clear_player_connection(player_id);
+        engine.clear_player_connection(player_id, initial_conn_id);
 
         // Re-add the player with a new connection
         let (player_tx, mut player_rx) = tokio::sync::mpsc::channel(128);
-        engine.update_player_connection(player_id, player_tx);
+        let reconnection_id = Uuid::new_v4();
+        engine.update_player_connection(player_id, player_tx, reconnection_id);
 
         // Reconnect
         engine.process_event(GameEvent {
@@ -1678,7 +1697,8 @@ mod tests {
 
         // Create channel to capture admin messages
         let (admin_tx, mut admin_rx) = tokio::sync::mpsc::channel(128);
-        engine.update_player_connection(admin_id, admin_tx);
+        let admin_conn_id = Uuid::new_v4();
+        engine.update_player_connection(admin_id, admin_tx, admin_conn_id);
 
         // First test: admin reconnects in lobby, should get upcoming questions
         engine.process_event(GameEvent {
@@ -1712,7 +1732,8 @@ mod tests {
 
         // Create new channel for clean message capture
         let (admin_tx2, mut admin_rx2) = tokio::sync::mpsc::channel(128);
-        engine.update_player_connection(admin_id, admin_tx2);
+        let admin_conn_id2 = Uuid::new_v4();
+        engine.update_player_connection(admin_id, admin_tx2, admin_conn_id2);
 
         engine.process_event(GameEvent {
             context: EventContext {
@@ -2037,7 +2058,10 @@ mod tests {
         );
 
         // Test connection removal cases
-        engine.clear_player_connection(player_id);
+        let conn_id = engine.state.players[&player_id]
+            .connection_id
+            .expect("connection id should be present");
+        engine.clear_player_connection(player_id, conn_id);
         assert!(
             engine
                 .state
@@ -2159,7 +2183,8 @@ mod tests {
     async fn test_admin_connect_during_question() {
         let (mut engine, admin_id) = setup_test_game();
         let (admin_tx, mut admin_rx) = tokio::sync::mpsc::channel(128);
-        engine.update_player_connection(admin_id, admin_tx);
+        let admin_conn_id = Uuid::new_v4();
+        engine.update_player_connection(admin_id, admin_tx, admin_conn_id);
 
         // Set up question phase
         engine.state.phase = GamePhase::Question;
@@ -2297,7 +2322,8 @@ mod tests {
         let (mut engine, admin_id) = setup_test_game();
         // Create channel to capture admin messages
         let (admin_tx, mut admin_rx) = tokio::sync::mpsc::channel(128);
-        engine.update_player_connection(admin_id, admin_tx);
+        let admin_conn_id = Uuid::new_v4();
+        engine.update_player_connection(admin_id, admin_tx, admin_conn_id);
         // First start - should succeed
         engine.process_event(GameEvent {
             context: EventContext {

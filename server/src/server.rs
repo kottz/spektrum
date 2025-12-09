@@ -518,6 +518,7 @@ struct WsConnection {
     lobby_key: Option<String>,
     recent_message_count: usize,
     count_reset_time: Instant,
+    connection_id: Uuid,
 }
 
 impl WsConnection {
@@ -527,6 +528,7 @@ impl WsConnection {
             lobby_key: None,
             recent_message_count: 0,
             count_reset_time: Instant::now(),
+            connection_id: Uuid::new_v4(),
         }
     }
 }
@@ -698,7 +700,7 @@ async fn handle_connect(
         return;
     }
 
-    engine.update_player_connection(player_id, tx.clone());
+    engine.update_player_connection(player_id, tx.clone(), conn.connection_id);
     conn.player_id = Some(player_id);
     conn.lobby_key = Some(code.to_string());
 
@@ -761,7 +763,7 @@ async fn handle_disconnect(conn: &WsConnection, state: &AppState) {
             player_id, lobby_key
         );
         if let Some(mut engine) = state.lobbies.get_mut(lobby_key) {
-            engine.clear_player_connection(player_id);
+            engine.clear_player_connection(player_id, conn.connection_id);
         }
     }
 }
