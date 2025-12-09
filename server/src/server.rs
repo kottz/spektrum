@@ -111,7 +111,7 @@ impl From<QuestionError> for ApiError {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
 pub enum ClientMessage {
-    Connect { player_id: Uuid },
+    Connect { session_token: String },
     Leave,
     Answer { answer: String },
     AdminAction { action: AdminAction },
@@ -129,17 +129,9 @@ pub enum AdminAction {
     CloseGame { reason: String },
 }
 
-pub struct Connection {
-    pub lobby_id: Uuid,
-    pub tx: Option<Sender<Utf8Bytes>>,
-    pub connection_id: Option<Uuid>,
-}
-
 #[derive(Clone)]
 pub struct AppState {
-    pub lobbies: Arc<DashMap<Uuid, GameEngine>>,
-    pub join_codes: Arc<DashMap<String, Uuid>>,
-    pub connections: Arc<DashMap<Uuid, Connection>>,
+    pub lobbies: Arc<DashMap<String, GameEngine>>,
     pub store: Arc<QuestionStore>,
     pub admin_passwords: Vec<String>,
 }
@@ -148,30 +140,25 @@ impl AppState {
     pub fn new(question_manager: QuestionStore, admin_passwords: Vec<String>) -> Self {
         let state = Self {
             lobbies: Arc::new(DashMap::new()),
-            join_codes: Arc::new(DashMap::new()),
-            connections: Arc::new(DashMap::new()),
             store: Arc::new(question_manager),
             admin_passwords,
         };
 
         {
             let lobbies = state.lobbies.clone();
-            let connections = state.connections.clone();
-            let join_codes = state.join_codes.clone();
             tokio::spawn(async move {
-                cleanup_lobbies(lobbies, connections, join_codes).await;
+                cleanup_lobbies(lobbies).await;
             });
         }
 
         state
     }
 
-    fn generate_join_code(&self, lobby_id: Uuid) -> Result<String, ApiError> {
+    fn generate_join_code(&self) -> Result<String, ApiError> {
         // First try 6-digit codes
         for _ in 0..10_000 {
             let code = format!("{:06}", fastrand::u32(0..1_000_000));
-            if !self.join_codes.contains_key(&code) {
-                self.join_codes.insert(code.clone(), lobby_id);
+            if !self.lobbies.contains_key(&code) {
                 return Ok(code);
             }
         }
@@ -179,8 +166,7 @@ impl AppState {
         // If many collisions, escalate to 7 digits
         for _ in 0..1_000_000 {
             let code = format!("{:07}", fastrand::u32(0..10_000_000));
-            if !self.join_codes.contains_key(&code) {
-                self.join_codes.insert(code.clone(), lobby_id);
+            if !self.lobbies.contains_key(&code) {
                 return Ok(code);
             }
         }
@@ -231,6 +217,7 @@ pub struct CreateLobbyRequest {
 pub struct CreateLobbyResponse {
     pub player_id: Uuid,
     pub join_code: String,
+    pub session_token: String,
 }
 
 pub async fn create_lobby(
@@ -256,33 +243,23 @@ pub async fn create_lobby(
         None
     };
 
-    let lobby_id = Uuid::new_v4();
     let admin_id = Uuid::new_v4();
-    let join_code = state.generate_join_code(lobby_id)?;
+    let join_code = state.generate_join_code()?;
 
     let mut engine = GameEngine::new(
         admin_id,
         Arc::clone(&questions),
         selected_set,
         round_duration,
-        state.connections.clone(),
     );
     engine.add_player(admin_id, "Admin".into())?;
-    trace!("Creating new lobby {}", lobby_id);
+    trace!("Creating new lobby {}", join_code);
 
-    state.connections.insert(
-        admin_id,
-        Connection {
-            lobby_id,
-            tx: None,
-            connection_id: None,
-        },
-    );
-    state.lobbies.insert(lobby_id, engine);
+    state.lobbies.insert(join_code.clone(), engine);
+    let session_token = format!("{}:{}", join_code, admin_id);
 
     info!(
-        "Lobby created: {} with join code: {} (round_duration: {}s, set: {})",
-        lobby_id,
+        "Lobby created with join code: {} (round_duration: {}s, set: {})",
         join_code,
         round_duration,
         selected_set
@@ -293,6 +270,7 @@ pub async fn create_lobby(
     Ok(CreateLobbyResponse {
         player_id: admin_id,
         join_code,
+        session_token,
     })
 }
 
@@ -305,22 +283,18 @@ pub struct JoinLobbyRequest {
 #[derive(Debug, Serialize, PartialEq)]
 pub struct JoinLobbyResponse {
     pub player_id: Uuid,
+    pub session_token: String,
 }
 
 pub async fn join_lobby(
     state: &AppState,
     req: JoinLobbyRequest,
 ) -> Result<JoinLobbyResponse, ApiError> {
-    let lobby_id = *state
-        .join_codes
-        .get(req.join_code.trim())
-        .ok_or_else(|| ApiError::Lobby("Invalid join code.".into()))?
-        .value();
-
+    let join_code = req.join_code.trim();
     let mut engine = state
         .lobbies
-        .get_mut(&lobby_id)
-        .ok_or_else(|| ApiError::Lobby("Lobby not found. It may have been closed.".into()))?;
+        .get_mut(join_code)
+        .ok_or_else(|| ApiError::Lobby("Invalid join code.".into()))?;
 
     if engine.is_full() {
         return Err(ApiError::Lobby("Lobby is full.".into()));
@@ -328,16 +302,9 @@ pub async fn join_lobby(
 
     let new_player_id = Uuid::new_v4();
     engine.add_player(new_player_id, req.name)?;
-    state.connections.insert(
-        new_player_id,
-        Connection {
-            lobby_id,
-            tx: None,
-            connection_id: None,
-        },
-    );
     Ok(JoinLobbyResponse {
         player_id: new_player_id,
+        session_token: format!("{}:{}", join_code, new_player_id),
     })
 }
 
@@ -432,12 +399,15 @@ pub async fn check_sessions(
         .sessions
         .into_iter()
         .filter_map(|session| {
-            let conn = state.connections.get(&session.player_id)?;
-            let lobby = state.lobbies.get(&conn.lobby_id)?;
-            if lobby.is_finished() {
+            let lobby = state
+                .lobbies
+                .iter()
+                .find(|entry| entry.value().has_player(&session.player_id))?;
+
+            if lobby.value().is_finished() {
                 return None;
             }
-            let last_update = lobby.last_update()?;
+            let last_update = lobby.value().last_update()?;
             let duration = mono_now.duration_since(last_update);
             let system_time = sys_now.checked_sub(duration)?;
             let last_update_iso =
@@ -545,7 +515,7 @@ pub async fn check_sessions_handler(
 
 struct WsConnection {
     player_id: Option<Uuid>,
-    connection_id: Uuid,
+    lobby_key: Option<String>,
     recent_message_count: usize,
     count_reset_time: Instant,
 }
@@ -554,7 +524,7 @@ impl WsConnection {
     fn new() -> Self {
         Self {
             player_id: None,
-            connection_id: Uuid::new_v4(),
+            lobby_key: None,
             recent_message_count: 0,
             count_reset_time: Instant::now(),
         }
@@ -654,8 +624,8 @@ async fn handle_message(
                 }
             };
 
-            if let ClientMessage::Connect { player_id } = client_msg {
-                handle_connect(player_id, conn, state, text_tx).await;
+            if let ClientMessage::Connect { session_token } = client_msg {
+                handle_connect(session_token, conn, state, text_tx).await;
             } else if conn.player_id.is_some() {
                 dispatch_game_action(client_msg, conn, state).await;
             } else {
@@ -678,35 +648,68 @@ async fn handle_message(
 }
 
 async fn handle_connect(
-    player_id: Uuid,
+    session_token: String,
     conn: &mut WsConnection,
     state: &AppState,
     tx: &Sender<Utf8Bytes>,
 ) {
-    if let Some(mut c) = state.connections.get_mut(&player_id) {
-        let lobby_id = c.lobby_id;
-        conn.player_id = Some(player_id);
-        c.tx = Some(tx.clone());
-        c.connection_id = Some(conn.connection_id);
-        drop(c);
-
-        if let Some(mut engine) = state.lobbies.get_mut(&lobby_id) {
-            let event = GameEvent {
-                context: EventContext {
-                    sender_id: player_id,
-                    timestamp: Instant::now(),
-                },
-                action: GameAction::Connect,
-            };
-            engine.process_event(event);
+    let (code, pid_str) = match session_token.split_once(':') {
+        Some(parts) => parts,
+        None => {
+            send_error_to_client(
+                tx,
+                "Invalid session token format.".to_string(),
+                "connect_token_parse",
+            );
+            return;
         }
-    } else {
+    };
+
+    let player_id = match pid_str.parse::<Uuid>() {
+        Ok(id) => id,
+        Err(_) => {
+            send_error_to_client(
+                tx,
+                "Invalid player id in session token.".to_string(),
+                "connect_token_invalid",
+            );
+            return;
+        }
+    };
+
+    let mut engine = match state.lobbies.get_mut(code) {
+        Some(engine) => engine,
+        None => {
+            send_error_to_client(
+                tx,
+                "Lobby not found for session token.".to_string(),
+                "connect_lobby_not_found",
+            );
+            return;
+        }
+    };
+
+    if !engine.has_player(&player_id) {
         send_error_to_client(
             tx,
-            "ID not in lobby. Must join lobby first.".to_string(),
-            "connect_id_not_found",
+            "Player not found in lobby. Please join again.".to_string(),
+            "connect_player_not_found",
         );
+        return;
     }
+
+    engine.update_player_connection(player_id, tx.clone());
+    conn.player_id = Some(player_id);
+    conn.lobby_key = Some(code.to_string());
+
+    let event = GameEvent {
+        context: EventContext {
+            sender_id: player_id,
+            timestamp: Instant::now(),
+        },
+        action: GameAction::Connect,
+    };
+    engine.process_event(event);
 }
 
 async fn dispatch_game_action(msg: ClientMessage, conn: &WsConnection, state: &AppState) {
@@ -714,52 +717,52 @@ async fn dispatch_game_action(msg: ClientMessage, conn: &WsConnection, state: &A
         error!("dispatch_game_action called without player_id");
         return;
     };
-    if let Some(c) = state.connections.get(&player_id) {
-        let lobby_id = c.lobby_id;
-        drop(c);
-        if let Some(mut engine) = state.lobbies.get_mut(&lobby_id) {
-            let action = match msg {
-                ClientMessage::Leave => GameAction::Leave,
-                ClientMessage::Answer { answer } => GameAction::Answer { answer },
-                ClientMessage::AdminAction { action } => match action {
-                    AdminAction::StartGame => GameAction::StartGame,
-                    AdminAction::StartRound => GameAction::StartRound,
-                    AdminAction::EndRound => GameAction::EndRound,
-                    AdminAction::SkipQuestion => GameAction::SkipQuestion,
-                    AdminAction::KickPlayer { player_name } => GameAction::KickPlayer {
-                        player_name: Arc::from(player_name),
-                    },
-                    AdminAction::EndGame { reason } => GameAction::EndGame {
-                        reason: Arc::from(reason),
-                    },
-                    AdminAction::CloseGame { reason } => GameAction::CloseGame {
-                        reason: Arc::from(reason),
-                    },
+    let Some(lobby_key) = conn.lobby_key.as_ref() else {
+        error!("dispatch_game_action called without lobby_key");
+        return;
+    };
+
+    if let Some(mut engine) = state.lobbies.get_mut(lobby_key) {
+        let action = match msg {
+            ClientMessage::Leave => GameAction::Leave,
+            ClientMessage::Answer { answer } => GameAction::Answer { answer },
+            ClientMessage::AdminAction { action } => match action {
+                AdminAction::StartGame => GameAction::StartGame,
+                AdminAction::StartRound => GameAction::StartRound,
+                AdminAction::EndRound => GameAction::EndRound,
+                AdminAction::SkipQuestion => GameAction::SkipQuestion,
+                AdminAction::KickPlayer { player_name } => GameAction::KickPlayer {
+                    player_name: Arc::from(player_name),
                 },
-                _ => return, // Connect is handled separately
-            };
-            let event = GameEvent {
-                context: EventContext {
-                    sender_id: player_id,
-                    timestamp: Instant::now(),
+                AdminAction::EndGame { reason } => GameAction::EndGame {
+                    reason: Arc::from(reason),
                 },
-                action,
-            };
-            engine.process_event(event);
-        }
+                AdminAction::CloseGame { reason } => GameAction::CloseGame {
+                    reason: Arc::from(reason),
+                },
+            },
+            _ => return, // Connect is handled separately
+        };
+        let event = GameEvent {
+            context: EventContext {
+                sender_id: player_id,
+                timestamp: Instant::now(),
+            },
+            action,
+        };
+        engine.process_event(event);
     }
 }
 
 async fn handle_disconnect(conn: &WsConnection, state: &AppState) {
-    if let Some(player_id) = conn.player_id {
-        if let Some(mut c) = state.connections.get_mut(&player_id) {
-            if c.connection_id == Some(conn.connection_id) {
-                trace!("Disconnect: Nullifying tx for player {}", player_id);
-                c.tx = None;
-                c.connection_id = None;
-            } else {
-                trace!("Disconnect: Stale disconnect for player {}", player_id);
-            }
+    if let (Some(player_id), Some(lobby_key)) = (conn.player_id, conn.lobby_key.as_ref()) {
+        trace!(
+            "Disconnecting player {} from lobby {}",
+            player_id,
+            lobby_key
+        );
+        if let Some(mut engine) = state.lobbies.get_mut(lobby_key) {
+            engine.clear_player_connection(player_id);
         }
     }
 }
@@ -775,19 +778,15 @@ fn send_error_to_client(tx: &Sender<Utf8Bytes>, message: String, context: &str) 
     }
 }
 
-async fn cleanup_lobbies(
-    lobbies: Arc<DashMap<Uuid, GameEngine>>,
-    connections: Arc<DashMap<Uuid, Connection>>,
-    join_codes: Arc<DashMap<String, Uuid>>,
-) {
+async fn cleanup_lobbies(lobbies: Arc<DashMap<String, GameEngine>>) {
     let mut tick = tokio::time::interval(Duration::from_secs(60));
     loop {
         tick.tick().await;
 
-        let finished_lobby_ids: Vec<Uuid> = lobbies
+        let finished_lobby_ids: Vec<String> = lobbies
             .iter()
             .filter(|entry| entry.value().is_finished())
-            .map(|entry| *entry.key())
+            .map(|entry| entry.key().clone())
             .collect();
 
         for lobby_id in &finished_lobby_ids {
@@ -806,9 +805,6 @@ async fn cleanup_lobbies(
                 );
             }
         }
-
-        join_codes.retain(|_, v| !finished_lobby_ids.contains(v));
-        connections.retain(|_, v| !finished_lobby_ids.contains(&v.lobby_id));
     }
 }
 
@@ -856,14 +852,14 @@ mod tests {
         let res = create_lobby(&state, req).await.unwrap();
 
         assert_eq!(state.lobbies.len(), 1);
-        assert_eq!(state.join_codes.len(), 1);
-        assert!(state.join_codes.contains_key(&res.join_code));
-
-        let lobby_id = *state.join_codes.get(&res.join_code).unwrap();
-        let lobby = state.lobbies.get(&lobby_id).unwrap();
+        let lobby = state.lobbies.get(&res.join_code).unwrap();
 
         assert_eq!(lobby.get_admin_id(), res.player_id);
         assert_eq!(lobby.get_round_duration(), 120);
+        assert_eq!(
+            res.session_token,
+            format!("{}:{}", res.join_code, res.player_id)
+        );
     }
 
     #[tokio::test]
@@ -896,13 +892,13 @@ mod tests {
         };
         let join_res = join_lobby(&state, join_req).await.unwrap();
 
-        assert_eq!(state.connections.len(), 2); // Admin + Player1
-        assert!(state.connections.contains_key(&join_res.player_id));
-
-        let lobby_id = *state.join_codes.get(&join_code).unwrap();
-        let lobby = state.lobbies.get(&lobby_id).unwrap();
+        let lobby = state.lobbies.get(&join_code).unwrap();
         assert_eq!(lobby.get_player_count(), 2); // Admin + Player1
         assert!(lobby.has_player(&join_res.player_id));
+        assert_eq!(
+            join_res.session_token,
+            format!("{}:{}", join_code, join_res.player_id)
+        );
     }
 
     #[tokio::test]

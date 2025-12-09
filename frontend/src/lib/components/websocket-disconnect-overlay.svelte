@@ -40,9 +40,9 @@
 	let showManualReconnect = $derived(connectionState === ConnectionState.ERROR && !canReconnect());
 
 	async function handleManualReconnect() {
-		const playerId = gameStore.state.playerId;
-		if (playerId) {
-			await gameActions.joinGame(playerId);
+		const sessionToken = gameStore.state.sessionToken;
+		if (sessionToken) {
+			await gameActions.joinGame(sessionToken);
 		}
 	}
 </script>

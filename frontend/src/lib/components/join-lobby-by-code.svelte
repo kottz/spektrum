@@ -17,13 +17,10 @@
 	let isJoining = $state(false);
 	let hasAttemptedSubmit = $state(false);
 
-	// Use the prop directly for validation and submission
-	const lobbyCode = initialJoinCode;
-
 	const NAME_VALIDATION_REGEX = /^[\p{L}\p{N}\s._-]+$/u;
 	// Basic validation for the passed code (optional, API should handle robustly)
 	const LOBBY_CODE_REGEX = /^\d+$/;
-	const isValidLobbyCode = LOBBY_CODE_REGEX.test(lobbyCode);
+	const isValidLobbyCode = $derived(LOBBY_CODE_REGEX.test(initialJoinCode));
 
 	const hasNameValidationError = $derived(
 		playerName.length > 0 && (playerName.length > 16 || !NAME_VALIDATION_REGEX.test(playerName))
@@ -42,7 +39,7 @@
 		// Optional: Basic client-side check on the provided code
 		if (!isValidLobbyCode) {
 			notifications.add('Invalid lobby code format in URL.', 'destructive');
-			warn('Attempted join with invalid code format from URL:', lobbyCode);
+			warn('Attempted join with invalid code format from URL:', initialJoinCode);
 			return;
 		}
 
@@ -64,7 +61,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					// Use the prop directly
-					join_code: lobbyCode.trim(),
+					join_code: initialJoinCode.trim(),
 					name: playerName.trim()
 				})
 			});
@@ -77,7 +74,10 @@
 
 			gameStore.setPlayerName(playerName.trim());
 			const data = await response.json();
-			await gameActions.joinGame(data.player_id);
+			gameStore.setJoinCode(data.join_code);
+			gameStore.setSessionToken(data.session_token);
+			gameStore.setPlayerId(data.player_id);
+			await gameActions.joinGame(data.session_token);
 			goto('/');
 		} catch (error) {
 			let errorMessage = 'Failed to join lobby';
@@ -98,7 +98,7 @@
 	<CardContent class="grid gap-4">
 		<div class="text-center">
 			<p class="text-muted-foreground text-sm">You are joining lobby:</p>
-			<p class="text-2xl font-semibold tracking-wider">{lobbyCode}</p>
+			<p class="text-2xl font-semibold tracking-wider">{initialJoinCode}</p>
 		</div>
 		<div class="mt-2">
 			<Input

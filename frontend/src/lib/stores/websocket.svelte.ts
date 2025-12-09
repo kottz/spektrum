@@ -95,9 +95,9 @@ function createWebSocketStore() {
 			return;
 		}
 
-		const playerId = gameStore.state.playerId;
-		if (!playerId) {
-			warn('No player ID available for reconnection');
+		const sessionToken = gameStore.state.sessionToken;
+		if (!sessionToken) {
+			warn('No session token available for reconnection');
 			return;
 		}
 
@@ -122,7 +122,7 @@ function createWebSocketStore() {
 			info(
 				`Executing reconnect attempt ${state.reconnectAttempts}/${CONFIG.MAX_RECONNECT_ATTEMPTS}`
 			);
-			connect(playerId).catch(() => {
+			connect(sessionToken).catch(() => {
 				if (state.reconnectAttempts >= CONFIG.MAX_RECONNECT_ATTEMPTS) {
 					state.error = 'Failed to reconnect after multiple attempts';
 					state.connectionState = ConnectionState.ERROR;
@@ -178,9 +178,9 @@ function createWebSocketStore() {
 		state.nextAttemptTime = null;
 	}
 
-	async function connect(playerId: string): Promise<void> {
-		if (!playerId) {
-			throw new Error('Player ID is required');
+	async function connect(sessionToken: string): Promise<void> {
+		if (!sessionToken) {
+			throw new Error('Session token is required');
 		}
 
 		return new Promise((resolve, reject) => {
@@ -209,8 +209,8 @@ function createWebSocketStore() {
 				state.error = null;
 				state.reconnectAttempts = 0;
 
-				gameStore.setPlayerId(playerId);
-				send({ type: 'Connect', player_id: playerId });
+				gameStore.setSessionToken(sessionToken);
+				send({ type: 'Connect', session_token: sessionToken });
 				startHeartbeat();
 				resolve();
 			};

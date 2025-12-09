@@ -19,6 +19,7 @@ export interface SessionInfo {
 	playerName: string;
 	isAdmin: boolean;
 	joinCode: string;
+	sessionToken: string;
 }
 
 export function loadSession(): SessionInfo | null {
@@ -48,6 +49,7 @@ const initialState: GameState = {
 	phase: GamePhase.Lobby,
 	isAdmin: false,
 	joinCode: undefined,
+	sessionToken: undefined,
 	roundDuration: 60,
 	players: new Map(),
 	currentAnswers: []
@@ -72,6 +74,7 @@ function createGameStore() {
 		state.playerName = undefined;
 		state.isAdmin = false;
 		state.joinCode = undefined;
+		state.sessionToken = undefined;
 		// Reset state to initial values.
 		Object.assign(state, initialState);
 	}
@@ -82,7 +85,7 @@ function createGameStore() {
 	async function checkSessions(): Promise<(SessionInfo & { last_update: string }) | null> {
 		if (!browser) return null;
 		const session = loadSession();
-		if (!session) return null;
+		if (!session || !session.sessionToken) return null;
 
 		try {
 			const res = await fetch(`${PUBLIC_SPEKTRUM_SERVER_URL}/api/check-sessions`, {
@@ -160,7 +163,8 @@ function createGameStore() {
 					playerId: message.player_id,
 					playerName: message.name,
 					isAdmin: state.isAdmin,
-					joinCode: state.joinCode || ''
+					joinCode: state.joinCode || '',
+					sessionToken: state.sessionToken || ''
 				};
 				saveSession(session);
 				state.playerId = message.player_id;
@@ -320,6 +324,10 @@ function createGameStore() {
 		state.joinCode = joinCode;
 	}
 
+	function setSessionToken(sessionToken: string) {
+		state.sessionToken = sessionToken;
+	}
+
 	function setPlayerId(playerId: string) {
 		state.playerId = playerId;
 	}
@@ -340,6 +348,7 @@ function createGameStore() {
 		setAdmin,
 		setAdminTo,
 		setJoinCode,
+		setSessionToken,
 		setPlayerId,
 		setPlayerName,
 		cleanup,

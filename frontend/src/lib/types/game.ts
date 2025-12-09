@@ -56,6 +56,7 @@ export interface GameState {
 	playerId?: string;
 	playerName?: string;
 	joinCode?: string;
+	sessionToken?: string;
 	isAdmin: boolean;
 	roundDuration: number;
 	players: Map<string, PlayerState>;
@@ -163,7 +164,7 @@ export type GameUpdate =
 export type ClientMessage =
 	| {
 			type: 'Connect';
-			player_id: string;
+			session_token: string;
 	  }
 	| {
 			type: 'Leave';

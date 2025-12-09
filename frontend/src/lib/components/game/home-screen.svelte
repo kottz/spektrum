@@ -32,13 +32,14 @@
 	});
 
 	function reconnectToSession() {
-		if (!currentSession) return;
+		if (!currentSession || !currentSession.sessionToken) return;
 
 		gameStore.setPlayerId(currentSession.playerId);
 		gameStore.setAdminTo(currentSession.isAdmin);
 		gameStore.setPlayerName(currentSession.playerName);
 		gameStore.setJoinCode(currentSession.joinCode);
-		gameActions.joinGame(currentSession.playerId);
+		gameStore.setSessionToken(currentSession.sessionToken);
+		gameActions.joinGame(currentSession.sessionToken);
 	}
 
 	function handleNewLobby() {

@@ -21,6 +21,6 @@
 		overflow: hidden;
 	}
 	.stream-window-container {
-		/* Additional stream-specific styles if needed */
+		min-height: 100vh;
 	}
 </style>

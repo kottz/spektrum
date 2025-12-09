@@ -1,16 +1,15 @@
 use crate::db::QuestionSet;
 use crate::question::GameQuestion;
-use crate::server::Connection;
 use crate::uuid::Uuid;
 use axum::extract::ws::Utf8Bytes;
 use bytes::{BufMut, BytesMut};
-use dashmap::DashMap;
 use lazy_static::lazy_static;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use tokio::sync::mpsc::Sender;
 use tracing::{error, warn};
 
 lazy_static! {
@@ -191,6 +190,8 @@ pub struct PlayerState {
     pub has_answered: bool,
     pub answer: Option<Arc<str>>,
     pub consecutive_misses: u32,
+    #[serde(skip)]
+    pub tx: Option<Sender<Utf8Bytes>>,
 }
 
 impl PlayerState {
@@ -202,13 +203,13 @@ impl PlayerState {
             has_answered: false,
             answer: None,
             consecutive_misses: 0,
+            tx: None,
         }
     }
 }
 
 pub struct GameEngine {
     state: GameState,
-    connections: Arc<DashMap<Uuid, Connection>>,
 }
 
 impl GameEngine {
@@ -217,7 +218,6 @@ impl GameEngine {
         questions: Arc<Vec<GameQuestion>>,
         set: Option<&QuestionSet>,
         round_duration: u64,
-        connections: Arc<DashMap<Uuid, Connection>>,
     ) -> Self {
         let indices = match set {
             None => {
@@ -256,7 +256,18 @@ impl GameEngine {
                 current_question_index: 0,
                 last_lobby_message: Some(Instant::now()),
             },
-            connections,
+        }
+    }
+
+    pub fn update_player_connection(&mut self, player_id: Uuid, tx: Sender<Utf8Bytes>) {
+        if let Some(player) = self.state.players.get_mut(&player_id) {
+            player.tx = Some(tx);
+        }
+    }
+
+    pub fn clear_player_connection(&mut self, player_id: Uuid) {
+        if let Some(player) = self.state.players.get_mut(&player_id) {
+            player.tx = None;
         }
     }
 
@@ -339,7 +350,6 @@ impl GameEngine {
         self.state.players.len()
     }
 
-    #[cfg(test)]
     pub fn has_player(&self, player_id: &Uuid) -> bool {
         self.state.players.contains_key(player_id)
     }
@@ -372,42 +382,34 @@ impl GameEngine {
 
         match recipients {
             Recipients::Single(target) => {
-                if self.state.players.contains_key(&target) {
-                    if let Some(conn) = self.connections.get(&target) {
-                        if let Some(ref tx) = conn.tx {
-                            let _ = tx.try_send(payload.clone());
-                        }
+                if let Some(player) = self.state.players.get(&target) {
+                    if let Some(tx) = &player.tx {
+                        let _ = tx.try_send(payload.clone());
                     }
                 }
             }
             Recipients::Multiple(targets) => {
                 for target in targets {
-                    if self.state.players.contains_key(&target) {
-                        if let Some(conn) = self.connections.get(&target) {
-                            if let Some(ref tx) = conn.tx {
-                                let _ = tx.try_send(payload.clone());
-                            }
+                    if let Some(player) = self.state.players.get(&target) {
+                        if let Some(tx) = &player.tx {
+                            let _ = tx.try_send(payload.clone());
                         }
                     }
                 }
             }
             Recipients::_AllExcept(exclusions) => {
-                for player_id in self.state.players.keys() {
+                for (player_id, player) in self.state.players.iter() {
                     if !exclusions.contains(player_id) {
-                        if let Some(conn) = self.connections.get(player_id) {
-                            if let Some(ref tx) = conn.tx {
-                                let _ = tx.try_send(payload.clone());
-                            }
+                        if let Some(tx) = &player.tx {
+                            let _ = tx.try_send(payload.clone());
                         }
                     }
                 }
             }
             Recipients::All => {
-                for player_id in self.state.players.keys() {
-                    if let Some(conn) = self.connections.get(player_id) {
-                        if let Some(ref tx) = conn.tx {
-                            let _ = tx.try_send(payload.clone());
-                        }
+                for player in self.state.players.values() {
+                    if let Some(tx) = &player.tx {
+                        let _ = tx.try_send(payload.clone());
                     }
                 }
             }
@@ -870,14 +872,6 @@ impl GameEngine {
             // Now we can safely remove the player
             self.state.players.remove(&target_player_id);
 
-            // Remove the connection entry (important for cleanup and preventing re-connect issues)
-            if self.connections.remove(&target_player_id).is_none() {
-                warn!(
-                    "Attempted to remove connection for kicked player {} but it was already gone.",
-                    target_player_id
-                );
-            }
-
             // Notify remaining players
             let remaining_players: Vec<Uuid> = self.state.players.keys().cloned().collect();
             self.push_update(
@@ -1074,42 +1068,30 @@ mod tests {
     fn setup_test_game() -> (GameEngine, Uuid) {
         let admin_id = Uuid::new_v4();
         let questions = Arc::new(create_test_questions());
-        let connections = Arc::new(DashMap::new());
-
-        // Create a connection for admin
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
-        connections.insert(
-            admin_id,
-            Connection {
-                lobby_id: Uuid::new_v4(),
-                tx: Some(tx),
-                connection_id: None,
-            },
-        );
+        let mut engine = GameEngine::new(admin_id, questions, None, 30);
+        engine.add_player(admin_id, "Admin".into()).unwrap();
+        engine.update_player_connection(admin_id, tx);
 
-        (
-            GameEngine::new(admin_id, questions, None, 30, connections),
-            admin_id,
-        )
+        (engine, admin_id)
     }
 
     fn add_test_player(engine: &mut GameEngine, name: &str) -> Uuid {
         let player_id = Uuid::new_v4();
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
-        engine.connections.insert(
-            player_id,
-            Connection {
-                lobby_id: engine
-                    .connections
-                    .get(&engine.state.admin_id)
-                    .unwrap()
-                    .lobby_id,
-                tx: Some(tx),
-                connection_id: None,
-            },
-        );
         engine.add_player(player_id, name.to_string()).unwrap();
+        engine.update_player_connection(player_id, tx);
         player_id
+    }
+
+    fn add_test_player_with_channel(
+        engine: &mut GameEngine,
+        name: &str,
+    ) -> (Uuid, Receiver<Utf8Bytes>) {
+        let player_id = add_test_player(engine, name);
+        let (tx, rx) = tokio::sync::mpsc::channel(128);
+        engine.update_player_connection(player_id, tx);
+        (player_id, rx)
     }
 
     #[test]
@@ -1199,7 +1181,6 @@ mod tests {
             },
         });
         assert_eq!(engine.state.phase, GamePhase::GameOver);
-        engine.connections.clear();
     }
 
     #[test]
@@ -1263,7 +1244,6 @@ mod tests {
                 action: GameAction::EndRound,
             });
         }
-        engine.connections.clear();
     }
 
     #[tokio::test]
@@ -1332,7 +1312,6 @@ mod tests {
             },
         });
         assert!(!engine.state.players[&late_player_id].has_answered);
-        engine.connections.clear();
     }
 
     #[test]
@@ -1364,7 +1343,6 @@ mod tests {
         let upcoming = engine.get_upcoming_questions(3);
         assert!(!upcoming.is_empty());
         assert!(upcoming.len() <= 3);
-        engine.connections.clear();
         engine.process_event(GameEvent {
             context: EventContext {
                 sender_id: admin_id,
@@ -1374,7 +1352,6 @@ mod tests {
                 reason: Arc::from("Test close"),
             },
         });
-        engine.connections.clear();
     }
 
     // #[tokio::test]
@@ -1476,22 +1453,11 @@ mod tests {
         let player_initial_state = engine.state.players.get(&player_id).unwrap().clone();
 
         // Simulate disconnection (remove the connection)
-        engine.connections.remove(&player_id);
+        engine.clear_player_connection(player_id);
 
         // Re-add the player with a new connection
         let (player_tx, mut player_rx) = tokio::sync::mpsc::channel(128);
-        engine.connections.insert(
-            player_id,
-            Connection {
-                lobby_id: engine
-                    .connections
-                    .get(&engine.state.admin_id)
-                    .unwrap()
-                    .lobby_id,
-                tx: Some(player_tx),
-                connection_id: None,
-            },
-        );
+        engine.update_player_connection(player_id, player_tx);
 
         // Reconnect
         engine.process_event(GameEvent {
@@ -1544,7 +1510,6 @@ mod tests {
             other => panic!("Expected StateDelta, got {:?}", other),
         }
 
-        engine.connections.clear();
         player_rx.close();
     }
 
@@ -1634,7 +1599,6 @@ mod tests {
             },
             action: GameAction::Leave,
         });
-        engine.connections.clear();
     }
 
     #[test]
@@ -1669,7 +1633,6 @@ mod tests {
                 reason: Arc::from("Test close"),
             },
         });
-        engine.connections.clear();
     }
 
     #[test]
@@ -1687,14 +1650,12 @@ mod tests {
 
         // Test last_update
         assert_eq!(engine.last_update(), engine.state.last_lobby_message);
-        engine.connections.clear();
     }
 
     #[test]
     fn test_question_set_handling() {
         let admin_id = Uuid::new_v4();
         let questions = Arc::new(create_test_questions());
-        let connections = Arc::new(DashMap::new());
 
         let question_set = QuestionSet {
             id: 1,
@@ -1702,39 +1663,19 @@ mod tests {
             name: Arc::from("Test Set"),
         };
 
-        let (tx, _rx) = tokio::sync::mpsc::channel(128);
-        connections.insert(
-            admin_id,
-            Connection {
-                lobby_id: Uuid::new_v4(),
-                tx: Some(tx),
-                connection_id: None,
-            },
-        );
-
-        let engine = GameEngine::new(admin_id, questions, Some(&question_set), 30, connections);
+        let mut engine = GameEngine::new(admin_id, questions, Some(&question_set), 30);
+        engine.add_player(admin_id, "Admin".into()).unwrap();
 
         assert_eq!(engine.state.shuffled_question_indices.len(), 2);
-        engine.connections.clear();
     }
 
     #[tokio::test]
     async fn test_admin_reconnect() {
         let (mut engine, admin_id) = setup_test_game();
 
-        // Add the admin to players
-        engine.add_player(admin_id, "Admin".to_string()).unwrap();
-
         // Create channel to capture admin messages
         let (admin_tx, mut admin_rx) = tokio::sync::mpsc::channel(128);
-        engine.connections.insert(
-            admin_id,
-            Connection {
-                lobby_id: Uuid::new_v4(),
-                tx: Some(admin_tx),
-                connection_id: None,
-            },
-        );
+        engine.update_player_connection(admin_id, admin_tx);
 
         // First test: admin reconnects in lobby, should get upcoming questions
         engine.process_event(GameEvent {
@@ -1768,14 +1709,7 @@ mod tests {
 
         // Create new channel for clean message capture
         let (admin_tx2, mut admin_rx2) = tokio::sync::mpsc::channel(128);
-        engine.connections.insert(
-            admin_id,
-            Connection {
-                lobby_id: Uuid::new_v4(),
-                tx: Some(admin_tx2),
-                connection_id: None,
-            },
-        );
+        engine.update_player_connection(admin_id, admin_tx2);
 
         engine.process_event(GameEvent {
             context: EventContext {
@@ -1808,59 +1742,16 @@ mod tests {
             }
             other => panic!("Expected AdminInfo message, got {:?}", other),
         }
-        engine.connections.clear();
         admin_rx2.close();
         admin_rx.close();
     }
 
     #[tokio::test]
     async fn test_admin_leave_message() {
-        // Setup game with initial admin
-        let admin_id = Uuid::new_v4();
-        let admin_lobby_id = Uuid::new_v4();
-        let connections = Arc::new(DashMap::new());
-        let (admin_tx, _admin_rx) = tokio::sync::mpsc::channel(128);
-
-        // Add admin connection
-        connections.insert(
-            admin_id,
-            Connection {
-                lobby_id: admin_lobby_id,
-                tx: Some(admin_tx),
-                connection_id: None,
-            },
-        );
-
-        // Create game engine
-        let mut engine = GameEngine::new(
-            admin_id,
-            Arc::new(create_test_questions()),
-            None,
-            30,
-            connections,
-        );
-
-        // IMPORTANT: Add admin to players first
-        engine.add_player(admin_id, "Admin".to_string()).unwrap();
+        let (mut engine, admin_id) = setup_test_game();
 
         // Add a player
-        let player_id = Uuid::new_v4();
-        let (player_tx, mut player_rx) = tokio::sync::mpsc::channel(128);
-
-        // Add player connection with same lobby id as admin
-        engine.connections.insert(
-            player_id,
-            Connection {
-                lobby_id: admin_lobby_id,
-                tx: Some(player_tx),
-                connection_id: None,
-            },
-        );
-
-        // Add player to game
-        engine
-            .add_player(player_id, "TestPlayer".to_string())
-            .unwrap();
+        let (player_id, mut player_rx) = add_test_player_with_channel(&mut engine, "TestPlayer");
 
         // Admin leaves
         engine.process_event(GameEvent {
@@ -1884,7 +1775,6 @@ mod tests {
 
         // State verifications
         assert!(!engine.state.players.contains_key(&admin_id));
-        engine.connections.clear();
     }
 
     #[test]
@@ -1933,7 +1823,6 @@ mod tests {
                 answer: "test".to_string(),
             },
         });
-        engine.connections.clear();
     }
 
     #[tokio::test]
@@ -1977,7 +1866,6 @@ mod tests {
         assert!(engine.state.current_question.is_none());
         // 4. No alternatives should be set
         assert!(engine.state.current_alternatives.is_empty());
-        engine.connections.clear();
     }
 
     #[tokio::test]
@@ -2029,7 +1917,6 @@ mod tests {
             engine.state.current_alternatives.is_empty(),
             "Alternatives should be cleared"
         );
-        engine.connections.clear();
     }
 
     #[tokio::test]
@@ -2085,7 +1972,6 @@ mod tests {
             engine.state.current_alternatives, initial_alternatives,
             "Alternatives should not change"
         );
-        engine.connections.clear();
     }
 
     #[test]
@@ -2148,12 +2034,15 @@ mod tests {
         );
 
         // Test connection removal cases
-        let initial_connection_count = engine.connections.len();
-        engine.connections.remove(&player_id);
-        assert_eq!(
-            engine.connections.len(),
-            initial_connection_count - 1,
-            "Connection count should decrease"
+        engine.clear_player_connection(player_id);
+        assert!(
+            engine
+                .state
+                .players
+                .get(&player_id)
+                .and_then(|p| p.tx.clone())
+                .is_none(),
+            "Connection should be cleared"
         );
 
         // Test message sending to removed connection
@@ -2208,48 +2097,23 @@ mod tests {
             "Game state should not change after failed broadcast"
         );
 
-        let final_connection_count = engine.connections.len();
-        engine.connections.clear();
-        assert_eq!(
-            engine.connections.len(),
-            0,
-            "All connections should be cleared"
-        );
         assert!(
-            final_connection_count > 0,
-            "Should have had connections before clearing"
+            engine
+                .state
+                .players
+                .get(&player_id)
+                .and_then(|p| p.tx.clone())
+                .is_none(),
+            "Connection should remain cleared"
         );
-        engine.connections.clear();
     }
 
     #[tokio::test]
     async fn test_regular_player_connect() {
-        // Setup
-        let admin_id = Uuid::new_v4();
-        let admin_lobby_id = Uuid::new_v4();
-        let connections = Arc::new(DashMap::new());
-
-        // Create game engine with admin
-        let mut engine = GameEngine::new(
-            admin_id,
-            Arc::new(create_test_questions()),
-            None,
-            30,
-            connections,
-        );
+        let (mut engine, _admin_id) = setup_test_game();
 
         // Add a player with message capture
-        let player_id = Uuid::new_v4();
-        let (player_tx, mut player_rx) = tokio::sync::mpsc::channel(128);
-        engine.connections.insert(
-            player_id,
-            Connection {
-                lobby_id: admin_lobby_id,
-                tx: Some(player_tx),
-                connection_id: None,
-            },
-        );
-        engine.add_player(player_id, "Player1".to_string()).unwrap();
+        let (player_id, mut player_rx) = add_test_player_with_channel(&mut engine, "Player1");
 
         // Test connect
         engine.process_event(GameEvent {
@@ -2285,42 +2149,19 @@ mod tests {
             }
             other => panic!("Expected StateDelta, got {:?}", other),
         }
-        engine.connections.clear();
         player_rx.close();
     }
 
     #[tokio::test]
     async fn test_admin_connect_during_question() {
-        // Setup
-        let admin_id = Uuid::new_v4();
-        let admin_lobby_id = Uuid::new_v4();
-        let connections = Arc::new(DashMap::new());
+        let (mut engine, admin_id) = setup_test_game();
         let (admin_tx, mut admin_rx) = tokio::sync::mpsc::channel(128);
-
-        // Create game engine with admin
-        let mut engine = GameEngine::new(
-            admin_id,
-            Arc::new(create_test_questions()),
-            None,
-            30,
-            connections.clone(),
-        );
-        engine.add_player(admin_id, "Admin".to_string()).unwrap();
+        engine.update_player_connection(admin_id, admin_tx);
 
         // Set up question phase
         engine.state.phase = GamePhase::Question;
         let question = engine.state.all_questions[0].clone();
         engine.state.current_question = Some(question.clone());
-
-        // Add admin connection and test connect
-        connections.insert(
-            admin_id,
-            Connection {
-                lobby_id: admin_lobby_id,
-                tx: Some(admin_tx),
-                connection_id: None,
-            },
-        );
 
         engine.process_event(GameEvent {
             context: EventContext {
@@ -2361,7 +2202,6 @@ mod tests {
             }
             other => panic!("Expected AdminInfo, got {:?}", other),
         }
-        engine.connections.clear();
         admin_rx.close();
     }
 
@@ -2419,44 +2259,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_admin_leave() {
-        // Setup game with channels
-        let admin_id = Uuid::new_v4();
-        let admin_lobby_id = Uuid::new_v4();
-        let connections = Arc::new(DashMap::new());
-        let (admin_tx, _admin_rx) = tokio::sync::mpsc::channel(128);
-
-        connections.insert(
-            admin_id,
-            Connection {
-                lobby_id: admin_lobby_id,
-                tx: Some(admin_tx),
-                connection_id: None,
-            },
-        );
-
-        let mut engine = GameEngine::new(
-            admin_id,
-            Arc::new(create_test_questions()),
-            None,
-            30,
-            connections,
-        );
-
-        // Add admin to players
-        engine.add_player(admin_id, "Admin".to_string()).unwrap();
+        let (mut engine, admin_id) = setup_test_game();
 
         // Add a player and capture their messages
-        let player_id = Uuid::new_v4();
-        let (player_tx, mut player_rx) = tokio::sync::mpsc::channel(128);
-        engine.connections.insert(
-            player_id,
-            Connection {
-                lobby_id: admin_lobby_id,
-                tx: Some(player_tx),
-                connection_id: None,
-            },
-        );
-        engine.add_player(player_id, "Player1".to_string()).unwrap();
+        let (player_id, mut player_rx) = add_test_player_with_channel(&mut engine, "Player1");
 
         // Test admin disconnect
         engine.process_event(GameEvent {
@@ -2480,37 +2286,15 @@ mod tests {
             }
             other => panic!("Expected GameClosed message, got {:?}", other),
         }
-        engine.connections.clear();
         player_rx.close();
     }
 
     #[tokio::test]
     async fn test_start_game_twice() {
-        // Create admin information
-        let admin_id = Uuid::new_v4();
-        let admin_lobby_id = Uuid::new_v4();
-        let connections = Arc::new(DashMap::new());
+        let (mut engine, admin_id) = setup_test_game();
         // Create channel to capture admin messages
         let (admin_tx, mut admin_rx) = tokio::sync::mpsc::channel(128);
-        // Add admin connection
-        connections.insert(
-            admin_id,
-            Connection {
-                lobby_id: admin_lobby_id,
-                tx: Some(admin_tx),
-                connection_id: None,
-            },
-        );
-        // Create game engine directly
-        let mut engine = GameEngine::new(
-            admin_id,
-            Arc::new(create_test_questions()),
-            None,
-            30,
-            connections,
-        );
-        // Add admin to players
-        engine.add_player(admin_id, "Admin".to_string()).unwrap();
+        engine.update_player_connection(admin_id, admin_tx);
         // First start - should succeed
         engine.process_event(GameEvent {
             context: EventContext {
@@ -2590,7 +2374,6 @@ mod tests {
         }
         // Verify game is still in Score phase
         assert_eq!(engine.state.phase, GamePhase::Score);
-        engine.connections.clear();
     }
 
     #[test]
@@ -2600,7 +2383,6 @@ mod tests {
         // Test case where last_lobby_message is None
         engine.state.last_lobby_message = None;
         assert!(!engine.is_finished());
-        engine.connections.clear();
     }
 
     #[test]

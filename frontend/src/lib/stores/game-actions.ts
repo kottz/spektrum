@@ -9,11 +9,11 @@ import { removeSession } from '$lib/stores/game.svelte';
 
 class GameActions {
 	/**
-	 * Join an existing lobby with a given player ID.
+	 * Join an existing lobby with a given session token.
 	 */
-	public async joinGame(playerId: string) {
+	public async joinGame(sessionToken: string) {
 		try {
-			await websocketStore.connect(playerId);
+			await websocketStore.connect(sessionToken);
 		} catch (error) {
 			warn('Failed to join game:', error);
 			throw error;
@@ -38,10 +38,12 @@ class GameActions {
 			// IMPORTANT: Remove the previously saved session for this lobby/player.
 			removeSession();
 
-			await websocketStore.connect(data.player_id);
+			gameStore.setAdmin();
+			gameStore.setJoinCode(data.join_code);
+			gameStore.setSessionToken(data.session_token);
+			gameStore.setPlayerId(data.player_id);
 
-			gameStore.state.isAdmin = true;
-			gameStore.state.joinCode = data.join_code;
+			await websocketStore.connect(data.session_token);
 
 			return data.join_code;
 		} catch (error) {
@@ -53,10 +55,10 @@ class GameActions {
 	/**
 	 * Attempt to reconnect using any credentials stored in localStorage.
 	 */
-	public async reconnectGame(playerId: string) {
+	public async reconnectGame(sessionToken: string) {
 		try {
 			info('Attempting to reconnect...');
-			await websocketStore.connect(playerId);
+			await websocketStore.connect(sessionToken);
 		} catch (error) {
 			warn('Failed to reconnect:', error);
 		}

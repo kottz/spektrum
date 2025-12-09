@@ -66,7 +66,10 @@
 
 			gameStore.setPlayerName(playerName.trim());
 			const data = await response.json();
-			await gameActions.joinGame(data.player_id);
+			gameStore.setJoinCode(data.join_code);
+			gameStore.setSessionToken(data.session_token);
+			gameStore.setPlayerId(data.player_id);
+			await gameActions.joinGame(data.session_token);
 		} catch (error) {
 			let errorMessage = 'Failed to join lobby';
 			if (error instanceof Error) {

@@ -106,7 +106,7 @@ impl GameplayMetrics {
 struct TestPlayer {
     name: String,
     join_code: String,
-    player_id: Uuid,
+    session_token: String,
     ws_write: futures_util::stream::SplitSink<WsStream, Message>,
     ws_read: futures_util::stream::SplitStream<WsStream>,
     rng: rand::rngs::StdRng,
@@ -114,8 +114,8 @@ struct TestPlayer {
 
 impl TestPlayer {
     /// Create a new test player.
-    /// First it calls the HTTP endpoint `/api/join-lobby` with its name and join code to obtain a player ID.
-    /// Then it connects to the WebSocket endpoint and sends a `Connect { player_id }` message.
+    /// First it calls the HTTP endpoint `/api/join-lobby` with its name and join code to obtain a session token.
+    /// Then it connects to the WebSocket endpoint and sends a `Connect { session_token }` message.
     async fn new(name: String, join_code: String, host: &str) -> Result<Self, TestError> {
         // Join lobby via HTTP POST
         let join_url = format!("http://{}/api/join-lobby", host);
@@ -129,10 +129,10 @@ impl TestPlayer {
             .send()
             .await?;
         let join_response: serde_json::Value = res.json().await?;
-        let player_id_str = join_response["player_id"]
+        let session_token = join_response["session_token"]
             .as_str()
-            .ok_or_else(|| TestError::Other("Missing player_id in join response".to_string()))?;
-        let player_id = Uuid::parse_str(player_id_str)?;
+            .ok_or_else(|| TestError::Other("Missing session_token in join response".to_string()))?
+            .to_string();
         // Connect via WebSocket
         let ws_url = format!("ws://{}/ws", host);
         let (ws_stream, _) = connect_async(&ws_url).await?;
@@ -140,13 +140,13 @@ impl TestPlayer {
         // Send the new protocol connect message
         let connect_msg = json!({
             "type": "Connect",
-            "player_id": player_id.to_string(),
+            "session_token": session_token,
         });
         write.send(Message::Text(connect_msg.to_string())).await?;
         Ok(Self {
             name,
             join_code,
-            player_id,
+            session_token,
             ws_write: write,
             ws_read: read,
             rng: rand::rngs::StdRng::from_entropy(),
@@ -203,7 +203,7 @@ impl TestPlayer {
 /// A test admin joins a lobby (using the HTTP create endpoint) and then opens a WebSocket connection
 /// to send admin actions.
 struct TestAdmin {
-    player_id: Uuid,
+    session_token: String,
     ws_write: futures_util::stream::SplitSink<WsStream, Message>,
     ws_read: futures_util::stream::SplitStream<WsStream>,
 }
@@ -226,22 +226,21 @@ impl TestAdmin {
                 TestError::Other("Missing join_code in create lobby response".to_string())
             })?
             .to_string();
-        let admin_id_str = create_response["player_id"].as_str().ok_or_else(|| {
-            TestError::Other("Missing player_id in create lobby response".to_string())
+        let session_token = create_response["session_token"].as_str().ok_or_else(|| {
+            TestError::Other("Missing session_token in create lobby response".to_string())
         })?;
-        let admin_id = Uuid::parse_str(admin_id_str)?;
         // Connect via WebSocket
         let ws_url = format!("ws://{}/ws", host);
         let (ws_stream, _) = connect_async(&ws_url).await?;
         let (mut write, read) = ws_stream.split();
         let connect_msg = json!({
             "type": "Connect",
-            "player_id": admin_id.to_string(),
+            "session_token": session_token,
         });
         write.send(Message::Text(connect_msg.to_string())).await?;
         Ok((
             Self {
-                player_id: admin_id,
+                session_token: session_token.to_string(),
                 ws_write: write,
                 ws_read: read,
             },
@@ -566,8 +565,11 @@ async fn run_single_game(
         .await?;
     let lobby_data: serde_json::Value = res.json().await?;
     let join_code = lobby_data["join_code"].as_str().unwrap().to_string();
-    // Admin's player_id is returned in the create response.
-    let _admin_id = Uuid::parse_str(lobby_data["player_id"].as_str().unwrap())?;
+    // Admin's session_token is returned in the create response (kept for completeness).
+    let _admin_session = lobby_data["session_token"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string();
 
     // Create admin via TestAdmin::new (which also connects via WS)
     let (mut admin, _) = TestAdmin::new(host).await?;
