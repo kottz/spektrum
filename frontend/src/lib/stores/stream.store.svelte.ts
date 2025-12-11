@@ -13,6 +13,7 @@ interface StreamGameState {
 	joinCode?: string;
 	players: Map<string, { name: string; score: number }>;
 	currentAnswers: PlayerAnswer[];
+	roundDuration: number;
 	currentQuestion?: {
 		type: string;
 		text?: string;
@@ -32,6 +33,7 @@ const initialStreamGameState: StreamGameState = {
 	phase: GamePhase.Lobby,
 	players: new Map(),
 	currentAnswers: [],
+	roundDuration: 60,
 	currentQuestion: undefined,
 	realtimeScoreboard: []
 };
@@ -146,6 +148,7 @@ function createStreamStore() {
 		switch (message.type) {
 			case 'Connected': {
 				if ('player_id' in message && 'name' in message) {
+					state.gameState.roundDuration = message.round_duration ?? state.gameState.roundDuration;
 					state.gameState.players.set(message.name, {
 						name: message.name,
 						score: 0
@@ -176,7 +179,10 @@ function createStreamStore() {
 								roundScore: 0
 							})
 						);
-						streamTimerStore.startTimer(60);
+						streamTimerStore.startTimer(
+							state.gameState.roundDuration,
+							message.question_time_remaining_ms
+						);
 					} else {
 						streamTimerStore.stopTimer();
 					}
@@ -207,6 +213,26 @@ function createStreamStore() {
 							})
 							.sort((a, b) => b.score - a.score);
 					}
+				}
+
+				if (message.answered_player_names) {
+					const roundScoreMap = new Map(message.round_scores ?? []);
+					const now = Date.now();
+					state.gameState.currentAnswers = message.answered_player_names.map((name) => ({
+						name,
+						score: roundScoreMap.get(name) ?? 0,
+						timestamp: now
+					}));
+				}
+
+				if (
+					state.gameState.phase === GamePhase.Question &&
+					message.question_time_remaining_ms !== undefined
+				) {
+					streamTimerStore.startTimer(
+						state.gameState.roundDuration,
+						message.question_time_remaining_ms
+					);
 				}
 				break;
 			}

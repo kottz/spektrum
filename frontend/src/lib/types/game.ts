@@ -73,6 +73,8 @@ export interface GameState {
 	error?: string;
 	upcomingQuestions?: GameQuestion[];
 	currentAnswers: PlayerAnswer[];
+	questionTimeRemainingMs?: number;
+	answeredPlayerNames?: string[];
 }
 
 /**
@@ -117,6 +119,8 @@ export type GameUpdate =
 			question_type?: string;
 			question_text?: string;
 			alternatives?: string[];
+			question_time_remaining_ms?: number;
+			answered_player_names?: string[];
 			scoreboard?: [string, number][];
 			round_scores?: [string, number][];
 			consecutive_misses?: [string, number][];

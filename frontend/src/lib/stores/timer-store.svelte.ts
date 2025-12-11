@@ -4,17 +4,25 @@ import { browser } from '$app/environment';
 function createTimerStore() {
 	const state = $state({
 		timeLeft: 60,
-		answeredTimeSnapshot: null as number | null
+		answeredTimeSnapshot: null as number | null,
+		roundDuration: 60
 	});
 
 	let interval: number | undefined;
 	let endTime: number = 0;
-	const roundDuration = 60;
 
-	function startTimer() {
+	function setRoundDuration(duration: number) {
+		state.roundDuration = duration;
+	}
+
+	function startTimer(totalSeconds?: number, remainingMs?: number) {
 		if (browser) {
-			endTime = Date.now() + roundDuration * 1000;
-			state.timeLeft = roundDuration;
+			const durationSeconds = totalSeconds ?? state.roundDuration;
+			const startRemainingMs =
+				remainingMs !== undefined ? Math.max(0, remainingMs) : durationSeconds * 1000;
+
+			endTime = Date.now() + startRemainingMs;
+			state.timeLeft = Math.round((startRemainingMs / 1000) * 10) / 10;
 			state.answeredTimeSnapshot = null;
 
 			if (interval) {
@@ -59,7 +67,7 @@ function createTimerStore() {
 			clearInterval(interval);
 			interval = undefined;
 		}
-		state.timeLeft = roundDuration;
+		state.timeLeft = state.roundDuration;
 		state.answeredTimeSnapshot = null;
 	}
 
@@ -67,6 +75,7 @@ function createTimerStore() {
 		get state() {
 			return state;
 		},
+		setRoundDuration,
 		startTimer,
 		stopTimer,
 		resetTimer

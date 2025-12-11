@@ -170,6 +170,7 @@ function createGameStore() {
 				state.playerId = message.player_id;
 				state.playerName = message.name;
 				state.roundDuration = message.round_duration;
+				timerStore.setRoundDuration(message.round_duration);
 				break;
 			}
 
@@ -209,7 +210,24 @@ function createGameStore() {
 							}
 						});
 					}
+					if (message.answered_player_names) {
+						message.answered_player_names.forEach((name) => {
+							const player = newPlayers.get(name);
+							if (player) {
+								player.hasAnswered = true;
+							}
+						});
+					}
 					state.players = newPlayers;
+				}
+
+				// Update answered flags on existing players even if no scoreboard was provided.
+				if (message.answered_player_names && !message.scoreboard) {
+					const updated = new Map(state.players);
+					updated.forEach((player, name) => {
+						player.hasAnswered = message.answered_player_names!.includes(name);
+					});
+					state.players = updated;
 				}
 
 				// Update the current question if alternatives are provided.
@@ -223,16 +241,49 @@ function createGameStore() {
 					state.currentQuestion = undefined;
 				}
 
+				if (message.question_time_remaining_ms !== undefined) {
+					state.questionTimeRemainingMs = message.question_time_remaining_ms;
+				}
+
+				// Sync answered players and currentAnswers from snapshot.
+				if (message.answered_player_names) {
+					state.answeredPlayerNames = message.answered_player_names;
+					const roundScoreMap = new Map(message.round_scores ?? []);
+					const existingAnswers = new Map(
+						state.currentAnswers.map((ans) => [ans.name, ans] as const)
+					);
+					const now = Date.now();
+					state.currentAnswers = message.answered_player_names.map((name) => {
+						const existing = existingAnswers.get(name);
+						if (existing) return existing;
+						return {
+							name,
+							score: roundScoreMap.get(name) ?? 0,
+							timestamp: now
+						};
+					});
+				}
+
 				// Perform phase-specific actions.
 				const currentPhase = state.phase;
 				if (previousPhase !== currentPhase) {
 					if (currentPhase === GamePhase.Question) {
-						timerStore.startTimer();
+						timerStore.startTimer(state.roundDuration, message.question_time_remaining_ms);
 					}
 					if (currentPhase === GamePhase.Score) {
+						timerStore.stopTimer(true);
 						state.currentAnswers = [];
 					}
 				}
+
+				// If we are in the Question phase and got a time snapshot, (re)start the timer with the remaining time.
+				if (
+					state.phase === GamePhase.Question &&
+					message.question_time_remaining_ms !== undefined
+				) {
+					timerStore.startTimer(state.roundDuration, message.question_time_remaining_ms);
+				}
+
 				break;
 			}
 

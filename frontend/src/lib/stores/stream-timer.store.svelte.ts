@@ -11,14 +11,15 @@ function createStreamTimerStore() {
 	let interval: number | undefined;
 	let endTime: number = 0;
 
-	function startTimer(duration: number = 60) {
+	function startTimer(duration: number = 60, remainingMs?: number) {
 		if (!browser) return;
 
 		info('StreamTimer: Starting timer', { duration });
 
 		state.roundDuration = duration;
-		endTime = Date.now() + duration * 1000;
-		state.timeLeft = duration;
+		const startRemainingMs = remainingMs !== undefined ? Math.max(0, remainingMs) : duration * 1000;
+		endTime = Date.now() + startRemainingMs;
+		state.timeLeft = Math.round((startRemainingMs / 1000) * 10) / 10;
 		state.isActive = true;
 
 		if (interval) {

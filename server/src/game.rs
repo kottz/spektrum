@@ -98,6 +98,8 @@ pub enum GameUpdate {
         question_type: Option<Arc<str>>,
         question_text: Option<Arc<str>>,
         alternatives: Option<Vec<Arc<str>>>,
+        question_time_remaining_ms: Option<u64>,
+        answered_player_names: Option<Vec<Arc<str>>>,
         scoreboard: Option<Vec<(Arc<str>, i32)>>,
         round_scores: Option<Vec<(Arc<str>, i32)>>,
         consecutive_misses: Option<Vec<(Arc<str>, u32)>>,
@@ -347,6 +349,22 @@ impl GameEngine {
             .collect()
     }
 
+    fn get_question_time_remaining_ms(&self, now: Instant) -> Option<u64> {
+        let start = self.state.round_start_time?;
+        let elapsed_ms = now.duration_since(start).as_millis();
+        let total_ms = self.state.round_duration as u128 * 1000;
+        Some(total_ms.saturating_sub(elapsed_ms) as u64)
+    }
+
+    fn get_answered_player_names(&self) -> Vec<Arc<str>> {
+        self.state
+            .players
+            .iter()
+            .filter(|(_, p)| p.has_answered)
+            .map(|(_, p)| p.name.clone())
+            .collect()
+    }
+
     #[cfg(test)]
     pub fn get_admin_id(&self) -> Uuid {
         self.state.admin_id
@@ -493,6 +511,16 @@ impl GameEngine {
                     .as_ref()
                     .and_then(|q| q.question_text.clone()),
                 alternatives: Some(self.state.current_alternatives.clone()),
+                question_time_remaining_ms: if self.state.phase == GamePhase::Question {
+                    self.get_question_time_remaining_ms(ctx.timestamp)
+                } else {
+                    None
+                },
+                answered_player_names: if self.state.phase == GamePhase::Question {
+                    Some(self.get_answered_player_names())
+                } else {
+                    None
+                },
                 scoreboard: Some(self.get_scoreboard()),
                 round_scores: Some(self.get_round_scores()),
                 consecutive_misses: Some(self.get_consecutive_misses()),
@@ -516,6 +544,8 @@ impl GameEngine {
                         question_type: None,
                         question_text: None,
                         alternatives: None,
+                        question_time_remaining_ms: None,
+                        answered_player_names: None,
                         scoreboard: Some(self.get_scoreboard()),
                         round_scores: None,
                         consecutive_misses: None,
@@ -674,6 +704,8 @@ impl GameEngine {
                 question_type: None,
                 question_text: None,
                 alternatives: None,
+                question_time_remaining_ms: None,
+                answered_player_names: None,
                 scoreboard: Some(self.get_scoreboard()),
                 round_scores: Some(self.get_round_scores()),
                 consecutive_misses: Some(self.get_consecutive_misses()),
@@ -739,6 +771,8 @@ impl GameEngine {
                         question_type: Some(Arc::from(question.get_question_type())),
                         question_text: question.question_text.clone(),
                         alternatives: Some(self.state.current_alternatives.clone()),
+                        question_time_remaining_ms: Some(self.state.round_duration * 1000),
+                        answered_player_names: Some(Vec::new()),
                         scoreboard: Some(self.get_scoreboard()),
                         round_scores: Some(self.get_round_scores()),
                         consecutive_misses: Some(self.get_consecutive_misses()),
@@ -795,6 +829,8 @@ impl GameEngine {
                 question_type: None,
                 question_text: None,
                 alternatives: None,
+                question_time_remaining_ms: None,
+                answered_player_names: None,
                 scoreboard: Some(self.get_scoreboard()),
                 round_scores: Some(self.get_round_scores()),
                 consecutive_misses: Some(self.get_consecutive_misses()),
@@ -900,6 +936,8 @@ impl GameEngine {
                     question_type: None,
                     question_text: None,
                     alternatives: None,
+                    question_time_remaining_ms: None,
+                    answered_player_names: None,
                     scoreboard: Some(self.get_scoreboard()), // Update scoreboard
                     round_scores: None, // Round scores might be irrelevant now, maybe send? Optional.
                     consecutive_misses: Some(self.get_consecutive_misses()),
@@ -2230,6 +2268,92 @@ mod tests {
             other => panic!("Expected AdminInfo, got {:?}", other),
         }
         admin_rx.close();
+    }
+
+    #[tokio::test]
+    async fn test_player_reconnect_during_question_receives_timer_and_answers() {
+        let (mut engine, admin_id) = setup_test_game();
+        let player1_id = add_test_player(&mut engine, "Player1");
+        let (player2_id, mut player2_rx) = add_test_player_with_channel(&mut engine, "Player2");
+
+        let start_time = Instant::now();
+
+        // Move into question phase
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: start_time,
+            },
+            action: GameAction::StartGame,
+        });
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: admin_id,
+                timestamp: start_time,
+            },
+            action: GameAction::StartRound,
+        });
+
+        // Player 1 answers so they appear in the answered list
+        let answer = engine.state.current_alternatives[0].clone();
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: player1_id,
+                timestamp: start_time + Duration::from_secs(3),
+            },
+            action: GameAction::Answer {
+                answer: answer.to_string(),
+            },
+        });
+
+        // Simulate player 2 reconnecting mid-question
+        let initial_conn_id = engine.state.players[&player2_id]
+            .connection_id
+            .expect("connection id should be set");
+        engine.clear_player_connection(player2_id, initial_conn_id);
+        let (reconnect_tx, mut reconnect_rx) = tokio::sync::mpsc::channel(128);
+        let reconnect_conn_id = Uuid::new_v4();
+        engine.update_player_connection(player2_id, reconnect_tx, reconnect_conn_id);
+
+        engine.process_event(GameEvent {
+            context: EventContext {
+                sender_id: player2_id,
+                timestamp: start_time + Duration::from_secs(10),
+            },
+            action: GameAction::Connect,
+        });
+
+        // Skip Connected message
+        let _ = receive_and_deserialize::<GameUpdate>(&mut reconnect_rx).await;
+
+        match receive_and_deserialize(&mut reconnect_rx).await {
+            GameUpdate::StateDelta {
+                question_time_remaining_ms,
+                answered_player_names,
+                ..
+            } => {
+                let remaining = question_time_remaining_ms
+                    .expect("question_time_remaining_ms should be present");
+                assert!(
+                    remaining <= 30_000 && remaining >= 19_000,
+                    "remaining time should be within expected window, got {}",
+                    remaining
+                );
+                let answered = answered_player_names
+                    .expect("answered_player_names should be present in question");
+                assert!(
+                    answered.contains(&engine.state.players[&player1_id].name),
+                    "answered list should include player1"
+                );
+                assert!(
+                    !answered.contains(&engine.state.players[&player2_id].name),
+                    "answered list should not include reconnecting player who has not answered"
+                );
+            }
+            other => panic!("Expected StateDelta, got {:?}", other),
+        }
+        player2_rx.close();
+        reconnect_rx.close();
     }
 
     #[tokio::test]
