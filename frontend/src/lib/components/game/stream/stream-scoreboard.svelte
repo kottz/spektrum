@@ -14,6 +14,8 @@
 
 	let currentPage = $state(1);
 	const totalPlayers = $derived(allSortedPlayers.length);
+	const answeredCount = $derived(currentAnswersList.length);
+	const denominator = $derived(Math.max(answeredCount, totalPlayers));
 	const maxPages = $derived(Math.ceil(totalPlayers / PAGE_SIZE));
 
 	// The subset of players to be rendered in the DOM.
@@ -26,8 +28,7 @@
 	const playingQuestion = $derived(gameState?.phase === GamePhase.Question);
 
 	// Answer progress calculations
-	const answeredCount = $derived(currentAnswersList.length);
-	const answerProgress = $derived(totalPlayers > 0 ? (answeredCount / totalPlayers) * 100 : 0);
+	const answerProgress = $derived(denominator > 0 ? (answeredCount / denominator) * 100 : 0);
 
 	// Create a map of players who have answered with their answer details
 	const playerAnswers = $derived(
@@ -87,7 +88,7 @@
 		{:else if playingQuestion}
 			<div class="flex items-center justify-between">
 				<Progress value={answerProgress} class="bg-muted h-6 flex-1" />
-				<span class="ml-4 text-4xl">{answeredCount}/{totalPlayers}</span>
+				<span class="ml-4 text-4xl">{answeredCount}/{denominator}</span>
 			</div>
 		{:else}
 			<h2 class="text-xl font-bold">

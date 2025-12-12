@@ -16,7 +16,8 @@
 
 	const totalPlayerCount = $derived(allPlayersList.length);
 	const answeredCount = $derived(currentAnswersList.length);
-	const progress = $derived(totalPlayerCount > 0 ? (answeredCount / totalPlayerCount) * 100 : 0);
+	const denominator = $derived(Math.max(answeredCount, totalPlayerCount));
+	const progress = $derived(denominator > 0 ? (answeredCount / denominator) * 100 : 0);
 
 	const allSortedDisplayItems = $derived(() => {
 		const answeredPlayerNames = new Set(currentAnswersList.map((ans) => ans.name));
@@ -47,7 +48,7 @@
 <div class="space-y-2">
 	<div class="flex justify-between text-sm">
 		<span class="text-muted-foreground">Answers</span>
-		<span>{answeredCount}/{totalPlayerCount}</span>
+		<span>{answeredCount}/{denominator}</span>
 	</div>
 	<Progress value={progress} class="bg-muted h-2" />
 	<ScrollArea orientation="horizontal" class="min-h-[32px] whitespace-nowrap">
