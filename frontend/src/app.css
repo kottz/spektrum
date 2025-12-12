@@ -148,11 +148,14 @@
 	background: transparent;
 }
 
-::selection,
+::selection {
+	background: var(--primary);
+	color: var(--primary-foreground);
+}
+
 mark {
-	background: hsl(var(--accent));
-	color: hsl(var(--accent-foreground));
-	width: max-content;
+	background: var(--accent);
+	color: var(--accent-foreground);
 }
 
 .metallic-gold {
