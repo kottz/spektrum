@@ -49,7 +49,7 @@
 	}
 </script>
 
-<div class="flex min-h-screen flex-col items-center justify-center gap-8 py-8">
+<div class="flex min-h-screen flex-col items-center justify-center gap-8 px-3 py-8">
 	<div class="flex items-center gap-3">
 		<span class="text-2xl">🎵</span>
 		<h1 class="text-3xl font-bold">{PUBLIC_TITLE}</h1>
