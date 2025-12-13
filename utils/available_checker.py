@@ -1,4 +1,7 @@
 import json
+import time
+import io
+import gzip
 import subprocess
 import os
 import sys
@@ -36,7 +39,7 @@ def send_failure_notification(stage: str, error: Exception):
     send_telegram_message(message)
 
 
-def load_input_json() -> Dict[str, Any]:
+def load_input_json():
     if INPUT_JSON_PATH and INPUT_JSON_URL:
         raise RuntimeError(
             "Both INPUT_JSON_PATH and INPUT_JSON_URL are set. Choose only one."
@@ -53,9 +56,34 @@ def load_input_json() -> Dict[str, Any]:
         if not INPUT_JSON_URL.startswith("https://"):
             raise ValueError("INPUT_JSON_URL must start with https://")
 
-        response = requests.get(INPUT_JSON_URL, timeout=20)
+        cache_buster = int(time.time())
+        url = f"{INPUT_JSON_URL}?cb={cache_buster}"
+
+        headers = {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Accept-Encoding": "gzip",
+        }
+
+        response = requests.get(url, headers=headers, timeout=20)
         response.raise_for_status()
-        return response.json()
+
+        content_type = response.headers.get("Content-Type", "")
+        content_encoding = response.headers.get("Content-Encoding", "")
+
+        raw_bytes = response.content
+
+        # Case 1: Server already decompressed it
+        if "application/json" in content_type and not content_encoding:
+            return json.loads(raw_bytes.decode("utf-8"))
+
+        # Case 2: Explicit gzip (json.gz)
+        try:
+            with gzip.GzipFile(fileobj=io.BytesIO(raw_bytes)) as gz:
+                decompressed = gz.read().decode("utf-8")
+                return json.loads(decompressed)
+        except OSError as e:
+            raise RuntimeError("Failed to decompress gzipped JSON") from e
 
     raise RuntimeError(
         "No input source configured. Set INPUT_JSON_PATH or INPUT_JSON_URL."
