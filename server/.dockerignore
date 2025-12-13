@@ -10,3 +10,7 @@ Dockerfile
 README.md
 *.pem
 config.toml
+data/
+config.dev.sh
+config.toml*
+env.example
