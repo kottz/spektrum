@@ -331,7 +331,7 @@ pub async fn join_lobby(
             debug!(
                 target: "lock",
                 lobby_key = %join_code,
-                duration_ms = dt.as_millis() as u64,
+                duration_us = dt.as_micros() as u64,
                 "lobby_lock_acquired"
             );
             engine
@@ -565,40 +565,54 @@ struct WsConnection {
     recent_message_count: usize,
     count_reset_time: Instant,
     connection_id: Uuid,
+    /// The connection-level tracing span, stored for explicit field recording
+    conn_span: Span,
 }
 
 impl WsConnection {
-    fn new() -> Self {
+    fn new(upgrade_request_id: Option<u64>) -> Self {
+        let connection_id = Uuid::new_v4();
+        let conn_span = info_span!(
+            target: "ws",
+            "ws_connection",
+            connection_id = %connection_id,
+            upgrade_request_id = upgrade_request_id,
+            player_id = tracing::field::Empty,
+            lobby_key = tracing::field::Empty,
+        );
         Self {
             player_id: None,
             lobby_key: None,
             recent_message_count: 0,
             count_reset_time: Instant::now(),
-            connection_id: Uuid::new_v4(),
+            connection_id,
+            conn_span,
         }
     }
 }
 
 pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_socket(socket, state))
+    // Generate a unique ID for this upgrade request that links HTTP → WebSocket
+    // This will appear in both the HTTP request span and the WS connection span
+    let upgrade_request_id = fastrand::u64(..);
+    debug!(
+        target: "ws",
+        upgrade_request_id = upgrade_request_id,
+        "WebSocket upgrade requested"
+    );
+
+    ws.on_upgrade(move |socket| handle_socket(socket, state, Some(upgrade_request_id)))
 }
 
-async fn handle_socket(socket: WebSocket, state: AppState) {
+async fn handle_socket(socket: WebSocket, state: AppState, upgrade_request_id: Option<u64>) {
     let (ws_tx, mut ws_rx) = socket.split();
 
     let (text_tx, text_rx) = channel::<Utf8Bytes>(128);
     let (bin_tx, bin_rx) = channel::<Bytes>(128);
 
-    let mut conn = WsConnection::new();
-
-    // Create connection span with fields that will be filled in later
-    let conn_span = info_span!(
-        target: "ws",
-        "ws_connection",
-        connection_id = %conn.connection_id,
-        player_id = tracing::field::Empty,
-        lobby_key = tracing::field::Empty,
-    );
+    let mut conn = WsConnection::new(upgrade_request_id);
+    // Clone the span for use in .instrument() - conn retains ownership for field recording
+    let conn_span = conn.conn_span.clone();
 
     let send_task = spawn_sender_task(ws_tx, text_rx, bin_rx, conn.connection_id);
 
@@ -803,7 +817,7 @@ async fn handle_connect(
             debug!(
                 target: "lock",
                 lobby_key = %code,
-                duration_ms = dt.as_millis() as u64,
+                duration_us = dt.as_micros() as u64,
                 "lobby_lock_acquired"
             );
             engine
@@ -832,9 +846,10 @@ async fn handle_connect(
     conn.player_id = Some(player_id);
     conn.lobby_key = Some(code.to_string());
 
-    // Record player_id and lobby_key in the parent connection span
-    Span::current().record("player_id", tracing::field::display(&player_id));
-    Span::current().record("lobby_key", code);
+    // Record player_id and lobby_key in the connection span (explicit, future-proof)
+    conn.conn_span
+        .record("player_id", tracing::field::display(&player_id));
+    conn.conn_span.record("lobby_key", code);
 
     debug!(
         target: "ws",
@@ -875,7 +890,7 @@ async fn dispatch_game_action(msg: ClientMessage, conn: &WsConnection, state: &A
     debug!(
         target: "lock",
         %lobby_key,
-        duration_ms = dt.as_millis() as u64,
+        duration_us = dt.as_micros() as u64,
         "lobby_lock_acquired"
     );
 
@@ -933,7 +948,7 @@ async fn handle_disconnect(conn: &WsConnection, state: &AppState) {
             debug!(
                 target: "lock",
                 %lobby_key,
-                duration_ms = dt.as_millis() as u64,
+                duration_us = dt.as_micros() as u64,
                 "lobby_lock_acquired"
             );
             engine.clear_player_connection(player_id, conn.connection_id);
