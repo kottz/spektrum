@@ -90,7 +90,7 @@
 					if (questionType === 'character') {
 						styles.push('bg-green-500/50');
 					} else if (questionType === 'text') {
-						styles.push('bg-green-500/20'); // Subtle tint for text
+						styles.push('!bg-green-500/20'); // Subtle tint for text
 					}
 				} else {
 					styles.push('ring-red-500');

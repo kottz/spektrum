@@ -73,7 +73,7 @@
 			if (questionType === 'character' || questionType === 'default') {
 				styles.push('bg-green-500/50');
 			} else if (questionType === 'text') {
-				styles.push('bg-green-500/20'); // Subtle green background for text
+				styles.push('!bg-green-500/20'); // Subtle tint for text
 			}
 			// Color type gets ring only, background is set by color itself or inline style
 		}
