@@ -4,6 +4,7 @@ import sys
 import time
 import requests
 
+
 def check_youtube_video(video_id):
     url = f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"
     try:
@@ -11,6 +12,7 @@ def check_youtube_video(video_id):
         return response.status_code == 200
     except requests.RequestException:
         return False
+
 
 def main():
     if len(sys.argv) != 2:
@@ -30,13 +32,15 @@ def main():
         available = check_youtube_video(video_id)
         status = "✅ Available" if available else "❌ Unavailable"
         print(f"{status} | {title} - {artist} ({video_id})")
-        results.append({
-            "id": entry.get("id"),
-            "title": title,
-            "artist": artist,
-            "youtube_id": video_id,
-            "available": available
-        })
+        results.append(
+            {
+                "id": entry.get("id"),
+                "title": title,
+                "artist": artist,
+                "youtube_id": video_id,
+                "available": available,
+            }
+        )
         time.sleep(1)  # 1 request per second rate limit
 
     # Save results to a file
@@ -46,6 +50,6 @@ def main():
 
     print(f"\nResults saved to {output_file}")
 
+
 if __name__ == "__main__":
     main()
-
