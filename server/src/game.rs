@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::Sender;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, error, instrument, warn};
 
 lazy_static! {
     pub(crate) static ref NAME_VALIDATION_REGEX: Regex =
@@ -465,7 +465,7 @@ impl GameEngine {
     }
 
     #[instrument(
-        level = "info",
+        level = "debug",
         skip(self, event),
         fields(
             sender_id = %event.context.sender_id,
@@ -741,7 +741,7 @@ impl GameEngine {
         }
 
         self.state.phase = GamePhase::Score;
-        info!(from = ?from_phase, to = ?self.state.phase, "Phase transition");
+        debug!(from = ?from_phase, to = ?self.state.phase, "Phase transition");
         self.push_update(
             Recipients::All,
             GameUpdate::StateDelta {
@@ -819,7 +819,7 @@ impl GameEngine {
                 };
                 self.state.phase = GamePhase::Question;
                 self.state.round_start_time = Some(ctx.timestamp);
-                info!(
+                debug!(
                     from = ?GamePhase::Score,
                     to = ?GamePhase::Question,
                     question_index = self.state.current_question_index,
@@ -888,7 +888,7 @@ impl GameEngine {
         self.state.current_alternatives.clear();
         self.state.correct_answers = None;
         self.state.phase = GamePhase::Score;
-        info!(from = ?GamePhase::Question, to = ?GamePhase::Score, "Phase transition");
+        debug!(from = ?GamePhase::Question, to = ?GamePhase::Score, "Phase transition");
         self.push_update(
             Recipients::All,
             GameUpdate::StateDelta {
@@ -1028,7 +1028,7 @@ impl GameEngine {
     fn handle_end_game(&mut self, _ctx: EventContext, reason: Arc<str>) {
         let from_phase = self.state.phase;
         self.state.phase = GamePhase::GameOver;
-        info!(from = ?from_phase, to = ?GamePhase::GameOver, "Phase transition");
+        debug!(from = ?from_phase, to = ?GamePhase::GameOver, "Phase transition");
         self.push_update(
             Recipients::All,
             GameUpdate::GameOver {
@@ -1041,7 +1041,7 @@ impl GameEngine {
     fn handle_close_game(&mut self, _ctx: EventContext, reason: Arc<str>) {
         let from_phase = self.state.phase;
         self.state.phase = GamePhase::GameClosed;
-        info!(from = ?from_phase, to = ?GamePhase::GameClosed, "Phase transition");
+        debug!(from = ?from_phase, to = ?GamePhase::GameClosed, "Phase transition");
         self.push_update(Recipients::All, GameUpdate::GameClosed { reason });
     }
 
