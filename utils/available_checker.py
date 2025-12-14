@@ -6,13 +6,32 @@ import subprocess
 import os
 import sys
 import requests
-from typing import Dict, Any
+from pathlib import Path
 
 YT_BASE_URL = "https://www.youtube.com/watch?v="
-INPUT_JSON_PATH = os.environ.get("INPUT_JSON_PATH")
-INPUT_JSON_URL = os.environ.get("INPUT_JSON_URL")
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+
+
+def get_config(name: str, *, required: bool = False) -> str | None:
+    cred_dir = os.environ.get("CREDENTIALS_DIRECTORY")
+    if cred_dir:
+        p = Path(cred_dir) / name
+        if p.exists():
+            return p.read_text().strip()
+
+    value = os.environ.get(name)
+    if value:
+        return value
+
+    if required:
+        raise RuntimeError(f"Missing required config value: {name}")
+
+    return None
+
+
+INPUT_JSON_PATH = get_config("INPUT_JSON_PATH")
+INPUT_JSON_URL = get_config("INPUT_JSON_URL")
+TELEGRAM_BOT_TOKEN = get_config("TELEGRAM_BOT_TOKEN", required=True)
+TELEGRAM_CHAT_ID = get_config("TELEGRAM_CHAT_ID", required=True)
 
 
 def send_telegram_message(text: str):
@@ -70,14 +89,11 @@ def load_input_json():
 
         content_type = response.headers.get("Content-Type", "")
         content_encoding = response.headers.get("Content-Encoding", "")
-
         raw_bytes = response.content
 
-        # Case 1: Server already decompressed it
         if "application/json" in content_type and not content_encoding:
             return json.loads(raw_bytes.decode("utf-8"))
 
-        # Case 2: Explicit gzip (json.gz)
         try:
             with gzip.GzipFile(fileobj=io.BytesIO(raw_bytes)) as gz:
                 decompressed = gz.read().decode("utf-8")
@@ -178,5 +194,4 @@ if __name__ == "__main__":
     try:
         main()
     except Exception:
-        # Exception already reported to Telegram
         sys.exit(1)
