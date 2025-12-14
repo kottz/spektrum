@@ -19,8 +19,8 @@ use tokio::time::Duration as TokioDuration;
 use tower_governor::{GovernorLayer, governor::GovernorConfigBuilder};
 use tower_http::compression::{CompressionLayer, CompressionLevel};
 use tower_http::cors::CorsLayer;
-use tower_http::trace::{DefaultMakeSpan, TraceLayer};
-use tracing::{info, warn};
+use tower_http::trace::TraceLayer;
+use tracing::{Instrument, info, info_span, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod db;
@@ -68,9 +68,19 @@ struct AppConfig {
     admin_password: Vec<String>,
 }
 
+/// Initialize tracing with configurable filters.
+///
+/// Default filter: `spektrum=info,tower_http=info` (limits dependency noise)
+///
+/// Example RUST_LOG filters:
+/// - `RUST_LOG=spektrum=info` - default application logs
+/// - `RUST_LOG=spektrum=info,lock=debug` - enable lock contention debugging
+/// - `RUST_LOG=spektrum=info,ws=trace` - verbose WebSocket debugging
+/// - `RUST_LOG=spektrum=info,storage=debug` - storage/S3 operation debugging
+/// - `RUST_LOG=spektrum=info,maintenance=debug` - cleanup task debugging
 fn init_tracing(json_logging: bool) {
-    let env_filter =
-        tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into());
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| "spektrum=info,tower_http=info".into());
     let registry = tracing_subscriber::registry().with(env_filter);
 
     if json_logging {
@@ -157,18 +167,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let governor_limiter = governor_conf.limiter().clone();
-    tokio::spawn(async move {
-        loop {
-            tokio::time::sleep(TokioDuration::from_secs(60)).await;
-            if governor_limiter.len() > 1_000_000 {
-                warn!(
-                    "Rate limiting storage size is large: {}",
-                    governor_limiter.len()
-                );
+    tokio::spawn(
+        async move {
+            loop {
+                tokio::time::sleep(TokioDuration::from_secs(60)).await;
+                if governor_limiter.len() > 1_000_000 {
+                    warn!(
+                        target: "maintenance",
+                        rate_limiter_size = governor_limiter.len(),
+                        "Rate limiting storage size is large"
+                    );
+                }
+                governor_limiter.retain_recent();
             }
-            governor_limiter.retain_recent();
         }
-    });
+        .instrument(info_span!(target: "maintenance", "rate_limit_cleanup")),
+    );
 
     let question_store = QuestionStore::new(&app_config.storage).await?;
     let state = AppState::new(question_store, app_config.admin_password);
@@ -187,8 +201,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .with_state(state)
         .layer(
-            TraceLayer::new_for_http()
-                .make_span_with(DefaultMakeSpan::default().include_headers(true)),
+            TraceLayer::new_for_http().make_span_with(|request: &http::Request<_>| {
+                let request_id = fastrand::u64(..);
+                tracing::info_span!(
+                    "http_request",
+                    request_id = %request_id,
+                    method = %request.method(),
+                    uri = %request.uri(),
+                )
+            }),
         )
         .layer(
             CompressionLayer::new()

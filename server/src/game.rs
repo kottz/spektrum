@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::Sender;
-use tracing::{error, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 lazy_static! {
     pub(crate) static ref NAME_VALIDATION_REGEX: Regex =
@@ -160,6 +160,24 @@ pub enum GameAction {
     KickPlayer { player_name: Arc<str> },
     EndGame { reason: Arc<str> },
     CloseGame { reason: Arc<str> },
+}
+
+impl GameAction {
+    /// Returns the variant name without any payload data (safe for logging)
+    pub fn kind(&self) -> &'static str {
+        match self {
+            GameAction::Connect => "Connect",
+            GameAction::Leave => "Leave",
+            GameAction::Answer { .. } => "Answer",
+            GameAction::StartGame => "StartGame",
+            GameAction::StartRound => "StartRound",
+            GameAction::EndRound => "EndRound",
+            GameAction::SkipQuestion => "SkipQuestion",
+            GameAction::KickPlayer { .. } => "KickPlayer",
+            GameAction::EndGame { .. } => "EndGame",
+            GameAction::CloseGame { .. } => "CloseGame",
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -446,6 +464,15 @@ impl GameEngine {
         }
     }
 
+    #[instrument(
+        level = "info",
+        skip(self, event),
+        fields(
+            sender_id = %event.context.sender_id,
+            action = %event.action.kind(),
+            phase = ?self.state.phase,
+        )
+    )]
     pub fn process_event(&mut self, event: GameEvent) {
         self.state.last_lobby_message = Some(Instant::now());
         // Check admin-only actions:
@@ -457,6 +484,11 @@ impl GameEngine {
             | GameAction::EndGame { .. }
             | GameAction::CloseGame { .. } => {
                 if event.context.sender_id != self.state.admin_id {
+                    debug!(
+                        sender_id = %event.context.sender_id,
+                        action = %event.action.kind(),
+                        "Admin action denied: sender is not admin"
+                    );
                     self.push_update(
                         Recipients::Single(event.context.sender_id),
                         GameUpdate::Error {
@@ -605,6 +637,11 @@ impl GameEngine {
 
     fn handle_answer(&mut self, ctx: EventContext, answer: String) {
         if self.state.phase != GamePhase::Question {
+            debug!(
+                sender_id = %ctx.sender_id,
+                current_phase = ?self.state.phase,
+                "Answer rejected: wrong phase"
+            );
             self.push_update(
                 Recipients::Single(ctx.sender_id),
                 GameUpdate::Error {
@@ -682,6 +719,11 @@ impl GameEngine {
 
     fn handle_start_game(&mut self, ctx: EventContext) {
         if self.state.phase != GamePhase::Lobby && self.state.phase != GamePhase::GameOver {
+            debug!(
+                sender_id = %ctx.sender_id,
+                current_phase = ?self.state.phase,
+                "StartGame rejected: wrong phase"
+            );
             self.push_update(
                 Recipients::Single(ctx.sender_id),
                 GameUpdate::Error {
@@ -691,12 +733,15 @@ impl GameEngine {
             return;
         }
 
+        let from_phase = self.state.phase;
+
         // if we came from a finished game, zero everything out
         if self.state.phase == GamePhase::GameOver {
             self.reset_for_new_game();
         }
 
         self.state.phase = GamePhase::Score;
+        info!(from = ?from_phase, to = ?self.state.phase, "Phase transition");
         self.push_update(
             Recipients::All,
             GameUpdate::StateDelta {
@@ -725,6 +770,11 @@ impl GameEngine {
 
     fn handle_start_round(&mut self, ctx: EventContext) {
         if self.state.phase != GamePhase::Score {
+            debug!(
+                sender_id = %ctx.sender_id,
+                current_phase = ?self.state.phase,
+                "StartRound rejected: wrong phase"
+            );
             self.push_update(
                 Recipients::Single(ctx.sender_id),
                 GameUpdate::Error {
@@ -734,6 +784,11 @@ impl GameEngine {
             return;
         }
         if self.state.current_question_index >= self.state.all_questions.len() {
+            debug!(
+                question_index = self.state.current_question_index,
+                total_questions = self.state.all_questions.len(),
+                "StartRound rejected: no more questions"
+            );
             self.push_update(
                 Recipients::Single(self.state.admin_id),
                 GameUpdate::Error {
@@ -764,6 +819,12 @@ impl GameEngine {
                 };
                 self.state.phase = GamePhase::Question;
                 self.state.round_start_time = Some(ctx.timestamp);
+                info!(
+                    from = ?GamePhase::Score,
+                    to = ?GamePhase::Question,
+                    question_index = self.state.current_question_index,
+                    "Phase transition"
+                );
                 self.push_update(
                     Recipients::All,
                     GameUpdate::StateDelta {
@@ -799,6 +860,11 @@ impl GameEngine {
 
     fn handle_end_round(&mut self, ctx: EventContext) {
         if self.state.phase != GamePhase::Question {
+            debug!(
+                sender_id = %ctx.sender_id,
+                current_phase = ?self.state.phase,
+                "EndRound rejected: wrong phase"
+            );
             self.push_update(
                 Recipients::Single(ctx.sender_id),
                 GameUpdate::Error {
@@ -822,6 +888,7 @@ impl GameEngine {
         self.state.current_alternatives.clear();
         self.state.correct_answers = None;
         self.state.phase = GamePhase::Score;
+        info!(from = ?GamePhase::Question, to = ?GamePhase::Score, "Phase transition");
         self.push_update(
             Recipients::All,
             GameUpdate::StateDelta {
@@ -959,7 +1026,9 @@ impl GameEngine {
     }
 
     fn handle_end_game(&mut self, _ctx: EventContext, reason: Arc<str>) {
+        let from_phase = self.state.phase;
         self.state.phase = GamePhase::GameOver;
+        info!(from = ?from_phase, to = ?GamePhase::GameOver, "Phase transition");
         self.push_update(
             Recipients::All,
             GameUpdate::GameOver {
@@ -970,7 +1039,9 @@ impl GameEngine {
     }
 
     fn handle_close_game(&mut self, _ctx: EventContext, reason: Arc<str>) {
+        let from_phase = self.state.phase;
         self.state.phase = GamePhase::GameClosed;
+        info!(from = ?from_phase, to = ?GamePhase::GameClosed, "Phase transition");
         self.push_update(Recipients::All, GameUpdate::GameClosed { reason });
     }
 

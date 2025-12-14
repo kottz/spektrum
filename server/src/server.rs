@@ -26,7 +26,7 @@ use std::time::{Duration, Instant, SystemTime};
 use thiserror::Error;
 use tokio::sync::mpsc::{Receiver, Sender, channel};
 use tokio::task::JoinHandle;
-use tracing::{error, info, trace};
+use tracing::{Instrument, Span, debug, error, info, info_span, trace};
 
 const HEARTBEAT_BYTE: u8 = 0x42;
 
@@ -117,6 +117,18 @@ pub enum ClientMessage {
     AdminAction { action: AdminAction },
 }
 
+impl ClientMessage {
+    /// Returns the variant name without any payload data (safe for logging)
+    pub fn kind(&self) -> &'static str {
+        match self {
+            ClientMessage::Connect { .. } => "Connect",
+            ClientMessage::Leave => "Leave",
+            ClientMessage::Answer { .. } => "Answer",
+            ClientMessage::AdminAction { .. } => "AdminAction",
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
 pub enum AdminAction {
@@ -127,6 +139,21 @@ pub enum AdminAction {
     KickPlayer { player_name: String },
     EndGame { reason: String },
     CloseGame { reason: String },
+}
+
+impl AdminAction {
+    /// Returns the variant name without any payload data (safe for logging)
+    pub fn kind(&self) -> &'static str {
+        match self {
+            AdminAction::StartGame => "StartGame",
+            AdminAction::StartRound => "StartRound",
+            AdminAction::EndRound => "EndRound",
+            AdminAction::SkipQuestion => "SkipQuestion",
+            AdminAction::KickPlayer { .. } => "KickPlayer",
+            AdminAction::EndGame { .. } => "EndGame",
+            AdminAction::CloseGame { .. } => "CloseGame",
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -146,9 +173,12 @@ impl AppState {
 
         {
             let lobbies = state.lobbies.clone();
-            tokio::spawn(async move {
-                cleanup_lobbies(lobbies).await;
-            });
+            tokio::spawn(
+                async move {
+                    cleanup_lobbies(lobbies).await;
+                }
+                .instrument(info_span!(target: "maintenance", "lobby_cleanup")),
+            );
         }
 
         state
@@ -291,10 +321,26 @@ pub async fn join_lobby(
     req: JoinLobbyRequest,
 ) -> Result<JoinLobbyResponse, ApiError> {
     let join_code = req.join_code.trim();
-    let mut engine = state
-        .lobbies
-        .get_mut(join_code)
-        .ok_or_else(|| ApiError::Lobby("Invalid join code.".into()))?;
+
+    debug!(target: "lock", lobby_key = %join_code, "acquiring_lobby_lock");
+    let t0 = Instant::now();
+
+    let mut engine = match state.lobbies.get_mut(join_code) {
+        Some(engine) => {
+            let dt = t0.elapsed();
+            debug!(
+                target: "lock",
+                lobby_key = %join_code,
+                duration_ms = dt.as_millis() as u64,
+                "lobby_lock_acquired"
+            );
+            engine
+        }
+        None => {
+            debug!(target: "lock", lobby_key = %join_code, "lobby_not_found");
+            return Err(ApiError::Lobby("Invalid join code.".into()));
+        }
+    };
 
     if engine.is_full() {
         return Err(ApiError::Lobby("Lobby is full.".into()));
@@ -545,41 +591,93 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
 
     let mut conn = WsConnection::new();
 
-    let send_task = spawn_sender_task(ws_tx, text_rx, bin_rx);
+    // Create connection span with fields that will be filled in later
+    let conn_span = info_span!(
+        target: "ws",
+        "ws_connection",
+        connection_id = %conn.connection_id,
+        player_id = tracing::field::Empty,
+        lobby_key = tracing::field::Empty,
+    );
 
-    while let Some(Ok(msg)) = ws_rx.next().await {
-        let result = handle_message(msg, &mut conn, &state, &text_tx, &bin_tx).await;
-        if result.is_err() {
-            break;
+    let send_task = spawn_sender_task(ws_tx, text_rx, bin_rx, conn.connection_id);
+
+    async {
+        while let Some(Ok(msg)) = ws_rx.next().await {
+            let (msg_kind, size_bytes) = get_message_info(&msg);
+            let msg_span = info_span!(
+                target: "ws",
+                "ws_message",
+                msg_kind = %msg_kind,
+                size_bytes = size_bytes,
+            );
+
+            let result = async { handle_message(msg, &mut conn, &state, &text_tx, &bin_tx).await }
+                .instrument(msg_span)
+                .await;
+
+            if result.is_err() {
+                break;
+            }
         }
-    }
 
-    handle_disconnect(&conn, &state).await;
-    send_task.abort();
+        handle_disconnect(&conn, &state).await;
+        send_task.abort();
+    }
+    .instrument(conn_span)
+    .await;
+}
+
+/// Returns (message_kind, size_bytes) for logging purposes
+fn get_message_info(msg: &Message) -> (&'static str, usize) {
+    match msg {
+        Message::Text(text) => ("text", text.len()),
+        Message::Binary(data) => {
+            if data.as_ref() == [HEARTBEAT_BYTE] {
+                ("binary_heartbeat", data.len())
+            } else {
+                ("binary", data.len())
+            }
+        }
+        Message::Ping(data) => ("ping", data.len()),
+        Message::Pong(data) => ("pong", data.len()),
+        Message::Close(_) => ("close", 0),
+    }
 }
 
 fn spawn_sender_task(
     mut ws_tx: SplitSink<WebSocket, Message>,
     mut text_rx: Receiver<Utf8Bytes>,
     mut bin_rx: Receiver<Bytes>,
+    connection_id: Uuid,
 ) -> JoinHandle<()> {
-    tokio::spawn(async move {
-        let mut ping_interval = tokio::time::interval(Duration::from_secs(30));
-        loop {
-            tokio::select! {
-                _ = ping_interval.tick() => {
-                    if ws_tx.send(Message::Ping(vec![].into())).await.is_err() { break; }
+    let sender_span = info_span!(
+        target: "ws",
+        "ws_sender_task",
+        connection_id = %connection_id,
+        channel = "ws_tx",
+    );
+
+    tokio::spawn(
+        async move {
+            let mut ping_interval = tokio::time::interval(Duration::from_secs(30));
+            loop {
+                tokio::select! {
+                    _ = ping_interval.tick() => {
+                        if ws_tx.send(Message::Ping(vec![].into())).await.is_err() { break; }
+                    }
+                    Some(msg) = text_rx.recv() => {
+                        if ws_tx.send(Message::Text(msg)).await.is_err() { break; }
+                    }
+                    Some(msg) = bin_rx.recv() => {
+                        if ws_tx.send(Message::Binary(msg)).await.is_err() { break; }
+                    }
+                    else => break,
                 }
-                Some(msg) = text_rx.recv() => {
-                    if ws_tx.send(Message::Text(msg)).await.is_err() { break; }
-                }
-                Some(msg) = bin_rx.recv() => {
-                    if ws_tx.send(Message::Binary(msg)).await.is_err() { break; }
-                }
-                else => break,
             }
         }
-    })
+        .instrument(sender_span),
+    )
 }
 
 async fn handle_message(
@@ -600,8 +698,10 @@ async fn handle_message(
     conn.recent_message_count += 1;
     if conn.recent_message_count > 30 {
         error!(
-            "Websocket client {:?} rate limit exceeded. Closing connection",
-            conn.player_id
+            target: "ws",
+            player_id = ?conn.player_id,
+            connection_id = %conn.connection_id,
+            "Rate limit exceeded, closing connection"
         );
         send_error_to_client(
             text_tx,
@@ -617,6 +717,14 @@ async fn handle_message(
             let client_msg: ClientMessage = match serde_json::from_str(&text) {
                 Ok(msg) => msg,
                 Err(e) => {
+                    // Log parse error without raw payload (security: avoid logging user data)
+                    debug!(
+                        target: "ws",
+                        connection_id = %conn.connection_id,
+                        error = %e,
+                        size_bytes = text.len(),
+                        "Failed to parse client message"
+                    );
                     send_error_to_client(
                         text_tx,
                         format!("Invalid message format: {}", e),
@@ -625,6 +733,13 @@ async fn handle_message(
                     return Ok(());
                 }
             };
+
+            // Log message type without payload (safe for logging)
+            trace!(
+                target: "ws",
+                client_msg_type = %client_msg.kind(),
+                "Processing client message"
+            );
 
             if let ClientMessage::Connect { session_token } = client_msg {
                 handle_connect(session_token, conn, state, text_tx).await;
@@ -679,9 +794,22 @@ async fn handle_connect(
         }
     };
 
+    debug!(target: "lock", lobby_key = %code, "acquiring_lobby_lock");
+    let t0 = Instant::now();
+
     let mut engine = match state.lobbies.get_mut(code) {
-        Some(engine) => engine,
+        Some(engine) => {
+            let dt = t0.elapsed();
+            debug!(
+                target: "lock",
+                lobby_key = %code,
+                duration_ms = dt.as_millis() as u64,
+                "lobby_lock_acquired"
+            );
+            engine
+        }
         None => {
+            debug!(target: "lock", lobby_key = %code, "lobby_not_found");
             send_error_to_client(
                 tx,
                 "Lobby not found for session token.".to_string(),
@@ -704,6 +832,17 @@ async fn handle_connect(
     conn.player_id = Some(player_id);
     conn.lobby_key = Some(code.to_string());
 
+    // Record player_id and lobby_key in the parent connection span
+    Span::current().record("player_id", tracing::field::display(&player_id));
+    Span::current().record("lobby_key", code);
+
+    debug!(
+        target: "ws",
+        %player_id,
+        lobby_key = %code,
+        "Player connected to lobby"
+    );
+
     let event = GameEvent {
         context: EventContext {
             sender_id: player_id,
@@ -724,11 +863,34 @@ async fn dispatch_game_action(msg: ClientMessage, conn: &WsConnection, state: &A
         return;
     };
 
-    if let Some(mut engine) = state.lobbies.get_mut(lobby_key) {
-        let action = match msg {
-            ClientMessage::Leave => GameAction::Leave,
-            ClientMessage::Answer { answer } => GameAction::Answer { answer },
-            ClientMessage::AdminAction { action } => match action {
+    debug!(target: "lock", %lobby_key, "acquiring_lobby_lock");
+    let t0 = Instant::now();
+
+    let Some(mut engine) = state.lobbies.get_mut(lobby_key) else {
+        debug!(target: "lock", %lobby_key, "lobby_not_found");
+        return;
+    };
+
+    let dt = t0.elapsed();
+    debug!(
+        target: "lock",
+        %lobby_key,
+        duration_ms = dt.as_millis() as u64,
+        "lobby_lock_acquired"
+    );
+
+    let action = match msg {
+        ClientMessage::Leave => GameAction::Leave,
+        ClientMessage::Answer { answer } => GameAction::Answer { answer },
+        ClientMessage::AdminAction { action } => {
+            debug!(
+                target: "ws",
+                admin_action_type = %action.kind(),
+                %player_id,
+                %lobby_key,
+                "Processing admin action"
+            );
+            match action {
                 AdminAction::StartGame => GameAction::StartGame,
                 AdminAction::StartRound => GameAction::StartRound,
                 AdminAction::EndRound => GameAction::EndRound,
@@ -742,18 +904,18 @@ async fn dispatch_game_action(msg: ClientMessage, conn: &WsConnection, state: &A
                 AdminAction::CloseGame { reason } => GameAction::CloseGame {
                     reason: Arc::from(reason),
                 },
-            },
-            _ => return, // Connect is handled separately
-        };
-        let event = GameEvent {
-            context: EventContext {
-                sender_id: player_id,
-                timestamp: Instant::now(),
-            },
-            action,
-        };
-        engine.process_event(event);
-    }
+            }
+        }
+        _ => return, // Connect is handled separately
+    };
+    let event = GameEvent {
+        context: EventContext {
+            sender_id: player_id,
+            timestamp: Instant::now(),
+        },
+        action,
+    };
+    engine.process_event(event);
 }
 
 async fn handle_disconnect(conn: &WsConnection, state: &AppState) {
@@ -762,8 +924,21 @@ async fn handle_disconnect(conn: &WsConnection, state: &AppState) {
             "Disconnecting player {} from lobby {}",
             player_id, lobby_key
         );
+
+        debug!(target: "lock", %lobby_key, "acquiring_lobby_lock");
+        let t0 = Instant::now();
+
         if let Some(mut engine) = state.lobbies.get_mut(lobby_key) {
+            let dt = t0.elapsed();
+            debug!(
+                target: "lock",
+                %lobby_key,
+                duration_ms = dt.as_millis() as u64,
+                "lobby_lock_acquired"
+            );
             engine.clear_player_connection(player_id, conn.connection_id);
+        } else {
+            debug!(target: "lock", %lobby_key, "lobby_not_found");
         }
     }
 }

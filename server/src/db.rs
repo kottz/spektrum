@@ -16,7 +16,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use thiserror::Error;
-use tracing::{info, warn};
+use tracing::{info, instrument, warn};
 
 #[derive(Error, Debug)]
 pub enum DbError {
@@ -292,6 +292,7 @@ pub struct FilesystemBackend {
 }
 
 impl FilesystemBackend {
+    #[instrument(target = "storage", level = "debug", skip(self), fields(path = %path))]
     async fn read_file(&self, path: &str) -> Result<String, DbError> {
         let full_path = self.base_path.join(path);
         if full_path.exists() {
@@ -303,6 +304,7 @@ impl FilesystemBackend {
         }
     }
 
+    #[instrument(target = "storage", level = "debug", skip(self, data), fields(path = %path, size_bytes = data.len()))]
     async fn write_file(&self, path: &str, data: &[u8]) -> Result<(), DbError> {
         let full_path = self.base_path.join(path);
 
@@ -318,6 +320,7 @@ impl FilesystemBackend {
             .map_err(DbError::from)
     }
 
+    #[instrument(target = "storage", level = "debug", skip(self, content), fields(file_stem = %file_stem))]
     async fn create_backup(&self, content: &str, file_stem: &str) -> Result<(), DbError> {
         let backup_dir = self.backup_dir.clone();
         let file_stem = file_stem.to_string();
@@ -348,6 +351,7 @@ pub struct S3Backend {
 }
 
 impl S3Backend {
+    #[instrument(target = "storage", level = "debug", skip(self), fields(path = %path))]
     async fn read_file(&self, path: &str) -> Result<String, DbError> {
         let mut key = format!("{}/{}", self.prefix, path);
 
@@ -360,7 +364,7 @@ impl S3Backend {
             key = format!("{}/{}/{}.gz", self.prefix, self.question_folder, path);
         }
 
-        info!("Reading from S3: {}", key);
+        info!(target: "storage", s3_key = %key, "Reading from S3");
 
         match self
             .client
@@ -393,7 +397,7 @@ impl S3Backend {
             }
             Err(err) => {
                 if let SdkError::ServiceError(service_err) = &err {
-                    warn!("S3 error details: {:?}", err);
+                    warn!(target: "storage", error = ?err, "S3 read error");
                     if service_err.err().is_no_such_key() {
                         return Ok(String::new());
                     }
@@ -403,6 +407,7 @@ impl S3Backend {
         }
     }
 
+    #[instrument(target = "storage", level = "debug", skip(self, data), fields(path = %path, size_bytes = data.len()))]
     async fn write_file(&self, path: &str, data: &[u8]) -> Result<(), DbError> {
         let mut key = format!("{}/{}", self.prefix, path);
 
@@ -433,7 +438,7 @@ impl S3Backend {
             "application/octet-stream" // Default binary type
         };
 
-        info!("Writing {} to S3: {}", content_type, key);
+        info!(target: "storage", s3_key = %key, %content_type, "Writing to S3");
 
         let body = if is_json {
             // Compress JSON data
@@ -460,12 +465,13 @@ impl S3Backend {
         {
             Ok(_) => Ok(()),
             Err(err) => {
-                warn!("S3 error details: {:?}", err);
+                warn!(target: "storage", error = ?err, "S3 write error");
                 Err(DbError::S3(err.to_string()))
             }
         }
     }
 
+    #[instrument(target = "storage", level = "debug", skip(self, content), fields(file_stem = %file_stem))]
     async fn create_backup(&self, content: &str, file_stem: &str) -> Result<(), DbError> {
         let now = Utc::now();
         let timestamp = now.format("%y%m%d_%H%M%S").to_string();
@@ -473,7 +479,7 @@ impl S3Backend {
             "{}/{}/backup/{file_stem}_{timestamp}.json.gz",
             self.prefix, self.question_folder
         );
-        info!("Create backup S3: {}", key);
+        info!(target: "storage", s3_key = %key, "Creating backup on S3");
 
         let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
         encoder.write_all(content.as_bytes())?;
@@ -560,6 +566,7 @@ impl QuestionDatabase {
         })
     }
 
+    #[instrument(target = "storage", level = "debug", skip(self))]
     pub async fn read_stored_data(&self) -> Result<StoredData, DbError> {
         let content = self.storage.read_file(&self.question_file).await?;
         if content.is_empty() {
@@ -577,6 +584,7 @@ impl QuestionDatabase {
         Ok(json_content)
     }
 
+    #[instrument(target = "storage", level = "debug", skip(self, data))]
     pub async fn set_stored_data(&self, data: StoredData) -> Result<(), DbError> {
         data.validate_stored_data()?;
         let json = serde_json::to_string(&data)?;
@@ -585,6 +593,7 @@ impl QuestionDatabase {
             .await
     }
 
+    #[instrument(target = "storage", level = "debug", skip(self, data), fields(character_name = %character_name, size_bytes = data.len()))]
     pub async fn store_character_image(
         &self,
         character_name: &str,
@@ -595,6 +604,7 @@ impl QuestionDatabase {
             .await
     }
 
+    #[instrument(target = "storage", level = "debug", skip(self))]
     pub async fn backup_stored_data(&self) -> Result<(), DbError> {
         let stored_data = self.read_stored_data().await?;
         let json = serde_json::to_string(&stored_data)?;
@@ -612,6 +622,7 @@ impl QuestionDatabase {
         self.storage.create_backup(&json, file_stem).await
     }
 
+    #[instrument(target = "storage", level = "info", skip(self))]
     pub async fn load_questions(&self) -> Result<(Vec<GameQuestion>, Vec<QuestionSet>), DbError> {
         let stored_data = self.read_stored_data().await?;
         stored_data.validate_stored_data()?;
