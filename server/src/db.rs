@@ -28,8 +28,22 @@ pub enum DbError {
     NoQuestions,
     #[error("Validation error: {0}")]
     Validation(String),
-    #[error("S3 error: {0}")]
-    S3(String),
+    #[error("S3 error: {msg}")]
+    S3 {
+        msg: String,
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+}
+
+fn s3_error<E: std::error::Error + Send + Sync + 'static>(
+    msg: impl Into<String>,
+    source: E,
+) -> DbError {
+    DbError::S3 {
+        msg: msg.into(),
+        source: Box::new(source),
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -379,7 +393,7 @@ impl S3Backend {
                     .body
                     .collect()
                     .await
-                    .map_err(|e| DbError::S3(format!("Failed to collect bytes: {e}")))?;
+                    .map_err(|e| s3_error("Failed to collect bytes", e))?;
 
                 // If it's a JSON file, decompress it
                 if is_json {
@@ -388,11 +402,10 @@ impl S3Backend {
                     let mut decompressed = String::new();
                     decoder
                         .read_to_string(&mut decompressed)
-                        .map_err(|e| DbError::S3(format!("Failed to decompress: {e}")))?;
+                        .map_err(|e| s3_error("Failed to decompress", e))?;
                     Ok(decompressed)
                 } else {
-                    String::from_utf8(bytes.to_vec())
-                        .map_err(|e| DbError::S3(format!("Invalid UTF-8: {e}")))
+                    String::from_utf8(bytes.to_vec()).map_err(|e| s3_error("Invalid UTF-8", e))
                 }
             }
             Err(err) => {
@@ -402,7 +415,7 @@ impl S3Backend {
                         return Ok(String::new());
                     }
                 }
-                Err(DbError::S3(err.to_string()))
+                Err(s3_error("S3 read failed", err))
             }
         }
     }
@@ -445,10 +458,10 @@ impl S3Backend {
             let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
             encoder
                 .write_all(data)
-                .map_err(|e| DbError::S3(format!("Failed to compress: {e}")))?;
+                .map_err(|e| s3_error("Failed to compress", e))?;
             encoder
                 .finish()
-                .map_err(|e| DbError::S3(format!("Failed to finish compression: {e}")))?
+                .map_err(|e| s3_error("Failed to finish compression", e))?
         } else {
             data.to_vec()
         };
@@ -466,7 +479,7 @@ impl S3Backend {
             Ok(_) => Ok(()),
             Err(err) => {
                 warn!(target: "storage", error = ?err, "S3 write error");
-                Err(DbError::S3(err.to_string()))
+                Err(s3_error("S3 write failed", err))
             }
         }
     }
@@ -481,9 +494,18 @@ impl S3Backend {
         );
         info!(target: "storage", s3_key = %key, "Creating backup on S3");
 
-        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-        encoder.write_all(content.as_bytes())?;
-        let compressed = encoder.finish()?;
+        let content_owned = content.to_owned();
+        let compressed = tokio::task::spawn_blocking(move || {
+            let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+            encoder
+                .write_all(content_owned.as_bytes())
+                .map_err(|e| s3_error("Failed to compress", e))?;
+            encoder
+                .finish()
+                .map_err(|e| s3_error("Failed to finish compression", e))
+        })
+        .await
+        .map_err(|e| s3_error("Compression task failed", e))??;
 
         self.client
             .put_object()
@@ -493,7 +515,7 @@ impl S3Backend {
             .content_type("application/gzip")
             .send()
             .await
-            .map_err(|e| DbError::S3(e.to_string()))?;
+            .map_err(|e| s3_error("S3 backup write failed", e))?;
 
         Ok(())
     }
