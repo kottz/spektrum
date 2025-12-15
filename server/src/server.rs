@@ -26,7 +26,7 @@ use std::time::{Duration, Instant, SystemTime};
 use thiserror::Error;
 use tokio::sync::mpsc::{Receiver, Sender, channel};
 use tokio::task::JoinHandle;
-use tracing::{Instrument, Span, debug, error, info, info_span, trace};
+use tracing::{Instrument, Span, debug, error, info, info_span, trace, warn};
 
 const HEARTBEAT_BYTE: u8 = 0x42;
 
@@ -771,7 +771,9 @@ async fn handle_message(
             }
         }
         Message::Binary(payload) if payload.as_ref() == [HEARTBEAT_BYTE] => {
-            let _ = bin_tx.try_send(payload);
+            if bin_tx.try_send(payload).is_err() {
+                warn!("Heartbeat channel full");
+            }
         }
         Message::Pong(_) => trace!("Received pong from client"),
         Message::Close(_) => {
@@ -980,6 +982,11 @@ async fn cleanup_lobbies(lobbies: Arc<DashMap<String, GameEngine>>) {
     let mut tick = tokio::time::interval(Duration::from_secs(60));
     loop {
         tick.tick().await;
+
+        // Close inactive lobbies and notify players before cleanup
+        for mut entry in lobbies.iter_mut() {
+            entry.value_mut().close_if_inactive();
+        }
 
         let finished_lobby_ids: Vec<String> = lobbies
             .iter()

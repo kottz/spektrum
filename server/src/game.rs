@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::error::TrySendError;
 use tracing::{debug, error, instrument, warn};
 
 lazy_static! {
@@ -327,15 +328,24 @@ impl GameEngine {
         if let Some(last_msg) = self.state.last_lobby_message
             && Instant::now().duration_since(last_msg) > Duration::from_secs(3600)
         {
+            return true;
+        }
+        false
+    }
+
+    pub fn close_if_inactive(&mut self) {
+        if self.state.phase != GamePhase::GameClosed
+            && let Some(last_msg) = self.state.last_lobby_message
+            && Instant::now().duration_since(last_msg) > Duration::from_secs(3600)
+        {
             self.push_update(
                 Recipients::All,
                 GameUpdate::GameClosed {
                     reason: "Lobby closed due to inactivity".into(),
                 },
             );
-            return true;
+            self.state.phase = GamePhase::GameClosed;
         }
-        false
     }
 
     pub fn is_full(&self) -> bool {
@@ -414,7 +424,7 @@ impl GameEngine {
             .collect()
     }
 
-    fn push_update(&self, recipients: Recipients, update: GameUpdate) {
+    fn push_update(&mut self, recipients: Recipients, update: GameUpdate) {
         let mut writer = BytesMut::with_capacity(2048).writer();
 
         if let Err(e) = serde_json::to_writer(&mut writer, &update) {
@@ -433,34 +443,74 @@ impl GameEngine {
 
         match recipients {
             Recipients::Single(target) => {
-                if let Some(player) = self.state.players.get(&target)
+                if let Some(player) = self.state.players.get_mut(&target)
                     && let Some(tx) = &player.tx
                 {
-                    let _ = tx.try_send(payload.clone());
+                    match tx.try_send(payload.clone()) {
+                        Ok(()) => {}
+                        Err(TrySendError::Full(_)) => {
+                            warn!(%target, "Channel full, disconnecting player");
+                            player.tx = None;
+                        }
+                        Err(TrySendError::Closed(_)) => {
+                            warn!(%target, "Channel closed, disconnecting player");
+                            player.tx = None;
+                        }
+                    }
                 }
             }
             Recipients::Multiple(targets) => {
                 for target in targets {
-                    if let Some(player) = self.state.players.get(&target)
+                    if let Some(player) = self.state.players.get_mut(&target)
                         && let Some(tx) = &player.tx
                     {
-                        let _ = tx.try_send(payload.clone());
+                        match tx.try_send(payload.clone()) {
+                            Ok(()) => {}
+                            Err(TrySendError::Full(_)) => {
+                                warn!(%target, "Channel full, disconnecting player");
+                                player.tx = None;
+                            }
+                            Err(TrySendError::Closed(_)) => {
+                                warn!(%target, "Channel closed, disconnecting player");
+                                player.tx = None;
+                            }
+                        }
                     }
                 }
             }
             Recipients::_AllExcept(exclusions) => {
-                for (player_id, player) in self.state.players.iter() {
+                for (player_id, player) in self.state.players.iter_mut() {
                     if !exclusions.contains(player_id)
                         && let Some(tx) = &player.tx
                     {
-                        let _ = tx.try_send(payload.clone());
+                        match tx.try_send(payload.clone()) {
+                            Ok(()) => {}
+                            Err(TrySendError::Full(_)) => {
+                                warn!(%player_id, "Channel full, disconnecting player");
+                                player.tx = None;
+                            }
+                            Err(TrySendError::Closed(_)) => {
+                                warn!(%player_id, "Channel closed, disconnecting player");
+                                player.tx = None;
+                            }
+                        }
                     }
                 }
             }
             Recipients::All => {
-                for player in self.state.players.values() {
+                for (player_id, player) in self.state.players.iter_mut() {
                     if let Some(tx) = &player.tx {
-                        let _ = tx.try_send(payload.clone());
+                        match tx.try_send(payload.clone()) {
+                            Ok(()) => {}
+                            Err(TrySendError::Full(_)) => {
+                                warn!(%player_id, "Channel full, disconnecting player");
+                                player.tx = None;
+                            }
+                            Err(TrySendError::Closed(_)) => {
+                                warn!(%player_id, "Channel closed, disconnecting player");
+                                player.tx = None;
+                            }
+                        }
                     }
                 }
             }
@@ -520,7 +570,7 @@ impl GameEngine {
         }
     }
 
-    fn handle_connect(&self, ctx: EventContext) {
+    fn handle_connect(&mut self, ctx: EventContext) {
         if let Some(player) = self.state.players.get(&ctx.sender_id) {
             // First send the initial connection acknowledgment
             self.push_update(
@@ -808,17 +858,14 @@ impl GameEngine {
         }
         match self.setup_round() {
             Ok(()) => {
-                let question = match &self.state.current_question {
-                    Some(q) => q,
-                    None => {
-                        self.push_update(
-                            Recipients::Single(self.state.admin_id),
-                            GameUpdate::Error {
-                                message: "Invalid state: question not set".into(),
-                            },
-                        );
-                        return;
-                    }
+                let Some(question) = self.state.current_question.clone() else {
+                    self.push_update(
+                        Recipients::Single(self.state.admin_id),
+                        GameUpdate::Error {
+                            message: "Invalid state: question not set".into(),
+                        },
+                    );
+                    return;
                 };
                 self.state.phase = GamePhase::Question;
                 self.state.round_start_time = Some(ctx.timestamp);
@@ -846,7 +893,7 @@ impl GameEngine {
                 self.push_update(
                     Recipients::Single(self.state.admin_id),
                     GameUpdate::AdminInfo {
-                        current_question: question.clone(),
+                        current_question: question,
                     },
                 );
             }
@@ -1491,6 +1538,11 @@ mod tests {
     #[tokio::test]
     async fn test_player_reconnect_lobby() {
         let (mut engine, admin_id) = setup_test_game();
+        // Keep admin receiver alive so broadcasts don't fail
+        let (admin_tx, _admin_rx) = tokio::sync::mpsc::channel(128);
+        let admin_conn_id = Uuid::new_v4();
+        engine.update_player_connection(admin_id, admin_tx, admin_conn_id);
+
         let player_id = add_test_player(&mut engine, "Player1");
         // Stay in lobby; do not start the game
         let player_initial_state = engine.state.players.get(&player_id).unwrap().clone();
