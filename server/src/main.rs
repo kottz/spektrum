@@ -37,7 +37,7 @@ struct ServerConfig {
 
 #[derive(Default, Debug, Deserialize)]
 struct LoggingConfig {
-    json: bool,
+    text: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -78,17 +78,17 @@ struct AppConfig {
 /// - `RUST_LOG=spektrum=info,ws=trace` - verbose WebSocket debugging
 /// - `RUST_LOG=spektrum=info,storage=debug` - storage/S3 operation debugging
 /// - `RUST_LOG=spektrum=info,maintenance=debug` - cleanup task debugging
-fn init_tracing(json_logging: bool) {
+fn init_tracing(text_logging: bool) {
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| "spektrum=info,tower_http=info".into());
     let registry = tracing_subscriber::registry().with(env_filter);
 
-    if json_logging {
+    if text_logging {
+        registry.with(tracing_subscriber::fmt::layer()).init();
+    } else {
         registry
             .with(tracing_subscriber::fmt::layer().json())
             .init();
-    } else {
-        registry.with(tracing_subscriber::fmt::layer()).init();
     }
 }
 
@@ -135,7 +135,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .try_deserialize()
         .map_err(|e| format!("Failed to parse config: {e}"))?;
 
-    init_tracing(app_config.logging.json);
+    init_tracing(app_config.logging.text);
 
     let cors_origins: Vec<HeaderValue> = app_config
         .server
