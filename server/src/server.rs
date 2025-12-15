@@ -614,7 +614,11 @@ async fn handle_socket(socket: WebSocket, state: AppState, upgrade_request_id: O
     // Clone the span for use in .instrument() - conn retains ownership for field recording
     let conn_span = conn.conn_span.clone();
 
-    let send_task = spawn_sender_task(ws_tx, text_rx, bin_rx, conn.connection_id);
+    // Ensure the sender task inherits the connection span as its parent
+    let send_task = {
+        let _guard = conn_span.enter();
+        spawn_sender_task(ws_tx, text_rx, bin_rx, conn.connection_id)
+    };
 
     async {
         while let Some(Ok(msg)) = ws_rx.next().await {
