@@ -303,6 +303,8 @@ impl GameQuestion {
     }
 }
 
+/// Immutable snapshot of question data and derived weights. Always obtain via
+/// `QuestionStore::snapshot()` to keep questions/sets/weights in sync.
 pub struct QuestionSnapshot {
     pub questions: Arc<Vec<GameQuestion>>,
     pub sets: Arc<Vec<QuestionSet>>,
@@ -470,6 +472,30 @@ mod tests {
                 (weights[color.idx()] - 0.15).abs() < 1e-12,
                 "expected baseline weight 0.15 for {color:?}, got {}",
                 weights[color.idx()]
+            );
+        }
+    }
+
+    #[test]
+    fn color_weights_zero_correct_answers_use_baseline() {
+        let questions = vec![GameQuestion {
+            id: 1,
+            question_type: QuestionType::Text,
+            question_text: None,
+            title: Arc::from("Other"),
+            artist: None,
+            youtube_id: Arc::from("id"),
+            options: vec![GameQuestionOption {
+                option: Arc::from("Only"),
+                is_correct: true,
+            }],
+        }];
+
+        let weights = calculate_color_weights_global(&questions);
+        for (idx, &weight) in weights.iter().enumerate() {
+            assert!(
+                (weight - 0.15).abs() < 1e-12,
+                "expected baseline weight for color index {idx}, got {weight}"
             );
         }
     }
