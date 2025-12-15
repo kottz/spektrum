@@ -20,6 +20,7 @@ function createYouTubeStore() {
 
 	let autoplayPending = false;
 	let apiInitialized = false;
+	let playRetryTimeout: ReturnType<typeof setTimeout> | null = null;
 
 	function initializeAPI() {
 		info('Initializing YouTube API');
@@ -94,6 +95,12 @@ function createYouTubeStore() {
 	}
 
 	function handlePhaseChange(phase: string) {
+		// Clear any pending retry timeout
+		if (playRetryTimeout) {
+			clearTimeout(playRetryTimeout);
+			playRetryTimeout = null;
+		}
+
 		if (!state.player || !state.isPlayerReady) {
 			if (phase === 'question') {
 				info('Setting autoplay pending due to player not ready');
@@ -110,6 +117,35 @@ function createYouTubeStore() {
 					const videoId = state.currentVideoId || state.pendingVideoId;
 					info('Question phase: verifying and playing video:', videoId);
 					verifyAndPlayVideo(videoId!);
+
+					// Sometimes users start new round before video player has loaded and
+					// the play command is not executed properly.
+					// Retry play up to 3 times, once per second, if not playing
+					let retryCount = 0;
+					const maxRetries = 3;
+
+					const scheduleRetry = () => {
+						playRetryTimeout = setTimeout(() => {
+							if (state.player && state.isPlayerReady) {
+								const playerState = state.player.getPlayerState();
+								if (playerState !== 1) {
+									// 1 = YT.PlayerState.PLAYING
+									retryCount++;
+									info(
+										`Player not playing after ${retryCount}s, retrying play command (${retryCount}/${maxRetries}). State:`,
+										playerState
+									);
+									state.player.playVideo();
+
+									if (retryCount < maxRetries) {
+										scheduleRetry();
+									}
+								}
+							}
+						}, 1000);
+					};
+
+					scheduleRetry();
 				}
 				break;
 			case 'score':
@@ -141,6 +177,12 @@ function createYouTubeStore() {
 
 	function cleanup() {
 		info('Cleaning up YouTube player');
+
+		// Clear retry timeout
+		if (playRetryTimeout) {
+			clearTimeout(playRetryTimeout);
+			playRetryTimeout = null;
+		}
 
 		if (state.player) {
 			state.player.destroy();
