@@ -2406,7 +2406,7 @@ mod tests {
                 let remaining = question_time_remaining_ms
                     .expect("question_time_remaining_ms should be present");
                 assert!(
-                    remaining <= 30_000 && remaining >= 19_000,
+                    (19_000..=30_000).contains(&remaining),
                     "remaining time should be within expected window, got {}",
                     remaining
                 );
