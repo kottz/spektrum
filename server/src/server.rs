@@ -219,8 +219,9 @@ pub struct ListSetsResponse {
 }
 
 pub async fn list_sets(state: &AppState) -> Result<ListSetsResponse, ApiError> {
-    let num_questions = state.store.questions.read().await.len();
-    let sets = state.store.sets.read().await;
+    let snap = state.store.snapshot();
+    let num_questions = snap.questions.len();
+    let sets = &*snap.sets;
 
     let sets_info: Vec<SetInfo> = sets
         .iter()
@@ -261,8 +262,9 @@ pub async fn create_lobby(
         ));
     }
 
-    let questions = state.store.questions.read().await;
-    let sets = state.store.sets.read().await;
+    let snap = state.store.snapshot();
+    let questions = snap.questions.clone();
+    let sets = &*snap.sets;
     let selected_set = if let Some(set_id) = req.set_id {
         Some(
             sets.iter()
@@ -278,7 +280,8 @@ pub async fn create_lobby(
 
     let mut engine = GameEngine::new(
         admin_id,
-        Arc::clone(&questions),
+        questions,
+        snap.color_weights,
         selected_set,
         round_duration,
     );
@@ -385,7 +388,7 @@ pub async fn set_stored_data(
     }
     state.store.backup_stored_data().await?;
     state.store.set_stored_data(req.stored_data).await?;
-    state.store.load_questions().await?;
+    state.store.reload().await?;
     let data = state.store.get_stored_data().await?;
     Ok(data)
 }

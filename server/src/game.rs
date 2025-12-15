@@ -1,5 +1,5 @@
 use crate::db::QuestionSet;
-use crate::question::GameQuestion;
+use crate::question::{Color, GameQuestion};
 use crate::uuid::Uuid;
 use axum::extract::ws::Utf8Bytes;
 use bytes::{BufMut, BytesMut};
@@ -197,6 +197,7 @@ pub struct GameState {
     pub correct_answers: Option<Vec<Arc<str>>>,
     pub current_question: Option<GameQuestion>,
     pub all_questions: Arc<Vec<GameQuestion>>,
+    pub color_weights: [f64; Color::COUNT],
     pub shuffled_question_indices: Vec<usize>,
     pub current_question_index: usize,
     pub last_lobby_message: Option<Instant>,
@@ -239,6 +240,7 @@ impl GameEngine {
     pub fn new(
         admin_id: Uuid,
         questions: Arc<Vec<GameQuestion>>,
+        color_weights: [f64; Color::COUNT],
         set: Option<&QuestionSet>,
         round_duration: u64,
     ) -> Self {
@@ -275,6 +277,7 @@ impl GameEngine {
                 correct_answers: None,
                 current_question: None,
                 all_questions: questions,
+                color_weights,
                 shuffled_question_indices: indices,
                 current_question_index: 0,
                 last_lobby_message: Some(Instant::now()),
@@ -1053,7 +1056,8 @@ impl GameEngine {
         let next_question = &self.state.all_questions[shuffled_idx];
         self.state.current_question = Some(next_question.clone());
         self.state.correct_answers = Some(next_question.get_correct_answer());
-        self.state.current_alternatives = next_question.generate_round_alternatives();
+        self.state.current_alternatives =
+            next_question.generate_round_alternatives(&self.state.color_weights);
         if let Some(correct_answers) = self.state.correct_answers.clone() {
             for answer in correct_answers {
                 if !self.state.current_alternatives.contains(&answer) {
@@ -1103,7 +1107,9 @@ impl GameEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::question::{Color, GameQuestion, GameQuestionOption, QuestionType};
+    use crate::question::{
+        Color, GameQuestion, GameQuestionOption, QuestionType, baseline_weights,
+    };
     use serde::Deserialize;
     use std::time::Duration;
     use tokio::sync::mpsc::Receiver;
@@ -1188,9 +1194,10 @@ mod tests {
     fn setup_test_game() -> (GameEngine, Uuid) {
         let admin_id = Uuid::new_v4();
         let questions = Arc::new(create_test_questions());
+        let color_weights = baseline_weights();
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
         let admin_conn_id = Uuid::new_v4();
-        let mut engine = GameEngine::new(admin_id, questions, None, 30);
+        let mut engine = GameEngine::new(admin_id, questions, color_weights, None, 30);
         engine.add_player(admin_id, "Admin".into()).unwrap();
         engine.update_player_connection(admin_id, tx, admin_conn_id);
 
@@ -1793,7 +1800,13 @@ mod tests {
             name: Arc::from("Test Set"),
         };
 
-        let mut engine = GameEngine::new(admin_id, questions, Some(&question_set), 30);
+        let mut engine = GameEngine::new(
+            admin_id,
+            questions,
+            baseline_weights(),
+            Some(&question_set),
+            30,
+        );
         engine.add_player(admin_id, "Admin".into()).unwrap();
 
         assert_eq!(engine.state.shuffled_question_indices.len(), 2);

@@ -1,16 +1,9 @@
 use crate::StorageConfig;
-use crate::db::{DbError, StoredData};
-use crate::db::{QuestionDatabase, QuestionSet};
-use dashmap::DashMap;
-use lazy_static::lazy_static;
+use crate::db::{DbError, QuestionDatabase, QuestionSet, StoredData};
+use arc_swap::ArcSwap;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
-use tokio::sync::RwLock;
-
-lazy_static! {
-    pub(crate) static ref COLOR_WEIGHTS: DashMap<Color, f64> = DashMap::new();
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -39,6 +32,8 @@ pub enum Color {
 }
 
 impl Color {
+    pub const COUNT: usize = 13;
+
     pub fn all() -> &'static [Color] {
         use Color::{
             Black, Blue, Brown, Gold, Gray, Green, Orange, Pink, Purple, Red, Silver, White, Yellow,
@@ -48,9 +43,33 @@ impl Color {
         ]
     }
 
-    fn get_weight(&self) -> f64 {
-        COLOR_WEIGHTS.get(self).map(|v| *v).unwrap_or(0.15)
+    /// Canonical dense index for array-backed color data. Do not assume Color::all() order matches.
+    pub fn idx(self) -> usize {
+        match self {
+            Color::Red => 0,
+            Color::Green => 1,
+            Color::Blue => 2,
+            Color::Yellow => 3,
+            Color::Purple => 4,
+            Color::Gold => 5,
+            Color::Silver => 6,
+            Color::Pink => 7,
+            Color::Black => 8,
+            Color::White => 9,
+            Color::Brown => 10,
+            Color::Orange => 11,
+            Color::Gray => 12,
+        }
     }
+}
+
+pub fn baseline_weights() -> [f64; Color::COUNT] {
+    debug_assert_eq!(
+        Color::COUNT,
+        Color::all().len(),
+        "Color::COUNT must match Color::all().len()"
+    );
+    [0.15; Color::COUNT]
 }
 
 impl std::fmt::Display for Color {
@@ -144,10 +163,13 @@ impl GameQuestion {
             .collect()
     }
 
-    pub fn generate_round_alternatives(&self) -> Vec<Arc<str>> {
+    pub fn generate_round_alternatives(
+        &self,
+        color_weights: &[f64; Color::COUNT],
+    ) -> Vec<Arc<str>> {
         match self.question_type {
             QuestionType::Color => self
-                .generate_color_alternatives()
+                .generate_color_alternatives(color_weights)
                 .into_iter()
                 .map(Arc::from)
                 .collect(),
@@ -174,7 +196,10 @@ impl GameQuestion {
         }
     }
 
-    fn generate_color_alternatives(&self) -> Vec<&'static str> {
+    fn generate_color_alternatives(
+        &self,
+        color_weights: &[f64; Color::COUNT],
+    ) -> Vec<&'static str> {
         const TARGET_SIZE: usize = 6;
 
         // Get initial colors from correct options
@@ -189,7 +214,7 @@ impl GameQuestion {
             .iter()
             .copied()
             .filter(|color| !round_colors.contains(color))
-            .map(|color| (color, color.get_weight()))
+            .map(|color| (color, color_weights[color.idx()]))
             .collect();
 
         // Select additional colors based on weights until we have TARGET_SIZE
@@ -278,9 +303,58 @@ impl GameQuestion {
     }
 }
 
+pub struct QuestionSnapshot {
+    pub questions: Arc<Vec<GameQuestion>>,
+    pub sets: Arc<Vec<QuestionSet>>,
+    pub color_weights: [f64; Color::COUNT],
+}
+
+fn calculate_color_weights_global(questions: &[GameQuestion]) -> [f64; Color::COUNT] {
+    let mut color_counts = [0usize; Color::COUNT];
+    let mut total_correct_color_answers = 0usize;
+
+    for question in questions {
+        if question.question_type == QuestionType::Color {
+            for option in question.get_correct_options() {
+                if let Ok(color) = option.option.parse::<Color>() {
+                    color_counts[color.idx()] += 1;
+                    total_correct_color_answers += 1;
+                }
+            }
+        }
+    }
+
+    if total_correct_color_answers == 0 {
+        return baseline_weights();
+    }
+
+    let mut weights = [0.0; Color::COUNT];
+    for color in Color::all() {
+        let count = color_counts[color.idx()] as f64;
+        let base_proportion = count / total_correct_color_answers as f64;
+        weights[color.idx()] = base_proportion.sqrt() + 0.15;
+    }
+    weights
+}
+
+fn build_snapshot(
+    game_questions: Vec<GameQuestion>,
+    sets: Vec<QuestionSet>,
+) -> Result<QuestionSnapshot, QuestionError> {
+    if game_questions.is_empty() {
+        return Err(QuestionError::NoQuestions);
+    }
+
+    let color_weights = calculate_color_weights_global(&game_questions);
+    Ok(QuestionSnapshot {
+        questions: Arc::new(game_questions),
+        sets: Arc::new(sets),
+        color_weights,
+    })
+}
+
 pub struct QuestionStore {
-    pub questions: RwLock<Arc<Vec<GameQuestion>>>,
-    pub sets: RwLock<Arc<Vec<QuestionSet>>>,
+    snapshot: ArcSwap<QuestionSnapshot>,
     db: QuestionDatabase,
 }
 
@@ -288,28 +362,29 @@ impl QuestionStore {
     pub async fn new(config: &StorageConfig) -> Result<Self, QuestionError> {
         let db = QuestionDatabase::new(config).map_err(QuestionError::DbError)?;
 
-        let store = Self {
-            questions: RwLock::new(Arc::new(Vec::new())),
-            sets: RwLock::new(Arc::new(Vec::new())),
+        let (game_questions, sets) = db.load_questions().await.map_err(QuestionError::DbError)?;
+        let snapshot = build_snapshot(game_questions, sets)?;
+
+        Ok(Self {
+            snapshot: ArcSwap::from_pointee(snapshot),
             db,
-        };
-        store.load_questions().await?;
-        Ok(store)
+        })
     }
 
-    pub async fn load_questions(&self) -> Result<(), QuestionError> {
+    pub async fn reload(&self) -> Result<(), QuestionError> {
         let (game_questions, sets) = self
             .db
             .load_questions()
             .await
             .map_err(QuestionError::DbError)?;
 
-        if game_questions.is_empty() {
-            return Err(QuestionError::NoQuestions);
-        }
-        *self.questions.write().await = Arc::new(game_questions);
-        *self.sets.write().await = Arc::new(sets);
+        let snapshot = build_snapshot(game_questions, sets)?;
+        self.snapshot.store(Arc::new(snapshot));
         Ok(())
+    }
+
+    pub fn snapshot(&self) -> Arc<QuestionSnapshot> {
+        self.snapshot.load_full()
     }
 
     pub async fn get_stored_data(&self) -> Result<StoredData, DbError> {
@@ -330,5 +405,72 @@ impl QuestionStore {
         data: &[u8],
     ) -> Result<String, DbError> {
         self.db.store_character_image(character_name, data).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn color_weights_use_correct_answer_denominator() {
+        let color_question = GameQuestion {
+            id: 1,
+            question_type: QuestionType::Color,
+            question_text: None,
+            title: Arc::from("Color"),
+            artist: None,
+            youtube_id: Arc::from("id"),
+            options: vec![
+                GameQuestionOption {
+                    option: Arc::from("Red"),
+                    is_correct: true,
+                },
+                GameQuestionOption {
+                    option: Arc::from("Blue"),
+                    is_correct: true,
+                },
+            ],
+        };
+
+        let mut questions = vec![color_question];
+        for idx in 0..9 {
+            questions.push(GameQuestion {
+                id: idx + 2,
+                question_type: QuestionType::Text,
+                question_text: None,
+                title: Arc::from("Other"),
+                artist: None,
+                youtube_id: Arc::from("id"),
+                options: vec![GameQuestionOption {
+                    option: Arc::from(format!("Opt{idx}")),
+                    is_correct: true,
+                }],
+            });
+        }
+
+        let weights = calculate_color_weights_global(&questions);
+        let expected = (0.5_f64).sqrt() + 0.15;
+        assert!(
+            (weights[Color::Red.idx()] - expected).abs() < 1e-12,
+            "expected red weight close to {expected}, got {}",
+            weights[Color::Red.idx()]
+        );
+        assert!(
+            (weights[Color::Blue.idx()] - expected).abs() < 1e-12,
+            "expected blue weight close to {expected}, got {}",
+            weights[Color::Blue.idx()]
+        );
+        for color in Color::all()
+            .iter()
+            .copied()
+            .filter(|c| *c != Color::Red && *c != Color::Blue)
+        {
+            assert!(
+                (weights[color.idx()] - 0.15).abs() < 1e-12,
+                "expected baseline weight 0.15 for {color:?}, got {}",
+                weights[color.idx()]
+            );
+        }
     }
 }

@@ -24,6 +24,7 @@ flate2 = "1.1.5"
 aws-sdk-s3 = "1.115.0"
 dashmap = "6.1.0"
 tower_governor = "0.8.0"
+arc-swap = "1.7.1"
 
 [dev-dependencies]
 tempfile = "3.23.0"
