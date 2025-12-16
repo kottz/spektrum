@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::Sender;
 use tokio::sync::mpsc::error::TrySendError;
-use tracing::{debug, error, instrument, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 lazy_static! {
     pub(crate) static ref NAME_VALIDATION_REGEX: Regex =
@@ -192,6 +192,7 @@ pub struct GameState {
     pub phase: GamePhase,
     pub players: HashMap<Uuid, PlayerState>,
     pub admin_id: Uuid,
+    pub join_code: Arc<str>,
     pub round_start_time: Option<Instant>,
     pub round_duration: u64,
     pub current_alternatives: Vec<Arc<str>>,
@@ -240,6 +241,7 @@ pub struct GameEngine {
 impl GameEngine {
     pub fn new(
         admin_id: Uuid,
+        join_code: Arc<str>,
         questions: Arc<Vec<GameQuestion>>,
         color_weights: [f64; Color::COUNT],
         set: Option<&QuestionSet>,
@@ -272,6 +274,7 @@ impl GameEngine {
                 phase: GamePhase::Lobby,
                 players: HashMap::new(),
                 admin_id,
+                join_code,
                 round_start_time: None,
                 round_duration,
                 current_alternatives: Vec::new(),
@@ -394,6 +397,22 @@ impl GameEngine {
             .filter(|(_, p)| p.has_answered)
             .map(|(_, p)| p.name.clone())
             .collect()
+    }
+
+    fn log_game_state(&self, action: &str) {
+        let (total_players, questions_played, player_scores) = self.get_lobby_stats();
+        let players_info: Vec<String> = player_scores
+            .iter()
+            .map(|(name, score)| format!("{}:{}", name, score))
+            .collect();
+        info!(
+            "Lobby {}: {} - {} players, {} questions played, players [{}]",
+            self.state.join_code,
+            action,
+            total_players,
+            questions_played,
+            players_info.join(", ")
+        );
     }
 
     #[cfg(test)]
@@ -790,6 +809,10 @@ impl GameEngine {
 
         // if we came from a finished game, zero everything out
         if self.state.phase == GamePhase::GameOver {
+            info!(
+                "Lobby {}: Game restarted in same lobby",
+                self.state.join_code
+            );
             self.reset_for_new_game();
         }
 
@@ -1079,6 +1102,7 @@ impl GameEngine {
         let from_phase = self.state.phase;
         self.state.phase = GamePhase::GameOver;
         debug!(from = ?from_phase, to = ?GamePhase::GameOver, "Phase transition");
+        self.log_game_state(&format!("Game ended: {}", reason));
         self.push_update(
             Recipients::All,
             GameUpdate::GameOver {
@@ -1092,6 +1116,7 @@ impl GameEngine {
         let from_phase = self.state.phase;
         self.state.phase = GamePhase::GameClosed;
         debug!(from = ?from_phase, to = ?GamePhase::GameClosed, "Phase transition");
+        self.log_game_state(&format!("Game closed: {}", reason));
         self.push_update(Recipients::All, GameUpdate::GameClosed { reason });
     }
 
@@ -1244,7 +1269,14 @@ mod tests {
         let color_weights = baseline_weights();
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
         let admin_conn_id = Uuid::new_v4();
-        let mut engine = GameEngine::new(admin_id, questions, color_weights, None, 30);
+        let mut engine = GameEngine::new(
+            admin_id,
+            Arc::from("TEST"),
+            questions,
+            color_weights,
+            None,
+            30,
+        );
         engine.add_player(admin_id, "Admin".into()).unwrap();
         engine.update_player_connection(admin_id, tx, admin_conn_id);
 
@@ -1854,6 +1886,7 @@ mod tests {
 
         let mut engine = GameEngine::new(
             admin_id,
+            Arc::from("TEST"),
             questions,
             baseline_weights(),
             Some(&question_set),

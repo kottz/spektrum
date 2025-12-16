@@ -280,6 +280,7 @@ pub async fn create_lobby(
 
     let mut engine = GameEngine::new(
         admin_id,
+        Arc::from(join_code.as_str()),
         questions,
         snap.color_weights,
         selected_set,
