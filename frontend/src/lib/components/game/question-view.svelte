@@ -162,7 +162,7 @@
 	</Card>
 
 	<Card>
-		<CardContent>
+		<CardContent class="p-4">
 			{#if questionType === 'text'}
 				<p class="mb-4 text-center text-xl font-semibold">{questionText}</p>
 			{/if}
