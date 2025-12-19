@@ -54,7 +54,7 @@ const SESSION_INVALID_MESSAGES = new Set<string>([
 	ErrorCode.NotAuthorized
 ]);
 
-function createWebSocketStore() {
+export function createWebSocketStore() {
 	// Core state with runes
 	const state = $state<WebSocketState>({
 		connectionState: ConnectionState.INITIAL,
@@ -89,9 +89,11 @@ function createWebSocketStore() {
 	let wasIntentionalClose = false;
 	let isVisible = browser ? document.visibilityState === 'visible' : true;
 	let isOnline = browser ? navigator.onLine : true;
-	let pendingConnect:
-		| { resolve: () => void; reject: (error: Error) => void; gen: number | null }
-		| null = null;
+	let pendingConnect: {
+		resolve: () => void;
+		reject: (error: Error) => void;
+		gen: number | null;
+	} | null = null;
 
 	// Computed properties using runes
 	const timeUntilReconnect = $derived(() =>
@@ -260,12 +262,13 @@ function createWebSocketStore() {
 		clearRetryTimer();
 		clearConnectionTimeout();
 		stopHeartbeat();
-		if (socket) {
-			socket.close(1000, 'Reconnecting');
-			socket = null;
-		}
 		generationId += 1;
 		const currentGen = generationId;
+		if (socket) {
+			const staleSocket = socket;
+			socket = null;
+			staleSocket.close(1000, 'Reconnecting');
+		}
 		wasIntentionalClose = false;
 		state.connectionState = ConnectionState.CONNECTING;
 		socket = new WebSocket(PUBLIC_SPEKTRUM_WS_SERVER_URL);
@@ -417,6 +420,7 @@ function createWebSocketStore() {
 				sessionToken = null;
 				sessionStatus = 'unknown';
 				closeSocket(true);
+				resetAttempts();
 				markDisconnected();
 				return;
 			}
@@ -425,6 +429,7 @@ function createWebSocketStore() {
 				sessionToken = null;
 				sessionStatus = 'invalid';
 				closeSocket(true);
+				resetAttempts();
 				markDisconnected();
 				return;
 			}
@@ -518,9 +523,6 @@ function createWebSocketStore() {
 					startHeartbeat();
 					return;
 				}
-				if (socket?.readyState === WebSocket.CONNECTING) {
-					return;
-				}
 				if (!desiredConnection) {
 					markDisconnected();
 					return;
@@ -549,9 +551,6 @@ function createWebSocketStore() {
 				}
 				if (!isVisible) {
 					markSuspended();
-					return;
-				}
-				if (socket?.readyState === WebSocket.CONNECTING) {
 					return;
 				}
 				resetAttempts();
