@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { PUBLIC_TITLE } from '$env/static/public';
+	import { env } from '$env/dynamic/public';
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Separator } from '$lib/components/ui/separator';
@@ -13,6 +14,7 @@
 	import type { SessionInfo } from '$lib/stores/game.svelte';
 	import { info, warn } from '$lib/utils/logger';
 
+	const supportEmail = env.PUBLIC_SUPPORT_EMAIL?.trim();
 	let showSetSelector = $state(false);
 	let showJoinCard = $state(false);
 	let currentSession = $state<(SessionInfo & { last_update: string }) | null>(null);
@@ -90,18 +92,25 @@
 			{/if}
 		{/if}
 		<Separator class="mt-4" />
-		<footer class="flex items-center justify-center text-sm">
-			<a href="/howto"><span class="text-muted-foreground">How to play</span></a>
-			<Separator orientation="vertical" class="mx-2 h-4" />
-			<Button
-				href="https://github.com/kottz/spektrum"
-				target="_blank"
-				variant="outline"
-				size="icon"
-			>
-				<Github class="h-[1.2rem] w-[1.2rem]" />
-				<span class="sr-only">Github repository</span>
-			</Button>
+		<footer class="flex flex-col items-center justify-center text-sm">
+			<div class="flex items-center justify-center">
+				<a href="/howto"><span class="text-muted-foreground">How to play</span></a>
+				<Separator orientation="vertical" class="mx-2 h-4" />
+				<Button
+					href="https://github.com/kottz/spektrum"
+					target="_blank"
+					variant="outline"
+					size="icon"
+				>
+					<Github class="h-[1.2rem] w-[1.2rem]" />
+					<span class="sr-only">Github repository</span>
+				</Button>
+			</div>
+			{#if supportEmail}
+				<div class="text-muted-foreground mt-2 text-xs">
+					Questions? <a class="ml-1" href={`mailto:${supportEmail}`}>{supportEmail}</a>
+				</div>
+			{/if}
 		</footer>
 	</div>
 </div>
