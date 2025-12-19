@@ -141,6 +141,7 @@ class GameActions {
 			type: 'Leave'
 		};
 		websocketStore.send(message);
+		websocketStore.disconnect();
 		timerStore.resetTimer();
 		gameStore.cleanup();
 		youtubeStore.cleanup();

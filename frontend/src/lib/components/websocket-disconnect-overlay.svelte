@@ -12,16 +12,21 @@
 	let error = $derived(websocketStore.state.error);
 	let isReconnecting = $derived(websocketStore.isReconnecting);
 	let canReconnect = $derived(websocketStore.canReconnect);
+	let maxReconnectAttempts = $derived(websocketStore.maxReconnectAttempts);
 
 	// Derived values for UI
 	let shouldShow = $derived(
-		connectionState === ConnectionState.ERROR || connectionState === ConnectionState.RECONNECTING
+		connectionState === ConnectionState.ERROR ||
+			connectionState === ConnectionState.RECONNECTING ||
+			connectionState === ConnectionState.OFFLINE
 	);
 
 	let title = $derived(() => {
 		switch (connectionState) {
 			case ConnectionState.RECONNECTING:
-				return `Reconnecting (Attempt ${reconnectAttempts}/5)`;
+				return `Reconnecting (Attempt ${reconnectAttempts}/${maxReconnectAttempts})`;
+			case ConnectionState.OFFLINE:
+				return 'You are offline';
 			case ConnectionState.ERROR:
 				return error || 'Connection Lost';
 			default:
@@ -33,6 +38,9 @@
 		if (connectionState === ConnectionState.RECONNECTING && timeUntilReconnect() !== null) {
 			const secondsUntilReconnect = Math.ceil((timeUntilReconnect() as number) / 1000);
 			return `Next attempt in ${secondsUntilReconnect} seconds...`;
+		}
+		if (connectionState === ConnectionState.OFFLINE) {
+			return 'Waiting for network connectivity...';
 		}
 		return '';
 	});
