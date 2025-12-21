@@ -23,7 +23,16 @@
 	const myAnswer = $derived(currentAnswers.find((a) => a.name === gameStore.state.playerName));
 	const wasCorrect = $derived(myAnswer?.score ? myAnswer.score > 0 : false);
 
-	let clickedAnswer = $state<string | null>(null);
+	const currentQuestionKey = $derived(() => {
+		const question = gameStore.state.currentQuestion;
+		if (!question) return null;
+		return `${question.type}|${question.text ?? ''}|${question.alternatives.join('|')}`;
+	});
+
+	let clickedAnswer = $state<{ key: string | null; answer: string } | null>(null);
+	let activeClickedAnswer = $derived(
+		clickedAnswer?.key === currentQuestionKey() ? clickedAnswer.answer : null
+	);
 
 	const colorMap: Record<string, string> = {
 		red: '#FF0000',
@@ -43,7 +52,7 @@
 
 	function handleAnswer(answer: string) {
 		if (!hasAnswered) {
-			clickedAnswer = answer;
+			clickedAnswer = { key: currentQuestionKey(), answer };
 			timerStore.stopTimer();
 			gameActions.submitAnswer(answer);
 		}
@@ -80,7 +89,7 @@
 		}
 
 		// --- Interaction and Feedback Styles (Common Logic) ---
-		if (alternative === clickedAnswer) {
+		if (alternative === activeClickedAnswer) {
 			styles.push('ring-4', 'z-10');
 			if (myAnswer) {
 				// Feedback after answer revealed
@@ -107,11 +116,11 @@
 			}
 		}
 
-		if (clickedAnswer && alternative !== clickedAnswer) {
+		if (activeClickedAnswer && alternative !== activeClickedAnswer) {
 			styles.push('opacity-40'); // Fade out unselected alternatives
 		}
 
-		if (!clickedAnswer) {
+		if (!activeClickedAnswer) {
 			// Hover effects only when clickable
 			styles.push('hover:ring-2', 'hover:ring-muted-foreground');
 			if (questionType === 'character' || questionType === 'color') {
@@ -142,7 +151,7 @@
 		}
 
 		// Cursor state
-		styles.push(clickedAnswer ? 'cursor-not-allowed' : 'cursor-pointer');
+		styles.push(activeClickedAnswer ? 'cursor-not-allowed' : 'cursor-pointer');
 
 		return styles.join(' ');
 	}
@@ -171,7 +180,7 @@
 				{#each alternatives as alternative}
 					<button
 						class={getButtonStyles(alternative)}
-						disabled={clickedAnswer !== null}
+						disabled={hasAnswered || activeClickedAnswer !== null}
 						onclick={() => handleAnswer(alternative)}
 						style={questionType === 'color' &&
 						!(alternative.toLowerCase() === 'gold' || alternative.toLowerCase() === 'silver')
