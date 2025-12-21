@@ -76,7 +76,7 @@
 				'items-center',
 				'justify-center'
 			);
-			if (!(alternative === clickedAnswer && myAnswer)) {
+			if (!(alternative === activeClickedAnswer && myAnswer)) {
 				styles.push('bg-gray-200', 'dark:bg-gray-800');
 			}
 		} else if (questionType === 'color') {
@@ -97,7 +97,7 @@
 					styles.push('ring-green-500');
 					// Apply original background feedback for character type
 					if (questionType === 'character') {
-						styles.push('bg-green-500/50');
+						styles.push('!bg-green-500/50');
 					} else if (questionType === 'text') {
 						styles.push('!bg-green-500/20'); // Subtle tint for text
 					}
@@ -105,9 +105,9 @@
 					styles.push('ring-red-500');
 					// Apply original background feedback for character type
 					if (questionType === 'character') {
-						styles.push('bg-red-500/50');
+						styles.push('!bg-red-500/50');
 					} else if (questionType === 'text') {
-						styles.push('bg-red-500/20'); // Subtle tint for text
+						styles.push('!bg-red-500/20'); // Subtle tint for text
 					}
 				}
 			} else {
