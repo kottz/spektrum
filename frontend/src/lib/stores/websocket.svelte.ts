@@ -40,12 +40,14 @@ type SupervisorEvent =
 	| { type: 'CLOSE'; gen: number; code: number; reason: string }
 	| { type: 'ERROR'; gen: number; reason: string }
 	| { type: 'HEARTBEAT_TIMEOUT'; gen: number }
+	| { type: 'LIVENESS_TIMEOUT'; gen: number }
 	| { type: 'CONNECTION_TIMEOUT'; gen: number }
 	| { type: 'RETRY_TIMER'; gen: number }
 	| { type: 'VISIBILITY_HIDDEN' }
 	| { type: 'VISIBILITY_VISIBLE' }
 	| { type: 'OFFLINE' }
-	| { type: 'ONLINE' };
+	| { type: 'ONLINE' }
+	| { type: 'NETWORK_CHANGE' };
 
 const SESSION_INVALID_MESSAGES = new Set<string>([
 	ErrorCode.GameClosed,
@@ -73,7 +75,10 @@ export function createWebSocketStore() {
 		MAX_BACKOFF_DELAY: 10000,
 		CONNECTION_TIMEOUT: 5000,
 		HEARTBEAT_INTERVAL: 5000,
-		HEARTBEAT_TIMEOUT: 6000
+		HEARTBEAT_TIMEOUT: 6000,
+		LIVENESS_CHECK_INTERVAL: 5000,
+		LIVENESS_TIMEOUT: 20000,
+		OFFLINE_PROBE_INTERVAL: 10000
 	} as const;
 
 	// Private variables
@@ -82,6 +87,8 @@ export function createWebSocketStore() {
 	let heartbeatInterval: number | undefined = undefined;
 	let heartbeatTimeout: number | undefined = undefined;
 	let connectionTimeout: number | undefined = undefined;
+	let livenessInterval: number | undefined = undefined;
+	let offlineProbeTimeout: number | undefined = undefined;
 	let generationId = 0;
 	let desiredConnection = false;
 	let sessionToken: string | null = null;
@@ -89,6 +96,7 @@ export function createWebSocketStore() {
 	let wasIntentionalClose = false;
 	let isVisible = browser ? document.visibilityState === 'visible' : true;
 	let isOnline = browser ? navigator.onLine : true;
+	let lastActivityAt: number | null = null;
 	let pendingConnect: {
 		resolve: () => void;
 		reject: (error: Error) => void;
@@ -133,6 +141,13 @@ export function createWebSocketStore() {
 		}
 	}
 
+	function clearOfflineProbe() {
+		if (offlineProbeTimeout !== undefined) {
+			window.clearTimeout(offlineProbeTimeout);
+			offlineProbeTimeout = undefined;
+		}
+	}
+
 	function stopHeartbeat() {
 		if (heartbeatInterval !== undefined) {
 			window.clearInterval(heartbeatInterval);
@@ -152,7 +167,13 @@ export function createWebSocketStore() {
 		heartbeatInterval = window.setInterval(() => {
 			if (!socket || socket.readyState !== WebSocket.OPEN) return;
 			if (!isVisible) return;
-			socket.send(new Uint8Array([0x42]));
+			try {
+				socket.send(new Uint8Array([0x42]));
+			} catch (error) {
+				warn('Heartbeat send failed', error);
+				dispatch({ type: 'ERROR', gen: generationId, reason: 'Heartbeat send failed' });
+				return;
+			}
 			if (heartbeatTimeout !== undefined) {
 				window.clearTimeout(heartbeatTimeout);
 			}
@@ -160,6 +181,26 @@ export function createWebSocketStore() {
 				dispatch({ type: 'HEARTBEAT_TIMEOUT', gen: generationId });
 			}, CONFIG.HEARTBEAT_TIMEOUT);
 		}, CONFIG.HEARTBEAT_INTERVAL);
+	}
+
+	function startLivenessMonitor() {
+		if (!browser) return;
+		stopLivenessMonitor();
+		livenessInterval = window.setInterval(() => {
+			if (state.connectionState !== ConnectionState.CONNECTED) return;
+			if (!desiredConnection || !isVisible) return;
+			if (!lastActivityAt) return;
+			if (Date.now() - lastActivityAt > CONFIG.LIVENESS_TIMEOUT) {
+				dispatch({ type: 'LIVENESS_TIMEOUT', gen: generationId });
+			}
+		}, CONFIG.LIVENESS_CHECK_INTERVAL);
+	}
+
+	function stopLivenessMonitor() {
+		if (livenessInterval !== undefined) {
+			window.clearInterval(livenessInterval);
+			livenessInterval = undefined;
+		}
 	}
 
 	function resetAttempts() {
@@ -171,8 +212,11 @@ export function createWebSocketStore() {
 		state.connectionState = ConnectionState.CONNECTED;
 		state.lastConnectedAt = Date.now();
 		state.error = null;
+		isOnline = true;
+		lastActivityAt = Date.now();
 		resetAttempts();
 		sessionStatus = 'valid';
+		clearOfflineProbe();
 	}
 
 	function markDisconnected() {
@@ -181,18 +225,26 @@ export function createWebSocketStore() {
 		state.error = null;
 		clearRetryTimer();
 		clearConnectionTimeout();
+		clearOfflineProbe();
+		stopHeartbeat();
+		stopLivenessMonitor();
 	}
 
 	function markSuspended() {
 		state.connectionState = ConnectionState.SUSPENDED;
 		state.lastDisconnectedAt = Date.now();
 		clearRetryTimer();
+		stopHeartbeat();
+		stopLivenessMonitor();
 	}
 
 	function markOffline() {
 		state.connectionState = ConnectionState.OFFLINE;
 		state.lastDisconnectedAt = Date.now();
 		clearRetryTimer();
+		stopHeartbeat();
+		stopLivenessMonitor();
+		scheduleOfflineProbe();
 	}
 
 	function markFailed(message: string) {
@@ -202,7 +254,9 @@ export function createWebSocketStore() {
 		sessionStatus = 'invalid';
 		clearRetryTimer();
 		clearConnectionTimeout();
+		clearOfflineProbe();
 		stopHeartbeat();
+		stopLivenessMonitor();
 		state.lastDisconnectedAt = Date.now();
 	}
 
@@ -230,8 +284,21 @@ export function createWebSocketStore() {
 		return desiredConnection && sessionStatus !== 'invalid' && isVisible && isOnline;
 	}
 
+	function scheduleOfflineProbe() {
+		if (!browser) return;
+		if (!desiredConnection || !isVisible) return;
+		if (offlineProbeTimeout !== undefined) return;
+		offlineProbeTimeout = window.setTimeout(() => {
+			offlineProbeTimeout = undefined;
+			if (!desiredConnection || !isVisible) return;
+			if (state.connectionState !== ConnectionState.OFFLINE) return;
+			openSocket();
+		}, CONFIG.OFFLINE_PROBE_INTERVAL);
+	}
+
 	function handleConnectionLoss(message?: string) {
 		stopHeartbeat();
+		stopLivenessMonitor();
 		clearConnectionTimeout();
 		state.lastDisconnectedAt = Date.now();
 		if (message) {
@@ -261,7 +328,9 @@ export function createWebSocketStore() {
 		}
 		clearRetryTimer();
 		clearConnectionTimeout();
+		clearOfflineProbe();
 		stopHeartbeat();
+		stopLivenessMonitor();
 		generationId += 1;
 		const currentGen = generationId;
 		if (socket) {
@@ -321,12 +390,17 @@ export function createWebSocketStore() {
 
 	function handleMessage(event: MessageEvent, gen: number) {
 		if (gen !== generationId) return;
+		lastActivityAt = Date.now();
 		if (typeof event.data !== 'string') {
 			if (heartbeatTimeout !== undefined) {
 				window.clearTimeout(heartbeatTimeout);
 				heartbeatTimeout = undefined;
 			}
 			return;
+		}
+		if (heartbeatTimeout !== undefined) {
+			window.clearTimeout(heartbeatTimeout);
+			heartbeatTimeout = undefined;
 		}
 		try {
 			const message = JSON.parse(event.data) as GameUpdate;
@@ -362,14 +436,6 @@ export function createWebSocketStore() {
 				desiredConnection = true;
 				sessionStatus = 'unknown';
 				state.error = null;
-				if (!isOnline) {
-					markOffline();
-					if (pendingConnect) {
-						pendingConnect.reject(new Error('Offline'));
-						pendingConnect = null;
-					}
-					return;
-				}
 				if (!isVisible) {
 					markSuspended();
 					if (pendingConnect) {
@@ -380,7 +446,6 @@ export function createWebSocketStore() {
 				}
 				if (socket?.readyState === WebSocket.OPEN) {
 					if (previousToken && previousToken !== sessionToken) {
-						closeSocket(false);
 						openSocket();
 						return;
 					}
@@ -402,10 +467,6 @@ export function createWebSocketStore() {
 				if (!sessionToken) {
 					warn('No session token available for manual reconnect');
 					markFailed('No session available for reconnect');
-					return;
-				}
-				if (!isOnline) {
-					markOffline();
 					return;
 				}
 				if (!isVisible) {
@@ -452,6 +513,7 @@ export function createWebSocketStore() {
 				}
 				if (isVisible) {
 					startHeartbeat();
+					startLivenessMonitor();
 				}
 				resolvePendingConnect(event.gen);
 				return;
@@ -476,9 +538,13 @@ export function createWebSocketStore() {
 				return;
 			}
 			case 'HEARTBEAT_TIMEOUT': {
-				if (!isVisible || !isOnline) return;
 				warn('Heartbeat timeout');
 				handleConnectionLoss('Connection lost - heartbeat timeout');
+				return;
+			}
+			case 'LIVENESS_TIMEOUT': {
+				warn('Connection stalled');
+				handleConnectionLoss('Connection stalled');
 				return;
 			}
 			case 'CONNECTION_TIMEOUT': {
@@ -508,6 +574,7 @@ export function createWebSocketStore() {
 				if (state.connectionState === ConnectionState.CONNECTED) {
 					stopHeartbeat();
 					clearRetryTimer();
+					stopLivenessMonitor();
 					return;
 				}
 				if (state.connectionState === ConnectionState.RECONNECTING) {
@@ -521,6 +588,7 @@ export function createWebSocketStore() {
 				if (socket?.readyState === WebSocket.OPEN) {
 					markConnected();
 					startHeartbeat();
+					startLivenessMonitor();
 					return;
 				}
 				if (!desiredConnection) {
@@ -547,6 +615,25 @@ export function createWebSocketStore() {
 				state.error = null;
 				if (!desiredConnection) {
 					markDisconnected();
+					return;
+				}
+				if (!isVisible) {
+					markSuspended();
+					return;
+				}
+				resetAttempts();
+				openSocket();
+				return;
+			}
+			case 'NETWORK_CHANGE': {
+				const currentOnline = navigator.onLine;
+				if (!currentOnline) {
+					dispatch({ type: 'OFFLINE' });
+					return;
+				}
+				isOnline = true;
+				state.error = null;
+				if (!desiredConnection) {
 					return;
 				}
 				if (!isVisible) {
@@ -607,6 +694,13 @@ export function createWebSocketStore() {
 		});
 		window.addEventListener('online', () => dispatch({ type: 'ONLINE' }));
 		window.addEventListener('offline', () => dispatch({ type: 'OFFLINE' }));
+		const connection =
+			(navigator as Navigator & { connection?: EventTarget }).connection ||
+			(navigator as Navigator & { mozConnection?: EventTarget }).mozConnection ||
+			(navigator as Navigator & { webkitConnection?: EventTarget }).webkitConnection;
+		if (connection && 'addEventListener' in connection) {
+			connection.addEventListener('change', () => dispatch({ type: 'NETWORK_CHANGE' }));
+		}
 	}
 
 	setupEnvironmentListeners();

@@ -140,10 +140,10 @@ describe('websocket FSM transitions', () => {
 		expect(store.state.connectionState).toBe(ConnectionStateEnum.OFFLINE);
 
 		vi.advanceTimersByTime(20000);
-		expect(MockWebSocket.instances.length).toBe(1);
+		expect(MockWebSocket.instances.length).toBe(2);
 
 		setOnline(true);
-		expect(MockWebSocket.instances.length).toBe(2);
+		expect(MockWebSocket.instances.length).toBe(3);
 
 		MockWebSocket.last().triggerOpen();
 	});
