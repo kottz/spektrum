@@ -160,7 +160,7 @@ describe('websocket FSM transitions', () => {
 		expect(store.canReconnect()).toBe(false);
 	});
 
-	it('allows manual reconnect after session invalid', async () => {
+	it('stops reconnecting after session invalid', async () => {
 		const connectPromise = store.connect('token-4').catch(() => {});
 		const socket = MockWebSocket.last();
 		socket.triggerOpen();
@@ -168,13 +168,7 @@ describe('websocket FSM transitions', () => {
 
 		socket.triggerMessage(JSON.stringify({ type: 'Error', message: 'LobbyNotFound' }));
 
-		expect(store.state.connectionState).toBe(ConnectionStateEnum.ERROR);
-
-		store.manualReconnect();
-		expect(MockWebSocket.instances.length).toBe(2);
-		expect(store.state.reconnectAttempts).toBe(0);
-
-		MockWebSocket.last().triggerOpen();
-		expect(store.state.connectionState).toBe(ConnectionStateEnum.CONNECTED);
+		expect(store.state.connectionState).toBe(ConnectionStateEnum.DISCONNECTED);
+		expect(store.canReconnect()).toBe(false);
 	});
 });

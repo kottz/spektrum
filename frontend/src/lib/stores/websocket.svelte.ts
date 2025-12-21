@@ -496,8 +496,12 @@ export function createWebSocketStore() {
 			}
 			case 'SESSION_INVALID': {
 				sessionStatus = 'invalid';
+				desiredConnection = false;
+				sessionToken = null;
+				state.error = null;
+				resetAttempts();
 				closeSocket(true);
-				markFailed(event.reason || 'Session is no longer valid');
+				markDisconnected();
 				return;
 			}
 			case 'GAME_ENDED': {
