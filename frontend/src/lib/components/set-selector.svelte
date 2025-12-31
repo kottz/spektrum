@@ -20,7 +20,9 @@
 	async function fetchQuestionSets() {
 		isLoading = true;
 		try {
-			const response = await fetch(`${PUBLIC_SPEKTRUM_SERVER_URL}/api/list-sets`);
+			const response = await fetch(`${PUBLIC_SPEKTRUM_SERVER_URL}/api/list-sets`, {
+				cache: 'no-store'
+			});
 			if (!response.ok) throw new Error('Failed to fetch question sets');
 			const data = await response.json();
 			const totalQuestions = data.num_questions;
@@ -42,10 +44,7 @@
 			notifications.add('Failed to create lobby', 'destructive');
 		}
 	}
-
-	$effect(() => {
-		fetchQuestionSets();
-	});
+	fetchQuestionSets();
 </script>
 
 <div class="flex h-full flex-col">

@@ -475,9 +475,17 @@ pub async fn check_sessions(
 
 pub async fn list_sets_handler(
     State(state): State<AppState>,
-) -> Result<Json<ListSetsResponse>, ApiError> {
+) -> Result<impl axum::response::IntoResponse, ApiError> {
     let response = list_sets(&state).await?;
-    Ok(Json(response))
+    let json = Json(response);
+
+    Ok((
+        [(
+            axum::http::header::CACHE_CONTROL,
+            "no-store, no-cache, must-revalidate, max-age=0",
+        )],
+        json,
+    ))
 }
 
 pub async fn create_lobby_handler(
