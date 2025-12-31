@@ -28,7 +28,8 @@ class GameActions {
 			const response = await fetch(`${PUBLIC_SPEKTRUM_SERVER_URL}/api/create-lobby`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ round_duration: 60, set_id: set })
+				body: JSON.stringify({ round_duration: 60, set_id: set }),
+				cache: 'no-store'
 			});
 			if (!response.ok) {
 				throw new Error('Failed to create lobby');

@@ -491,17 +491,33 @@ pub async fn list_sets_handler(
 pub async fn create_lobby_handler(
     State(state): State<AppState>,
     Json(req): Json<CreateLobbyRequest>,
-) -> Result<Json<CreateLobbyResponse>, ApiError> {
+) -> Result<impl axum::response::IntoResponse, ApiError> {
     let response = create_lobby(&state, req).await?;
-    Ok(Json(response))
+    let json = Json(response);
+
+    Ok((
+        [(
+            axum::http::header::CACHE_CONTROL,
+            "no-store, no-cache, must-revalidate, max-age=0",
+        )],
+        json,
+    ))
 }
 
 pub async fn join_lobby_handler(
     State(state): State<AppState>,
     Json(req): Json<JoinLobbyRequest>,
-) -> Result<Json<JoinLobbyResponse>, ApiError> {
+) -> Result<impl axum::response::IntoResponse, ApiError> {
     let response = join_lobby(&state, req).await?;
-    Ok(Json(response))
+    let json = Json(response);
+
+    Ok((
+        [(
+            axum::http::header::CACHE_CONTROL,
+            "no-store, no-cache, must-revalidate, max-age=0",
+        )],
+        json,
+    ))
 }
 
 pub async fn get_stored_data_handler(
@@ -566,9 +582,17 @@ pub async fn upload_character_image_handler(
 pub async fn check_sessions_handler(
     State(state): State<AppState>,
     Json(req): Json<CheckSessionsRequest>,
-) -> Result<Json<CheckSessionsResponse>, ApiError> {
+) -> Result<impl axum::response::IntoResponse, ApiError> {
     let response = check_sessions(&state, req).await?;
-    Ok(Json(response))
+    let json = Json(response);
+
+    Ok((
+        [(
+            axum::http::header::CACHE_CONTROL,
+            "no-store, no-cache, must-revalidate, max-age=0",
+        )],
+        json,
+    ))
 }
 
 struct WsConnection {

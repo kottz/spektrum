@@ -97,7 +97,8 @@ function createGameStore() {
 							player_id: session.playerId
 						}
 					]
-				})
+				}),
+				cache: 'no-store'
 			});
 
 			if (!res.ok) {

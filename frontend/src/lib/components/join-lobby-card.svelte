@@ -55,7 +55,8 @@
 				body: JSON.stringify({
 					join_code: lobbyCode.trim(),
 					name: playerName.trim()
-				})
+				}),
+				cache: 'no-store'
 			});
 
 			if (!response.ok) {

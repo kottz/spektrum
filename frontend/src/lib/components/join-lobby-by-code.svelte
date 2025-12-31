@@ -63,7 +63,8 @@
 					// Use the prop directly
 					join_code: initialJoinCode.trim(),
 					name: playerName.trim()
-				})
+				}),
+				cache: 'no-store'
 			});
 
 			if (!response.ok) {
