@@ -589,6 +589,8 @@ export function createWebSocketStore() {
 			}
 			case 'VISIBILITY_VISIBLE': {
 				isVisible = true;
+				isOnline = navigator.onLine;
+
 				if (socket?.readyState === WebSocket.OPEN) {
 					markConnected();
 					startHeartbeat();
@@ -599,10 +601,8 @@ export function createWebSocketStore() {
 					markDisconnected();
 					return;
 				}
-				if (!isOnline) {
-					markOffline();
-					return;
-				}
+				// Always try to reconnect - let connection success/failure be the source of truth
+				// rather than trusting potentially stale or incorrect navigator.onLine
 				resetAttempts();
 				openSocket();
 				return;
