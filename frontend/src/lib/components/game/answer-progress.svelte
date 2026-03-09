@@ -19,7 +19,7 @@
 	const denominator = $derived(Math.max(answeredCount, totalPlayerCount));
 	const progress = $derived(denominator > 0 ? (answeredCount / denominator) * 100 : 0);
 
-	const allSortedDisplayItems = $derived(() => {
+	const allSortedDisplayItems = $derived.by(() => {
 		const answeredPlayerNames = new Set(currentAnswersList.map((ans) => ans.name));
 
 		const answeredDisplayItems: DisplayListItem[] = currentAnswersList.map((answer) => ({
@@ -39,7 +39,7 @@
 		return [...answeredDisplayItems, ...unansweredDisplayItems];
 	});
 
-	const renderedDisplayItems = $derived(allSortedDisplayItems().slice(0, MAX_DISPLAYED_NAMES));
+	const renderedDisplayItems = $derived(allSortedDisplayItems.slice(0, MAX_DISPLAYED_NAMES));
 	const remainingHiddenPlayersCount = $derived(
 		Math.max(0, totalPlayerCount - MAX_DISPLAYED_NAMES) // totalPlayerCount comes from allPlayersList.length
 	);

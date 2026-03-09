@@ -16,7 +16,7 @@
 
 	const totalPlayerCount = $derived(allPlayersList.length);
 
-	const allSortedDisplayItems = $derived(() => {
+	const allSortedDisplayItems = $derived.by(() => {
 		const answeredPlayerNames = new Set(currentAnswersList.map((ans) => ans.name));
 
 		const answeredDisplayItems: DisplayListItem[] = currentAnswersList.map((answer) => ({
@@ -36,7 +36,7 @@
 		return [...answeredDisplayItems, ...unansweredDisplayItems];
 	});
 
-	const renderedDisplayItems = $derived(allSortedDisplayItems().slice(0, MAX_DISPLAYED_NAMES));
+	const renderedDisplayItems = $derived(allSortedDisplayItems.slice(0, MAX_DISPLAYED_NAMES));
 	const remainingHiddenPlayersCount = $derived(Math.max(0, totalPlayerCount - MAX_DISPLAYED_NAMES));
 </script>
 

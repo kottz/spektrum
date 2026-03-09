@@ -23,7 +23,7 @@
 	const myAnswer = $derived(currentAnswers.find((a) => a.name === gameStore.state.playerName));
 	const wasCorrect = $derived(myAnswer?.score ? myAnswer.score > 0 : false);
 
-	const currentQuestionKey = $derived(() => {
+	const currentQuestionKey = $derived.by(() => {
 		const question = gameStore.state.currentQuestion;
 		if (!question) return null;
 		return `${question.type}|${question.text ?? ''}|${question.alternatives.join('|')}`;
@@ -31,7 +31,7 @@
 
 	let clickedAnswer = $state<{ key: string | null; answer: string } | null>(null);
 	let activeClickedAnswer = $derived(
-		clickedAnswer?.key === currentQuestionKey() ? clickedAnswer.answer : null
+		clickedAnswer?.key === currentQuestionKey ? clickedAnswer.answer : null
 	);
 
 	const colorMap: Record<string, string> = {
@@ -52,7 +52,7 @@
 
 	function handleAnswer(answer: string) {
 		if (!hasAnswered) {
-			clickedAnswer = { key: currentQuestionKey(), answer };
+			clickedAnswer = { key: currentQuestionKey, answer };
 			timerStore.stopTimer();
 			gameActions.submitAnswer(answer);
 		}

@@ -23,7 +23,7 @@
 	<div class="flex items-center gap-4">
 		<div class="bg-secondary relative h-4 w-[20vw] overflow-hidden rounded-full">
 			<div
-				class="bg-primary absolute top-0 left-0 h-full transition-all duration-100 ease-linear"
+				class="bg-primary absolute top-0 left-0 h-full transition-all duration-50 ease-linear"
 				style="width: {progress}%"
 			></div>
 		</div>

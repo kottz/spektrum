@@ -79,7 +79,7 @@ export function createTimer(options: TimerOptions = {}) {
 				}
 				log('Timer finished');
 			}
-		}, 100);
+		}, 33);
 	}
 
 	function stopTimer(forceStopActualTimer: boolean = false) {
