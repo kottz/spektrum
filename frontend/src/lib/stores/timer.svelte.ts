@@ -14,7 +14,7 @@ interface TimerState {
 	isActive: boolean;
 }
 
-function createTimer(options: TimerOptions = {}) {
+export function createTimer(options: TimerOptions = {}) {
 	const { trackAnswerSnapshot = false, trackActiveState = false, label } = options;
 
 	const state = $state<TimerState>({

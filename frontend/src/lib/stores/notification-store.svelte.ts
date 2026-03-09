@@ -6,7 +6,7 @@ interface Notification {
 	type: NotificationType;
 }
 
-function createNotificationStore() {
+export function createNotificationStore() {
 	let items = $state<Notification[]>([]);
 
 	return {
