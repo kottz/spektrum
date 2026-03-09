@@ -10,7 +10,7 @@
 	const winner = $derived(players[0]);
 </script>
 
-<div class="space-y-6">
+<div class="mx-auto max-w-2xl space-y-6 p-6">
 	<!-- Winner announcement -->
 	<Card>
 		<CardHeader>
