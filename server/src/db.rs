@@ -10,7 +10,7 @@ use chrono::Utc;
 use flate2::Compression;
 use flate2::{read::GzDecoder, write::GzEncoder};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -649,25 +649,27 @@ impl QuestionDatabase {
         let stored_data = self.read_stored_data().await?;
         stored_data.validate_stored_data()?;
 
+        let media_by_id: HashMap<i64, _> = stored_data.media.iter().map(|m| (m.id, m)).collect();
+
+        let mut options_by_question: HashMap<i64, Vec<GameQuestionOption>> = HashMap::new();
+        for opt in &stored_data.options {
+            options_by_question
+                .entry(opt.question_id)
+                .or_default()
+                .push(GameQuestionOption {
+                    option: opt.option_text.clone(),
+                    is_correct: opt.is_correct,
+                });
+        }
+
         let game_questions: Vec<GameQuestion> = stored_data
             .questions
             .iter()
             .filter(|q| q.is_active)
             .filter_map(|question| {
-                let media = stored_data
-                    .media
-                    .iter()
-                    .find(|m| m.id == question.media_id)?;
+                let media = media_by_id.get(&question.media_id)?;
 
-                let options = stored_data
-                    .options
-                    .iter()
-                    .filter(|o| o.question_id == question.id)
-                    .map(|opt| GameQuestionOption {
-                        option: opt.option_text.clone(),
-                        is_correct: opt.is_correct,
-                    })
-                    .collect();
+                let options = options_by_question.remove(&question.id).unwrap_or_default();
 
                 Some(GameQuestion {
                     id: question.id.try_into().ok()?,
