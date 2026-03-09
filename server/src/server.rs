@@ -278,7 +278,7 @@ pub async fn create_lobby(
     let admin_id = Uuid::new_v4();
     let join_code = state.generate_join_code()?;
 
-    let mut engine = GameEngine::new(
+    let engine = GameEngine::new(
         admin_id,
         Arc::from(join_code.as_str()),
         questions,
@@ -286,7 +286,6 @@ pub async fn create_lobby(
         selected_set,
         round_duration,
     );
-    engine.add_player(admin_id, "Admin".into())?;
     trace!("Creating new lobby {}", join_code);
 
     state.lobbies.insert(join_code.clone(), engine);
@@ -1124,7 +1123,7 @@ mod tests {
         let join_res = join_lobby(&state, join_req).await.unwrap();
 
         let lobby = state.lobbies.get(&join_code).unwrap();
-        assert_eq!(lobby.get_player_count(), 2); // Admin + Player1
+        assert_eq!(lobby.get_player_count(), 1); // Player1 (admin is separate)
         assert!(lobby.has_player(&join_res.player_id));
         assert_eq!(
             join_res.session_token,

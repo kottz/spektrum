@@ -192,6 +192,7 @@ pub struct GameState {
     pub phase: GamePhase,
     pub players: HashMap<Uuid, PlayerState>,
     pub admin_id: Uuid,
+    pub admin: AdminConnection,
     pub join_code: Arc<str>,
     pub round_start_time: Option<Instant>,
     pub round_duration: u64,
@@ -234,6 +235,13 @@ impl PlayerState {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct AdminConnection {
+    pub name: Arc<str>,
+    pub tx: Option<Sender<Utf8Bytes>>,
+    pub connection_id: Option<Uuid>,
+}
+
 pub struct GameEngine {
     state: GameState,
 }
@@ -274,6 +282,11 @@ impl GameEngine {
                 phase: GamePhase::Lobby,
                 players: HashMap::new(),
                 admin_id,
+                admin: AdminConnection {
+                    name: Arc::from("Admin"),
+                    tx: None,
+                    connection_id: None,
+                },
                 join_code,
                 round_start_time: None,
                 round_duration,
@@ -295,14 +308,22 @@ impl GameEngine {
         tx: Sender<Utf8Bytes>,
         connection_id: Uuid,
     ) {
-        if let Some(player) = self.state.players.get_mut(&player_id) {
+        if player_id == self.state.admin_id {
+            self.state.admin.tx = Some(tx);
+            self.state.admin.connection_id = Some(connection_id);
+        } else if let Some(player) = self.state.players.get_mut(&player_id) {
             player.tx = Some(tx);
             player.connection_id = Some(connection_id);
         }
     }
 
     pub fn clear_player_connection(&mut self, player_id: Uuid, connection_id: Uuid) {
-        if let Some(player) = self.state.players.get_mut(&player_id)
+        if player_id == self.state.admin_id {
+            if self.state.admin.connection_id == Some(connection_id) {
+                self.state.admin.tx = None;
+                self.state.admin.connection_id = None;
+            }
+        } else if let Some(player) = self.state.players.get_mut(&player_id)
             && player.connection_id == Some(connection_id)
         {
             player.tx = None;
@@ -312,7 +333,12 @@ impl GameEngine {
 
     pub fn add_player(&mut self, player_id: Uuid, name: String) -> Result<(), NameValidationError> {
         let trimmed = name.trim();
-        let existing_names = self.state.players.values().map(|p| p.name.as_ref());
+        let existing_names = self
+            .state
+            .players
+            .values()
+            .map(|p| p.name.as_ref())
+            .chain(std::iter::once(self.state.admin.name.as_ref()));
         validate_player_name(trimmed, existing_names)?;
         self.state
             .players
@@ -379,11 +405,9 @@ impl GameEngine {
         let mut scoreboard = Vec::with_capacity(player_count);
         let mut round_scores = Vec::with_capacity(player_count);
         let mut consecutive_misses = Vec::with_capacity(player_count);
-        for (id, p) in &self.state.players {
+        for p in self.state.players.values() {
             let name = p.name.clone();
-            if *id != self.state.admin_id {
-                scoreboard.push((name.clone(), p.score));
-            }
+            scoreboard.push((name.clone(), p.score));
             round_scores.push((name.clone(), p.round_score));
             consecutive_misses.push((name, p.consecutive_misses));
         }
@@ -439,16 +463,37 @@ impl GameEngine {
     }
 
     pub fn has_player(&self, player_id: &Uuid) -> bool {
-        self.state.players.contains_key(player_id)
+        *player_id == self.state.admin_id || self.state.players.contains_key(player_id)
     }
 
     fn get_scoreboard(&self) -> Vec<(Arc<str>, i32)> {
         self.state
             .players
-            .iter()
-            .filter(|(id, _)| **id != self.state.admin_id)
-            .map(|(_, p)| (p.name.clone(), p.score))
+            .values()
+            .map(|p| (p.name.clone(), p.score))
             .collect()
+    }
+
+    fn try_send_to(tx: &Sender<Utf8Bytes>, payload: Utf8Bytes, id: Uuid) -> Result<(), Utf8Bytes> {
+        match tx.try_send(payload) {
+            Ok(()) => Ok(()),
+            Err(TrySendError::Full(p)) => {
+                warn!(%id, "Channel full, disconnecting");
+                Err(p)
+            }
+            Err(TrySendError::Closed(p)) => {
+                warn!(%id, "Channel closed, disconnecting");
+                Err(p)
+            }
+        }
+    }
+
+    fn send_to_admin(&mut self, payload: Utf8Bytes) {
+        if let Some(tx) = &self.state.admin.tx
+            && Self::try_send_to(tx, payload, self.state.admin_id).is_err()
+        {
+            self.state.admin.tx = None;
+        }
     }
 
     fn push_update(&mut self, recipients: Recipients, update: GameUpdate) {
@@ -470,74 +515,47 @@ impl GameEngine {
 
         match recipients {
             Recipients::Single(target) => {
-                if let Some(player) = self.state.players.get_mut(&target)
+                if target == self.state.admin_id {
+                    self.send_to_admin(payload);
+                } else if let Some(player) = self.state.players.get_mut(&target)
                     && let Some(tx) = &player.tx
+                    && Self::try_send_to(tx, payload, target).is_err()
                 {
-                    match tx.try_send(payload.clone()) {
-                        Ok(()) => {}
-                        Err(TrySendError::Full(_)) => {
-                            warn!(%target, "Channel full, disconnecting player");
-                            player.tx = None;
-                        }
-                        Err(TrySendError::Closed(_)) => {
-                            warn!(%target, "Channel closed, disconnecting player");
-                            player.tx = None;
-                        }
-                    }
+                    player.tx = None;
                 }
             }
             Recipients::Multiple(targets) => {
                 for target in targets {
-                    if let Some(player) = self.state.players.get_mut(&target)
+                    if target == self.state.admin_id {
+                        self.send_to_admin(payload.clone());
+                    } else if let Some(player) = self.state.players.get_mut(&target)
                         && let Some(tx) = &player.tx
+                        && Self::try_send_to(tx, payload.clone(), target).is_err()
                     {
-                        match tx.try_send(payload.clone()) {
-                            Ok(()) => {}
-                            Err(TrySendError::Full(_)) => {
-                                warn!(%target, "Channel full, disconnecting player");
-                                player.tx = None;
-                            }
-                            Err(TrySendError::Closed(_)) => {
-                                warn!(%target, "Channel closed, disconnecting player");
-                                player.tx = None;
-                            }
-                        }
+                        player.tx = None;
                     }
                 }
             }
             Recipients::_AllExcept(exclusions) => {
+                if !exclusions.contains(&self.state.admin_id) {
+                    self.send_to_admin(payload.clone());
+                }
                 for (player_id, player) in self.state.players.iter_mut() {
                     if !exclusions.contains(player_id)
                         && let Some(tx) = &player.tx
+                        && Self::try_send_to(tx, payload.clone(), *player_id).is_err()
                     {
-                        match tx.try_send(payload.clone()) {
-                            Ok(()) => {}
-                            Err(TrySendError::Full(_)) => {
-                                warn!(%player_id, "Channel full, disconnecting player");
-                                player.tx = None;
-                            }
-                            Err(TrySendError::Closed(_)) => {
-                                warn!(%player_id, "Channel closed, disconnecting player");
-                                player.tx = None;
-                            }
-                        }
+                        player.tx = None;
                     }
                 }
             }
             Recipients::All => {
+                self.send_to_admin(payload.clone());
                 for (player_id, player) in self.state.players.iter_mut() {
-                    if let Some(tx) = &player.tx {
-                        match tx.try_send(payload.clone()) {
-                            Ok(()) => {}
-                            Err(TrySendError::Full(_)) => {
-                                warn!(%player_id, "Channel full, disconnecting player");
-                                player.tx = None;
-                            }
-                            Err(TrySendError::Closed(_)) => {
-                                warn!(%player_id, "Channel closed, disconnecting player");
-                                player.tx = None;
-                            }
-                        }
+                    if let Some(tx) = &player.tx
+                        && Self::try_send_to(tx, payload.clone(), *player_id).is_err()
+                    {
+                        player.tx = None;
                     }
                 }
             }
@@ -598,113 +616,120 @@ impl GameEngine {
     }
 
     fn handle_connect(&mut self, ctx: EventContext) {
-        if let Some(player) = self.state.players.get(&ctx.sender_id) {
-            // First send the initial connection acknowledgment
+        let is_admin = ctx.sender_id == self.state.admin_id;
+        let name = if is_admin {
+            self.state.admin.name.clone()
+        } else {
+            match self.state.players.get(&ctx.sender_id) {
+                Some(player) => player.name.clone(),
+                None => {
+                    self.push_update(
+                        Recipients::Single(ctx.sender_id),
+                        GameUpdate::Error {
+                            message: "Player not found. Please register before connecting.".into(),
+                        },
+                    );
+                    return;
+                }
+            }
+        };
+
+        // First send the initial connection acknowledgment
+        self.push_update(
+            Recipients::Single(ctx.sender_id),
+            GameUpdate::Connected {
+                player_id: ctx.sender_id,
+                name,
+                round_duration: self.state.round_duration,
+            },
+        );
+
+        // Then send the complete current state
+        let (scoreboard, round_scores, consecutive_misses) = self.get_player_summary();
+        let state_update = GameUpdate::StateDelta {
+            phase: Some(self.state.phase),
+            question_type: self
+                .state
+                .current_question
+                .as_ref()
+                .map(|q| Arc::from(q.get_question_type())),
+            question_text: self
+                .state
+                .current_question
+                .as_ref()
+                .and_then(|q| q.question_text.clone()),
+            alternatives: Some(self.state.current_alternatives.clone()),
+            question_time_remaining_ms: if self.state.phase == GamePhase::Question {
+                self.get_question_time_remaining_ms(ctx.timestamp)
+            } else {
+                None
+            },
+            answered_player_names: if self.state.phase == GamePhase::Question {
+                Some(self.get_answered_player_names())
+            } else {
+                None
+            },
+            scoreboard: Some(scoreboard),
+            round_scores: Some(round_scores),
+            consecutive_misses: Some(consecutive_misses),
+            admin_extra: if is_admin {
+                Some(AdminExtraInfo {
+                    upcoming_questions: self.get_upcoming_questions(3),
+                })
+            } else {
+                None
+            },
+        };
+
+        self.push_update(Recipients::Single(ctx.sender_id), state_update);
+
+        // In lobby phase, broadcast scoreboard to all players
+        if self.state.phase == GamePhase::Lobby {
             self.push_update(
-                Recipients::Single(ctx.sender_id),
-                GameUpdate::Connected {
-                    player_id: ctx.sender_id,
-                    name: player.name.clone(),
-                    round_duration: self.state.round_duration,
+                Recipients::_AllExcept(vec![ctx.sender_id]),
+                GameUpdate::StateDelta {
+                    phase: None,
+                    question_type: None,
+                    question_text: None,
+                    alternatives: None,
+                    question_time_remaining_ms: None,
+                    answered_player_names: None,
+                    scoreboard: Some(self.get_scoreboard()),
+                    round_scores: None,
+                    consecutive_misses: None,
+                    admin_extra: None,
                 },
             );
+        }
 
-            // Then send the complete current state
-            let (scoreboard, round_scores, consecutive_misses) = self.get_player_summary();
-            let state_update = GameUpdate::StateDelta {
-                phase: Some(self.state.phase),
-                question_type: self
-                    .state
-                    .current_question
-                    .as_ref()
-                    .map(|q| Arc::from(q.get_question_type())),
-                question_text: self
-                    .state
-                    .current_question
-                    .as_ref()
-                    .and_then(|q| q.question_text.clone()),
-                alternatives: Some(self.state.current_alternatives.clone()),
-                question_time_remaining_ms: if self.state.phase == GamePhase::Question {
-                    self.get_question_time_remaining_ms(ctx.timestamp)
-                } else {
-                    None
-                },
-                answered_player_names: if self.state.phase == GamePhase::Question {
-                    Some(self.get_answered_player_names())
-                } else {
-                    None
-                },
-                scoreboard: Some(scoreboard),
-                round_scores: Some(round_scores),
-                consecutive_misses: Some(consecutive_misses),
-                admin_extra: if ctx.sender_id == self.state.admin_id {
-                    Some(AdminExtraInfo {
-                        upcoming_questions: self.get_upcoming_questions(3),
-                    })
-                } else {
-                    None
-                },
-            };
-
-            self.push_update(Recipients::Single(ctx.sender_id), state_update);
-
-            // In lobby phase, broadcast scoreboard to all players
-            if self.state.phase == GamePhase::Lobby {
-                self.push_update(
-                    Recipients::_AllExcept(vec![ctx.sender_id]),
-                    GameUpdate::StateDelta {
-                        phase: None,
-                        question_type: None,
-                        question_text: None,
-                        alternatives: None,
-                        question_time_remaining_ms: None,
-                        answered_player_names: None,
-                        scoreboard: Some(self.get_scoreboard()),
-                        round_scores: None,
-                        consecutive_misses: None,
-                        admin_extra: None,
-                    },
-                );
-            }
-
-            // If this is the admin and we're in Question phase, send the current question
-            if ctx.sender_id == self.state.admin_id
-                && self.state.phase == GamePhase::Question
-                && let Some(question) = &self.state.current_question
-            {
-                self.push_update(
-                    Recipients::Single(self.state.admin_id),
-                    GameUpdate::AdminInfo {
-                        current_question: question.clone(),
-                    },
-                );
-            }
-        } else {
+        // If this is the admin and we're in Question phase, send the current question
+        if is_admin
+            && self.state.phase == GamePhase::Question
+            && let Some(question) = &self.state.current_question
+        {
             self.push_update(
-                Recipients::Single(ctx.sender_id),
-                GameUpdate::Error {
-                    message: "Player not found. Please register before connecting.".into(),
+                Recipients::Single(self.state.admin_id),
+                GameUpdate::AdminInfo {
+                    current_question: question.clone(),
                 },
             );
         }
     }
 
     fn handle_leave(&mut self, ctx: EventContext) {
-        if let Some(player) = self.state.players.remove(&ctx.sender_id) {
-            if ctx.sender_id == self.state.admin_id {
-                self.state.phase = GamePhase::GameClosed;
-                self.push_update(
-                    Recipients::All,
-                    GameUpdate::GameClosed {
-                        reason: "Host left the game".into(),
-                    },
-                );
-            } else {
-                self.push_update(
-                    Recipients::All,
-                    GameUpdate::PlayerLeft { name: player.name },
-                );
-            }
+        if ctx.sender_id == self.state.admin_id {
+            self.state.phase = GamePhase::GameClosed;
+            self.push_update(
+                Recipients::All,
+                GameUpdate::GameClosed {
+                    reason: "Host left the game".into(),
+                },
+            );
+        } else if let Some(player) = self.state.players.remove(&ctx.sender_id) {
+            self.push_update(
+                Recipients::All,
+                GameUpdate::PlayerLeft { name: player.name },
+            );
         } else {
             self.push_update(
                 Recipients::Single(ctx.sender_id),
@@ -716,6 +741,9 @@ impl GameEngine {
     }
 
     fn handle_answer(&mut self, ctx: EventContext, answer: String) {
+        if ctx.sender_id == self.state.admin_id {
+            return;
+        }
         if self.state.phase != GamePhase::Question {
             debug!(
                 sender_id = %ctx.sender_id,
@@ -1047,16 +1075,6 @@ impl GameEngine {
                 return;
             }
         };
-        // Admin cannot kick themselves
-        if target_player_id == self.state.admin_id {
-            self.push_update(
-                Recipients::Single(ctx.sender_id), // Send error to admin
-                GameUpdate::Error {
-                    message: "Admin cannot kick themselves.".into(),
-                },
-            );
-            return;
-        }
 
         // Get player name for notification before removing
         if let Some(kicked_player) = self.state.players.get(&target_player_id) {
@@ -1290,7 +1308,6 @@ mod tests {
             None,
             30,
         );
-        engine.add_player(admin_id, "Admin".into()).unwrap();
         engine.update_player_connection(admin_id, tx, admin_conn_id);
 
         (engine, admin_id)
@@ -1656,12 +1673,7 @@ mod tests {
 
         // Ensure admin connection is unaffected
         assert!(
-            engine
-                .state
-                .players
-                .get(&admin_id)
-                .and_then(|p| p.tx.clone())
-                .is_some(),
+            engine.state.admin.tx.is_some(),
             "Admin connection should remain intact"
         );
     }
@@ -1897,7 +1909,7 @@ mod tests {
             name: Arc::from("Test Set"),
         };
 
-        let mut engine = GameEngine::new(
+        let engine = GameEngine::new(
             admin_id,
             Arc::from("TEST"),
             questions,
@@ -1905,7 +1917,6 @@ mod tests {
             Some(&question_set),
             30,
         );
-        engine.add_player(admin_id, "Admin".into()).unwrap();
 
         assert_eq!(engine.state.shuffled_question_indices.len(), 2);
     }
@@ -2017,7 +2028,7 @@ mod tests {
         }
 
         // State verifications
-        assert!(!engine.state.players.contains_key(&admin_id));
+        assert_eq!(engine.state.phase, GamePhase::GameClosed);
     }
 
     #[test]
@@ -2241,10 +2252,11 @@ mod tests {
             action: GameAction::Leave,
         });
 
-        // Assert admin was removed
-        assert!(
-            !engine.state.players.contains_key(&admin_id),
-            "Admin should be removed after leaving"
+        // Assert game was closed after admin left
+        assert_eq!(
+            engine.state.phase,
+            GamePhase::GameClosed,
+            "Game should be closed after admin leaves"
         );
 
         // Test answer with non-existent player
@@ -2540,7 +2552,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_connect_unregistered_player() {
-        let (mut engine, admin_id) = setup_test_game();
+        let (mut engine, _admin_id) = setup_test_game();
         let initial_player_count = engine.get_player_count();
 
         // Attempt to connect with an unknown player id
@@ -2553,9 +2565,8 @@ mod tests {
             action: GameAction::Connect,
         });
 
-        // Ensure state is unchanged and admin remains present
+        // Ensure state is unchanged
         assert_eq!(engine.get_player_count(), initial_player_count);
-        assert!(engine.state.players.contains_key(&admin_id));
         assert!(!engine.state.players.contains_key(&invalid_id));
     }
 
@@ -2575,11 +2586,8 @@ mod tests {
             action: GameAction::Leave,
         });
 
-        // Verify admin was removed
-        assert!(
-            !engine.state.players.contains_key(&admin_id),
-            "Admin should be removed from players"
-        );
+        // Verify game was closed
+        assert_eq!(engine.state.phase, GamePhase::GameClosed);
 
         // Verify player received game closed message
         match receive_and_deserialize(&mut player_rx).await {
@@ -2838,7 +2846,7 @@ mod tests {
         let initial_player_count = engine.state.players.len();
         let now = Instant::now();
 
-        // Admin tries to kick themselves
+        // Admin tries to kick "Admin" — not found in players since admin is separate
         engine.process_event(GameEvent {
             context: EventContext {
                 sender_id: admin_id,
@@ -2849,14 +2857,13 @@ mod tests {
             },
         });
 
-        // Verify admin was not removed
-        assert!(engine.state.players.contains_key(&admin_id));
+        // Verify player count unchanged
         assert_eq!(engine.state.players.len(), initial_player_count);
 
-        // Verify admin received an error message
+        // Verify admin received a "not found" error message
         match receive_and_deserialize(&mut admin_rx).await {
             GameUpdate::Error { message } => {
-                assert!(message.contains("Admin cannot kick themselves"));
+                assert!(message.contains("not found"));
             }
             other => panic!("Admin expected Error, got {:?}", other),
         }
