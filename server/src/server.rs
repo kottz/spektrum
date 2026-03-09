@@ -1029,17 +1029,10 @@ async fn cleanup_lobbies(lobbies: Arc<DashMap<String, GameEngine>>) {
 
         for lobby_id in &finished_lobby_ids {
             if let Some((_, engine)) = lobbies.remove(lobby_id) {
-                let (total_players, questions_played, player_scores) = engine.get_lobby_stats();
-                let players_info: Vec<String> = player_scores
-                    .iter()
-                    .map(|(name, score)| format!("{}:{}", name, score))
-                    .collect();
+                let (total_players, questions_played) = engine.get_lobby_stats();
                 info!(
-                    "Lobby closed: {} with {} players, {} questions played, players [{}]",
-                    lobby_id,
-                    total_players,
-                    questions_played,
-                    players_info.join(", ")
+                    "Lobby closed: {} with {} players, {} questions played",
+                    lobby_id, total_players, questions_played,
                 );
             }
         }

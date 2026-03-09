@@ -27,14 +27,14 @@ pub enum NameValidationError {
 }
 
 impl NameValidationError {
-    fn to_message(&self) -> String {
+    fn to_message(&self) -> &'static str {
         match self {
-            Self::TooShort => "Name must be at least 2 characters long.".into(),
-            Self::TooLong => "Name cannot be longer than 16 characters.".into(),
+            Self::TooShort => "Name must be at least 2 characters long.",
+            Self::TooLong => "Name cannot be longer than 16 characters.",
             Self::InvalidCharacters => {
-                "Name can only contain letters, numbers, spaces, and the symbols: _ - .".into()
+                "Name can only contain letters, numbers, spaces, and the symbols: _ - ."
             }
-            Self::AlreadyTaken => "This name is already taken.".into(),
+            Self::AlreadyTaken => "This name is already taken.",
         }
     }
 }
@@ -355,16 +355,8 @@ impl GameEngine {
         self.state.players.len() >= 1024
     }
 
-    pub fn get_lobby_stats(&self) -> (usize, usize, Vec<(Arc<str>, i32)>) {
-        let total_players = self.state.players.len();
-        let questions_played = self.state.current_question_index;
-        let player_scores: Vec<(Arc<str>, i32)> = self
-            .state
-            .players
-            .values()
-            .map(|p| (p.name.clone(), p.score))
-            .collect();
-        (total_players, questions_played, player_scores)
+    pub fn get_lobby_stats(&self) -> (usize, usize) {
+        (self.state.players.len(), self.state.current_question_index)
     }
 
     pub fn get_consecutive_misses(&self) -> Vec<(Arc<str>, u32)> {
@@ -375,12 +367,27 @@ impl GameEngine {
             .collect()
     }
 
-    pub fn get_round_scores(&self) -> Vec<(Arc<str>, i32)> {
-        self.state
-            .players
-            .values()
-            .map(|p| (p.name.clone(), p.round_score))
-            .collect()
+    #[allow(clippy::type_complexity)]
+    fn get_player_summary(
+        &self,
+    ) -> (
+        Vec<(Arc<str>, i32)>,
+        Vec<(Arc<str>, i32)>,
+        Vec<(Arc<str>, u32)>,
+    ) {
+        let player_count = self.state.players.len();
+        let mut scoreboard = Vec::with_capacity(player_count);
+        let mut round_scores = Vec::with_capacity(player_count);
+        let mut consecutive_misses = Vec::with_capacity(player_count);
+        for (id, p) in &self.state.players {
+            let name = p.name.clone();
+            if *id != self.state.admin_id {
+                scoreboard.push((name.clone(), p.score));
+            }
+            round_scores.push((name.clone(), p.round_score));
+            consecutive_misses.push((name, p.consecutive_misses));
+        }
+        (scoreboard, round_scores, consecutive_misses)
     }
 
     fn get_question_time_remaining_ms(&self, now: Instant) -> Option<u64> {
@@ -400,18 +407,19 @@ impl GameEngine {
     }
 
     fn log_game_state(&self, action: &str) {
-        let (total_players, questions_played, player_scores) = self.get_lobby_stats();
-        let players_info: Vec<String> = player_scores
-            .iter()
-            .map(|(name, score)| format!("{}:{}", name, score))
-            .collect();
+        use std::fmt::Write;
+        let total_players = self.state.players.len();
+        let questions_played = self.state.current_question_index;
+        let mut players_info = String::new();
+        for (i, p) in self.state.players.values().enumerate() {
+            if i > 0 {
+                players_info.push_str(", ");
+            }
+            let _ = write!(players_info, "{}:{}", p.name, p.score);
+        }
         info!(
             "Lobby {}: {} - {} players, {} questions played, players [{}]",
-            self.state.join_code,
-            action,
-            total_players,
-            questions_played,
-            players_info.join(", ")
+            self.state.join_code, action, total_players, questions_played, players_info
         );
     }
 
@@ -602,6 +610,7 @@ impl GameEngine {
             );
 
             // Then send the complete current state
+            let (scoreboard, round_scores, consecutive_misses) = self.get_player_summary();
             let state_update = GameUpdate::StateDelta {
                 phase: Some(self.state.phase),
                 question_type: self
@@ -625,9 +634,9 @@ impl GameEngine {
                 } else {
                     None
                 },
-                scoreboard: Some(self.get_scoreboard()),
-                round_scores: Some(self.get_round_scores()),
-                consecutive_misses: Some(self.get_consecutive_misses()),
+                scoreboard: Some(scoreboard),
+                round_scores: Some(round_scores),
+                consecutive_misses: Some(consecutive_misses),
                 admin_extra: if ctx.sender_id == self.state.admin_id {
                     Some(AdminExtraInfo {
                         upcoming_questions: self.get_upcoming_questions(3),
@@ -661,7 +670,6 @@ impl GameEngine {
             // If this is the admin and we're in Question phase, send the current question
             if ctx.sender_id == self.state.admin_id
                 && self.state.phase == GamePhase::Question
-                && self.state.current_question.is_some()
                 && let Some(question) = &self.state.current_question
             {
                 self.push_update(
@@ -818,6 +826,7 @@ impl GameEngine {
 
         self.state.phase = GamePhase::Score;
         debug!(from = ?from_phase, to = ?self.state.phase, "Phase transition");
+        let (scoreboard, round_scores, consecutive_misses) = self.get_player_summary();
         self.push_update(
             Recipients::All,
             GameUpdate::StateDelta {
@@ -827,9 +836,9 @@ impl GameEngine {
                 alternatives: None,
                 question_time_remaining_ms: None,
                 answered_player_names: None,
-                scoreboard: Some(self.get_scoreboard()),
-                round_scores: Some(self.get_round_scores()),
-                consecutive_misses: Some(self.get_consecutive_misses()),
+                scoreboard: Some(scoreboard),
+                round_scores: Some(round_scores),
+                consecutive_misses: Some(consecutive_misses),
                 admin_extra: None,
             },
         );
@@ -881,7 +890,7 @@ impl GameEngine {
         }
         match self.setup_round() {
             Ok(()) => {
-                let Some(question) = self.state.current_question.clone() else {
+                let Some(ref question) = self.state.current_question else {
                     self.push_update(
                         Recipients::Single(self.state.admin_id),
                         GameUpdate::Error {
@@ -890,6 +899,9 @@ impl GameEngine {
                     );
                     return;
                 };
+                let question_type = Arc::from(question.get_question_type());
+                let question_text = question.question_text.clone();
+                let admin_question = question.clone();
                 self.state.phase = GamePhase::Question;
                 self.state.round_start_time = Some(ctx.timestamp);
                 debug!(
@@ -898,25 +910,26 @@ impl GameEngine {
                     question_index = self.state.current_question_index,
                     "Phase transition"
                 );
+                let (scoreboard, round_scores, consecutive_misses) = self.get_player_summary();
                 self.push_update(
                     Recipients::All,
                     GameUpdate::StateDelta {
                         phase: Some(GamePhase::Question),
-                        question_type: Some(Arc::from(question.get_question_type())),
-                        question_text: question.question_text.clone(),
+                        question_type: Some(question_type),
+                        question_text,
                         alternatives: Some(self.state.current_alternatives.clone()),
                         question_time_remaining_ms: Some(self.state.round_duration * 1000),
                         answered_player_names: Some(Vec::new()),
-                        scoreboard: Some(self.get_scoreboard()),
-                        round_scores: Some(self.get_round_scores()),
-                        consecutive_misses: Some(self.get_consecutive_misses()),
+                        scoreboard: Some(scoreboard),
+                        round_scores: Some(round_scores),
+                        consecutive_misses: Some(consecutive_misses),
                         admin_extra: None,
                     },
                 );
                 self.push_update(
                     Recipients::Single(self.state.admin_id),
                     GameUpdate::AdminInfo {
-                        current_question: question,
+                        current_question: admin_question,
                     },
                 );
             }
@@ -962,6 +975,7 @@ impl GameEngine {
         self.state.correct_answers = None;
         self.state.phase = GamePhase::Score;
         debug!(from = ?GamePhase::Question, to = ?GamePhase::Score, "Phase transition");
+        let (scoreboard, round_scores, consecutive_misses) = self.get_player_summary();
         self.push_update(
             Recipients::All,
             GameUpdate::StateDelta {
@@ -971,9 +985,9 @@ impl GameEngine {
                 alternatives: None,
                 question_time_remaining_ms: None,
                 answered_player_names: None,
-                scoreboard: Some(self.get_scoreboard()),
-                round_scores: Some(self.get_round_scores()),
-                consecutive_misses: Some(self.get_consecutive_misses()),
+                scoreboard: Some(scoreboard),
+                round_scores: Some(round_scores),
+                consecutive_misses: Some(consecutive_misses),
                 admin_extra: None,
             },
         );
@@ -1060,17 +1074,16 @@ impl GameEngine {
             self.state.players.remove(&target_player_id);
 
             // Notify remaining players
-            let remaining_players: Vec<Uuid> = self.state.players.keys().cloned().collect();
             self.push_update(
-                Recipients::Multiple(remaining_players.clone()), // Send to all *remaining* players
+                Recipients::All,
                 GameUpdate::PlayerLeft {
                     name: kicked_player_name,
                 },
             );
 
-            // // Send updated scoreboard to remaining players
+            // Send updated scoreboard to remaining players
             self.push_update(
-                Recipients::Multiple(remaining_players),
+                Recipients::All,
                 GameUpdate::StateDelta {
                     phase: None, // Phase doesn't change
                     question_type: None,
