@@ -1130,10 +1130,10 @@ impl GameEngine {
         self.state.correct_answers = Some(next_question.get_correct_answer());
         self.state.current_alternatives =
             next_question.generate_round_alternatives(&self.state.color_weights);
-        if let Some(correct_answers) = self.state.correct_answers.clone() {
+        if let Some(ref correct_answers) = self.state.correct_answers {
             for answer in correct_answers {
-                if !self.state.current_alternatives.contains(&answer) {
-                    self.state.current_alternatives.push(answer);
+                if !self.state.current_alternatives.contains(answer) {
+                    self.state.current_alternatives.push(answer.clone());
                 }
             }
         }
