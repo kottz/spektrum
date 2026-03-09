@@ -6,7 +6,7 @@ import type { GameUpdate, PlayerAnswer } from '$lib/types/game';
 import { GamePhase } from '$lib/types/game';
 import { DEFAULT_DISPLAY_CONFIG } from '$lib/types/stream.types';
 import { info, warn } from '$lib/utils/logger';
-import { streamTimerStore } from './stream-timer.store.svelte';
+import { streamTimerStore } from './timer.svelte';
 
 interface StreamGameState {
 	phase: GamePhase;

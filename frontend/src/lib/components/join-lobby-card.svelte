@@ -3,7 +3,7 @@
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Input } from '$lib/components/ui/input';
 	import { gameActions } from '$lib/stores/game-actions';
-	import { notifications } from '$lib/stores/notification-store';
+	import { notifications } from '$lib/stores/notification-store.svelte';
 	import { warn } from '$lib/utils/logger';
 	import { gameStore } from '$lib/stores/game.svelte';
 	import { PUBLIC_SPEKTRUM_SERVER_URL } from '$env/static/public';

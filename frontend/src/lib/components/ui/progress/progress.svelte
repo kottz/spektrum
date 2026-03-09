@@ -1,28 +1,34 @@
 <script lang="ts">
 	import { Progress as ProgressPrimitive } from 'bits-ui';
-	import { cn } from '$lib/utils.js';
+	import { cn, type WithElementRef } from '$lib/utils.js';
 
-	type $$Props = ProgressPrimitive.RootProps;
+	type ProgressProps = WithElementRef<ProgressPrimitive.RootProps>;
 
-	let className: $$Props['class'] = undefined;
-	export { className as class };
-	export let value: $$Props['value'] = 0;
-	export let max: $$Props['max'] = 100;
-	export let min: $$Props['min'] = 0;
+	let {
+		class: className,
+		ref = $bindable(null),
+		value = 0,
+		max = 100,
+		min = 0,
+		...restProps
+	}: ProgressProps = $props();
 
-	$: clampedMax = max ?? 100;
-	$: clampedMin = min ?? 0;
-	$: range = Math.max(clampedMax - clampedMin, 1);
-	$: normalized = value == null ? clampedMin : Math.min(Math.max(value, clampedMin), clampedMax);
-	$: progress = ((normalized - clampedMin) / range) * 100;
+	const clampedMax = $derived(max ?? 100);
+	const clampedMin = $derived(min ?? 0);
+	const range = $derived(Math.max(clampedMax - clampedMin, 1));
+	const normalized = $derived(
+		value == null ? clampedMin : Math.min(Math.max(value, clampedMin), clampedMax)
+	);
+	const progress = $derived(((normalized - clampedMin) / range) * 100);
 </script>
 
 <ProgressPrimitive.Root
+	bind:ref
 	class={cn('bg-secondary relative h-4 w-full overflow-hidden rounded-full', className)}
 	{value}
 	{max}
 	{min}
-	{...$$restProps}
+	{...restProps}
 >
 	<div
 		class="bg-primary h-full w-full flex-1 transition-all"

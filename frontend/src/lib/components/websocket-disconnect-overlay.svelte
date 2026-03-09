@@ -21,7 +21,7 @@
 			connectionState === ConnectionState.OFFLINE
 	);
 
-	let title = $derived(() => {
+	let title = $derived.by(() => {
 		switch (connectionState) {
 			case ConnectionState.RECONNECTING:
 				return `Reconnecting (Attempt ${reconnectAttempts}/${maxReconnectAttempts})`;
@@ -34,9 +34,9 @@
 		}
 	});
 
-	let message = $derived(() => {
-		if (connectionState === ConnectionState.RECONNECTING && timeUntilReconnect() !== null) {
-			const secondsUntilReconnect = Math.ceil((timeUntilReconnect() as number) / 1000);
+	let message = $derived.by(() => {
+		if (connectionState === ConnectionState.RECONNECTING && timeUntilReconnect !== null) {
+			const secondsUntilReconnect = Math.ceil((timeUntilReconnect as number) / 1000);
 			return `Next attempt in ${secondsUntilReconnect} seconds...`;
 		}
 		if (connectionState === ConnectionState.OFFLINE) {
@@ -45,7 +45,7 @@
 		return '';
 	});
 
-	let showManualReconnect = $derived(connectionState === ConnectionState.ERROR && !canReconnect());
+	let showManualReconnect = $derived(connectionState === ConnectionState.ERROR && !canReconnect);
 
 	async function handleManualReconnect() {
 		const sessionToken = gameStore.state.sessionToken;
@@ -63,12 +63,12 @@
 		<div
 			class="bg-background/95 flex flex-col items-center space-y-4 rounded-lg border p-6 shadow-lg"
 		>
-			{#if isReconnecting()}
+			{#if isReconnecting}
 				<div class="border-primary h-8 w-8 animate-spin rounded-full border-b-2"></div>
 			{/if}
-			<p class="text-foreground text-lg font-medium">{title()}</p>
-			{#if message()}
-				<p class="text-muted-foreground text-sm">{message()}</p>
+			<p class="text-foreground text-lg font-medium">{title}</p>
+			{#if message}
+				<p class="text-muted-foreground text-sm">{message}</p>
 			{/if}
 			{#if showManualReconnect}
 				<div class="flex flex-col items-center gap-2 pt-2">

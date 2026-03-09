@@ -18,7 +18,8 @@ export default ts.config(
 		languageOptions: {
 			globals: {
 				...globals.browser,
-				...globals.node
+				...globals.node,
+				YT: 'readonly'
 			}
 		}
 	},
@@ -29,6 +30,21 @@ export default ts.config(
 			parserOptions: {
 				parser: ts.parser
 			}
+		}
+	},
+	{
+		rules: {
+			'@typescript-eslint/no-unused-vars': [
+				'error',
+				{ argsIgnorePattern: '^_', varsIgnorePattern: '^_' }
+			]
+		}
+	},
+	{
+		files: ['src/lib/components/ui/**/*.svelte'],
+		rules: {
+			// UI wrapper components use ...restProps by design; they are not custom elements
+			'svelte/valid-compile': ['error', { ignoreWarnings: true }]
 		}
 	}
 );

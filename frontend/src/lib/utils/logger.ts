@@ -21,7 +21,7 @@ const config: LogConfig = {
  * Main logger function that handles all log types
  */
 function createLogger(type: 'log' | 'info' | 'warn' | 'error' | 'debug') {
-	return (...args: any[]) => {
+	return (...args: unknown[]) => {
 		if (!config.enabled) return;
 
 		const timestamp = new Date().toISOString();

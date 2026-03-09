@@ -3,7 +3,7 @@
 	import { gameStore } from '$lib/stores/game.svelte';
 	import { Copy, Link } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { notifications } from '$lib/stores/notification-store';
+	import { notifications } from '$lib/stores/notification-store.svelte';
 	const joinCode = $derived(gameStore.state.joinCode);
 
 	async function copyCodeToClipboard() {

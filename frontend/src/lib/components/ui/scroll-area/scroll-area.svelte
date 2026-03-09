@@ -1,24 +1,30 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import { ScrollArea as ScrollAreaPrimitive } from 'bits-ui';
 	import { Scrollbar } from './index.js';
-	import { cn } from '$lib/utils.js';
+	import { cn, type WithElementRef } from '$lib/utils.js';
 
-	type $$Props = ScrollAreaPrimitive.RootProps & {
+	type ScrollAreaProps = WithElementRef<ScrollAreaPrimitive.RootProps> & {
 		orientation?: 'vertical' | 'horizontal' | 'both';
 		scrollbarXClasses?: string;
 		scrollbarYClasses?: string;
+		children?: Snippet;
 	};
 
-	let className: $$Props['class'] = undefined;
-	export { className as class };
-	export let orientation: $$Props['orientation'] = 'vertical';
-	export let scrollbarXClasses = '';
-	export let scrollbarYClasses = '';
+	let {
+		class: className,
+		ref = $bindable(null),
+		orientation = 'vertical',
+		scrollbarXClasses = '',
+		scrollbarYClasses = '',
+		children,
+		...restProps
+	}: ScrollAreaProps = $props();
 </script>
 
-<ScrollAreaPrimitive.Root {...$$restProps} class={cn('relative overflow-hidden', className)}>
+<ScrollAreaPrimitive.Root bind:ref {...restProps} class={cn('relative overflow-hidden', className)}>
 	<ScrollAreaPrimitive.Viewport class="h-full w-full rounded-[inherit]">
-		<slot />
+		{@render children?.()}
 	</ScrollAreaPrimitive.Viewport>
 	{#if orientation === 'vertical' || orientation === 'both'}
 		<Scrollbar orientation="vertical" class={scrollbarYClasses} />

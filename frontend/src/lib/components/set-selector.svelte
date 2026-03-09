@@ -3,7 +3,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent } from '$lib/components/ui/card';
 	import { gameActions } from '$lib/stores/game-actions';
-	import { notifications } from '$lib/stores/notification-store';
+	import { notifications } from '$lib/stores/notification-store.svelte';
 	import { warn } from '$lib/utils/logger';
 	import { PUBLIC_SPEKTRUM_SERVER_URL } from '$env/static/public';
 

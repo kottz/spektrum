@@ -36,10 +36,17 @@ declare namespace YT {
 		stopVideo(): void;
 		cueVideoById(videoId: string): void;
 		loadVideoById(videoId: string): void;
+		getPlayerState(): number;
 		getVideoData(): { video_id: string };
 		destroy(): void;
-		addEventListener(event: string, listener: (event: any) => void): void;
-		removeEventListener(event: string, listener: (event: any) => void): void;
+		addEventListener(
+			event: string,
+			listener: (event: PlayerEvent | OnStateChangeEvent | OnErrorEvent) => void
+		): void;
+		removeEventListener(
+			event: string,
+			listener: (event: PlayerEvent | OnStateChangeEvent | OnErrorEvent) => void
+		): void;
 	}
 
 	interface PlayerEvent {
@@ -58,3 +65,8 @@ declare namespace YT {
 }
 
 declare const YT: YT;
+
+interface Window {
+	onYouTubeIframeAPIReady?: (() => void) | undefined;
+	YT?: YT | undefined;
+}

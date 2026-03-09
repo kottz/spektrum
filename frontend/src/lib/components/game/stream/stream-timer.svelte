@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { streamTimerStore } from '$lib/stores/stream-timer.store.svelte';
+	import { streamTimerStore } from '$lib/stores/timer.svelte';
 	import { streamStore } from '$lib/stores/stream.store.svelte';
 	import { GamePhase } from '$lib/types/game';
 	import { Separator } from '$lib/components/ui/separator';

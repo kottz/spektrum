@@ -1,15 +1,23 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import { ScrollArea as ScrollAreaPrimitive } from 'bits-ui';
-	import { cn } from '$lib/utils.js';
+	import { cn, type WithElementRef } from '$lib/utils.js';
 
-	type $$Props = ScrollAreaPrimitive.ScrollbarProps;
+	type ScrollbarProps = WithElementRef<ScrollAreaPrimitive.ScrollbarProps> & {
+		children?: Snippet;
+	};
 
-	let className: $$Props['class'] = undefined;
-	export let orientation: $$Props['orientation'] = 'vertical';
-	export { className as class };
+	let {
+		class: className,
+		ref = $bindable(null),
+		orientation = 'vertical',
+		children,
+		...restProps
+	}: ScrollbarProps = $props();
 </script>
 
 <ScrollAreaPrimitive.Scrollbar
+	bind:ref
 	{orientation}
 	class={cn(
 		'flex touch-none transition-colors select-none',
@@ -17,9 +25,9 @@
 		orientation === 'horizontal' && 'h-2.5 w-full border-t border-t-transparent p-px',
 		className
 	)}
-	{...$$restProps}
+	{...restProps}
 >
-	<slot />
+	{@render children?.()}
 	<ScrollAreaPrimitive.Thumb
 		class={cn('bg-border relative rounded-full', orientation === 'vertical' && 'flex-1')}
 	/>

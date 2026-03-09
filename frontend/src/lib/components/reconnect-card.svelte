@@ -1,15 +1,16 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
-	import type { SessionInfo } from '$lib/stores/game.svelte';
+	import type { ValidatedSession } from '$lib/stores/game.svelte';
 
-	const props = $props<{
-		session: SessionInfo & { last_update: string };
+	interface ReconnectCardProps {
+		session: ValidatedSession;
 		onReconnect: () => void;
 		onNewLobby: () => void;
-	}>();
+	}
 
-	// Function to format the time ago string
+	const { session, onReconnect, onNewLobby }: ReconnectCardProps = $props();
+
 	function getTimeAgoString(lastUpdateStr: string): string {
 		const lastUpdate = new Date(lastUpdateStr);
 		const now = new Date();
@@ -33,7 +34,7 @@
 		return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
 	}
 
-	let timeAgoString = $derived(getTimeAgoString(props.session.last_update));
+	let timeAgoString = $derived(getTimeAgoString(session.last_update));
 </script>
 
 <Card>
@@ -45,12 +46,8 @@
 			Last lobby update: {timeAgoString}
 		</div>
 		<div class="space-y-2">
-			<Button class="w-full" onclick={props.onReconnect}
-				>Reconnect as {props.session.playerName}</Button
-			>
-			<Button variant="outline" class="w-full" onclick={props.onNewLobby}>
-				Join Different Lobby
-			</Button>
+			<Button class="w-full" onclick={onReconnect}>Reconnect as {session.playerName}</Button>
+			<Button variant="outline" class="w-full" onclick={onNewLobby}>Join Different Lobby</Button>
 		</div>
 	</CardContent>
 </Card>

@@ -5,7 +5,7 @@
 	import AnswerProgress from './answer-progress.svelte';
 	import RoundTimer from './round-timer.svelte';
 	import { PUBLIC_SPEKTRUM_CDN_URL } from '$env/static/public';
-	import { timerStore } from '$lib/stores/timer-store.svelte';
+	import { timerStore } from '$lib/stores/timer.svelte';
 
 	const imageBaseUrl = $derived(`${PUBLIC_SPEKTRUM_CDN_URL}/img`);
 

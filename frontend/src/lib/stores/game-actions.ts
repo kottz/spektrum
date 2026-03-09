@@ -1,7 +1,7 @@
 import { websocketStore } from './websocket.svelte';
 import { gameStore } from '$lib/stores/game.svelte';
 import { youtubeStore } from '$lib/stores/youtube-store.svelte';
-import { timerStore } from '$lib/stores/timer-store.svelte';
+import { timerStore } from '$lib/stores/timer.svelte';
 import { info, warn } from '$lib/utils/logger';
 import type { ClientMessage, AdminAction } from '../types/game';
 import { PUBLIC_SPEKTRUM_SERVER_URL } from '$env/static/public';

@@ -6,6 +6,7 @@
 	import { broadcastService } from '$lib/services/broadcast.service';
 	import type { BroadcastMessage } from '$lib/services/broadcast.service';
 	import { MonitorPlay, Eye, EyeOff, ExternalLink } from '@lucide/svelte';
+	import { onDestroy } from 'svelte';
 	import { info } from '$lib/utils/logger';
 
 	const streamWindowState = $derived(uiStore.streamWindow);
@@ -73,10 +74,8 @@
 	}
 
 	// Clean up listener when component is destroyed
-	$effect(() => {
-		return () => {
-			broadcastService.removeListener(handleBroadcastMessage);
-		};
+	onDestroy(() => {
+		broadcastService.removeListener(handleBroadcastMessage);
 	});
 
 	function handleToggleVisibility(): void {

@@ -157,7 +157,7 @@ describe('websocket FSM transitions', () => {
 		socket.triggerMessage(JSON.stringify({ type: 'GameClosed', reason: 'closed' }));
 
 		expect(store.state.connectionState).toBe(ConnectionStateEnum.DISCONNECTED);
-		expect(store.canReconnect()).toBe(false);
+		expect(store.canReconnect).toBe(false);
 	});
 
 	it('stops reconnecting after session invalid', async () => {
@@ -169,6 +169,6 @@ describe('websocket FSM transitions', () => {
 		socket.triggerMessage(JSON.stringify({ type: 'Error', message: 'LobbyNotFound' }));
 
 		expect(store.state.connectionState).toBe(ConnectionStateEnum.DISCONNECTED);
-		expect(store.canReconnect()).toBe(false);
+		expect(store.canReconnect).toBe(false);
 	});
 });

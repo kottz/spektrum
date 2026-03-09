@@ -2,9 +2,9 @@
 
 import { browser } from '$app/environment';
 import { youtubeStore } from '$lib/stores/youtube-store.svelte';
-import { timerStore } from '$lib/stores/timer-store.svelte';
+import { timerStore } from '$lib/stores/timer.svelte';
 import { info, warn } from '$lib/utils/logger';
-import { notifications } from '$lib/stores/notification-store';
+import { notifications } from '$lib/stores/notification-store.svelte';
 import { broadcastService } from '$lib/services/broadcast.service';
 
 import type { GameState, GameUpdate } from '../types/game';
@@ -21,6 +21,9 @@ export interface SessionInfo {
 	joinCode: string;
 	sessionToken: string;
 }
+
+/** SessionInfo enriched with server-validated last_update timestamp. */
+export type ValidatedSession = SessionInfo & { last_update: string };
 
 export function loadSession(): SessionInfo | null {
 	if (!browser) return null;
@@ -82,7 +85,7 @@ function createGameStore() {
 	/**
 	 * Optional helper to validate the current session with the server.
 	 */
-	async function checkSessions(): Promise<(SessionInfo & { last_update: string }) | null> {
+	async function checkSessions(): Promise<ValidatedSession | null> {
 		if (!browser) return null;
 		const session = loadSession();
 		if (!session || !session.sessionToken) return null;
@@ -119,7 +122,7 @@ function createGameStore() {
 				return {
 					...session,
 					last_update: validSession.last_update
-				} as SessionInfo & { last_update: string };
+				} satisfies ValidatedSession;
 			}
 
 			removeSession();

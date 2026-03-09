@@ -3,7 +3,7 @@
 	import { Card, CardContent } from '$lib/components/ui/card';
 	import { Input } from '$lib/components/ui/input';
 	import { gameActions } from '$lib/stores/game-actions';
-	import { notifications } from '$lib/stores/notification-store';
+	import { notifications } from '$lib/stores/notification-store.svelte';
 	import { warn } from '$lib/utils/logger';
 	import { gameStore } from '$lib/stores/game.svelte';
 	import { PUBLIC_SPEKTRUM_SERVER_URL } from '$env/static/public';
@@ -106,7 +106,7 @@
 				name="playerName"
 				placeholder="Enter your name"
 				bind:value={playerName}
-				on:input={handleNameInput}
+				oninput={handleNameInput}
 				maxlength={16}
 				disabled={isJoining}
 				class={hasNameValidationError || (isNameTooShort && hasAttemptedSubmit)

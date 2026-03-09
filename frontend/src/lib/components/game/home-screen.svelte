@@ -9,39 +9,22 @@
 	import LightSwitch from '$lib/components/ui/light-switch.svelte';
 	import JoinLobbyCard from '$lib/components/join-lobby-card.svelte';
 	import ReconnectCard from '$lib/components/reconnect-card.svelte';
-	import { gameActions } from '$lib/stores/game-actions';
-	import { gameStore } from '$lib/stores/game.svelte';
-	import type { SessionInfo } from '$lib/stores/game.svelte';
-	import { info, warn } from '$lib/utils/logger';
+	import { gameStore, type ValidatedSession } from '$lib/stores/game.svelte';
+	import { checkAndLoadSession, reconnectToSession as reconnectSession } from '$lib/utils/session';
+	import { onMount } from 'svelte';
 
 	const supportEmail = env.PUBLIC_SUPPORT_EMAIL?.trim();
 	let showSetSelector = $state(false);
 	let showJoinCard = $state(false);
-	let currentSession = $state<(SessionInfo & { last_update: string }) | null>(null);
+	let currentSession = $state<ValidatedSession | null>(null);
 
-	$effect(() => {
-		(async () => {
-			try {
-				const session = await gameStore.checkSessions();
-				info('Checking sessions on home load:', session);
-				// Now TypeScript knows both types match exactly
-				currentSession = session;
-			} catch (error) {
-				warn('Failed to check sessions:', error);
-				currentSession = null;
-			}
-		})();
+	onMount(async () => {
+		currentSession = await checkAndLoadSession();
 	});
 
 	function reconnectToSession() {
-		if (!currentSession || !currentSession.sessionToken) return;
-
-		gameStore.setPlayerId(currentSession.playerId);
-		gameStore.setAdminTo(currentSession.isAdmin);
-		gameStore.setPlayerName(currentSession.playerName);
-		gameStore.setJoinCode(currentSession.joinCode);
-		gameStore.setSessionToken(currentSession.sessionToken);
-		gameActions.joinGame(currentSession.sessionToken);
+		if (!currentSession) return;
+		reconnectSession(currentSession);
 	}
 
 	function handleNewLobby() {

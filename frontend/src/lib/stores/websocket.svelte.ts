@@ -104,13 +104,13 @@ export function createWebSocketStore() {
 	} | null = null;
 
 	// Computed properties using runes
-	const timeUntilReconnect = $derived(() =>
+	const timeUntilReconnect = $derived.by(() =>
 		state.nextAttemptTime ? Math.max(0, state.nextAttemptTime - Date.now()) : null
 	);
 
-	const isReconnecting = $derived(() => state.connectionState === ConnectionState.RECONNECTING);
+	const isReconnecting = $derived(state.connectionState === ConnectionState.RECONNECTING);
 
-	const canReconnect = $derived(
+	const canReconnect = $derived.by(
 		() =>
 			desiredConnection &&
 			state.connectionState !== ConnectionState.ERROR &&

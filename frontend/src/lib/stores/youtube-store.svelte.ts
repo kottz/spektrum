@@ -32,8 +32,8 @@ function createYouTubeStore() {
 		}
 
 		// Reset global YouTube API state
-		(window as any).YT = undefined;
-		(window as any).onYouTubeIframeAPIReady = undefined;
+		window.YT = undefined;
+		window.onYouTubeIframeAPIReady = undefined;
 
 		// Add new script
 		const tag = document.createElement('script');

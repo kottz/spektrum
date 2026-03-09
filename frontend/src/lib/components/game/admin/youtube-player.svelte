@@ -37,13 +37,13 @@
 			});
 		};
 
-		(window as any).onYouTubeIframeAPIReady = initializePlayer;
+		window.onYouTubeIframeAPIReady = initializePlayer;
 
 		// Cleanup function
 		return () => {
 			youtubeStore.cleanup();
 			// Clean up the global callback
-			delete (window as any).onYouTubeIframeAPIReady;
+			delete window.onYouTubeIframeAPIReady;
 		};
 	});
 

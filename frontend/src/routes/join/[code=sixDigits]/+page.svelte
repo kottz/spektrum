@@ -7,36 +7,21 @@
 	import NotificationList from '$lib/components/NotificationList.svelte';
 	import { House } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
-	import { gameStore } from '$lib/stores/game.svelte';
-	import { gameActions } from '$lib/stores/game-actions';
-	import type { SessionInfo } from '$lib/stores/game.svelte';
+	import { gameStore, type ValidatedSession } from '$lib/stores/game.svelte';
+	import { checkAndLoadSession, reconnectToSession as reconnectSession } from '$lib/utils/session';
+	import { onMount } from 'svelte';
 
 	const { data } = $props<{ data: { joinCode: string } }>();
 
-	let currentSession = $state<(SessionInfo & { last_update: string }) | null>(null);
+	let currentSession = $state<ValidatedSession | null>(null);
 
-	$effect(() => {
-		(async () => {
-			try {
-				const session = await gameStore.checkSessions();
-				console.log('Session check result:', session);
-				currentSession = session;
-			} catch (error) {
-				console.error('Session check error:', error);
-				currentSession = null;
-			}
-		})();
+	onMount(async () => {
+		currentSession = await checkAndLoadSession();
 	});
 
 	function reconnectToSession() {
-		if (!currentSession || !currentSession.sessionToken) return;
-
-		gameStore.setPlayerId(currentSession.playerId);
-		gameStore.setAdminTo(currentSession.isAdmin);
-		gameStore.setPlayerName(currentSession.playerName);
-		gameStore.setJoinCode(currentSession.joinCode);
-		gameStore.setSessionToken(currentSession.sessionToken);
-		gameActions.joinGame(currentSession.sessionToken);
+		if (!currentSession) return;
+		reconnectSession(currentSession);
 		goto('/');
 	}
 

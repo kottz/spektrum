@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { timerStore } from '$lib/stores/timer-store.svelte';
+	import { timerStore } from '$lib/stores/timer.svelte';
 	import { gameStore } from '$lib/stores/game.svelte';
 
 	const actualTimeLeftInRound = $derived(timerStore.state.timeLeft);
