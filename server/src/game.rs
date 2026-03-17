@@ -94,18 +94,31 @@ pub enum GameUpdate {
         round_duration: u64,
     },
     /// A partial (delta) state update.
+    /// All fields are optional; absent fields (None) are omitted from the JSON so
+    /// the client can distinguish "not updated" from an explicit null.
     StateDelta {
+        #[serde(skip_serializing_if = "Option::is_none")]
         phase: Option<GamePhase>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         question_type: Option<Arc<str>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         question_text: Option<Arc<str>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         alternatives: Option<Vec<Arc<str>>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         question_time_remaining_ms: Option<u64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         answered_player_names: Option<Vec<Arc<str>>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         scoreboard: Option<Vec<(Arc<str>, i32)>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         round_scores: Option<Vec<(Arc<str>, i32)>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         consecutive_misses: Option<Vec<(Arc<str>, u32)>>,
-        // Optional extra info for admin
+        #[serde(skip_serializing_if = "Option::is_none")]
         admin_extra: Option<AdminExtraInfo>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        lobby_locked: Option<bool>,
     },
     PlayerLeft {
         name: Arc<str>,
@@ -161,6 +174,7 @@ pub enum GameAction {
     KickPlayer { player_name: Arc<str> },
     EndGame { reason: Arc<str> },
     CloseGame { reason: Arc<str> },
+    LockLobby { locked: bool },
 }
 
 impl GameAction {
@@ -177,6 +191,7 @@ impl GameAction {
             GameAction::KickPlayer { .. } => "KickPlayer",
             GameAction::EndGame { .. } => "EndGame",
             GameAction::CloseGame { .. } => "CloseGame",
+            GameAction::LockLobby { .. } => "LockLobby",
         }
     }
 }
@@ -204,6 +219,7 @@ pub struct GameState {
     pub shuffled_question_indices: Vec<usize>,
     pub current_question_index: usize,
     pub last_lobby_message: Option<Instant>,
+    pub locked: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -298,6 +314,7 @@ impl GameEngine {
                 shuffled_question_indices: indices,
                 current_question_index: 0,
                 last_lobby_message: Some(Instant::now()),
+                locked: false,
             },
         }
     }
@@ -379,6 +396,10 @@ impl GameEngine {
 
     pub fn is_full(&self) -> bool {
         self.state.players.len() >= 1024
+    }
+
+    pub fn is_locked(&self) -> bool {
+        self.state.locked
     }
 
     pub fn get_lobby_stats(&self) -> (usize, usize) {
@@ -580,7 +601,8 @@ impl GameEngine {
             | GameAction::EndRound
             | GameAction::KickPlayer { .. }
             | GameAction::EndGame { .. }
-            | GameAction::CloseGame { .. } => {
+            | GameAction::CloseGame { .. }
+            | GameAction::LockLobby { .. } => {
                 if event.context.sender_id != self.state.admin_id {
                     debug!(
                         sender_id = %event.context.sender_id,
@@ -612,6 +634,7 @@ impl GameEngine {
             }
             GameAction::EndGame { reason } => self.handle_end_game(event.context, reason),
             GameAction::CloseGame { reason } => self.handle_close_game(event.context, reason),
+            GameAction::LockLobby { locked } => self.handle_lock_lobby(event.context, locked),
         }
     }
 
@@ -679,6 +702,11 @@ impl GameEngine {
             } else {
                 None
             },
+            lobby_locked: if is_admin {
+                Some(self.state.locked)
+            } else {
+                None
+            },
         };
 
         self.push_update(Recipients::Single(ctx.sender_id), state_update);
@@ -698,6 +726,7 @@ impl GameEngine {
                     round_scores: None,
                     consecutive_misses: None,
                     admin_extra: None,
+                    lobby_locked: None,
                 },
             );
         }
@@ -868,6 +897,7 @@ impl GameEngine {
                 round_scores: Some(round_scores),
                 consecutive_misses: Some(consecutive_misses),
                 admin_extra: None,
+                lobby_locked: None,
             },
         );
         let upcoming = self.get_upcoming_questions(3);
@@ -952,6 +982,7 @@ impl GameEngine {
                         round_scores: Some(round_scores),
                         consecutive_misses: Some(consecutive_misses),
                         admin_extra: None,
+                        lobby_locked: None,
                     },
                 );
                 self.push_update(
@@ -1017,6 +1048,7 @@ impl GameEngine {
                 round_scores: Some(round_scores),
                 consecutive_misses: Some(consecutive_misses),
                 admin_extra: None,
+                lobby_locked: None,
             },
         );
         let upcoming = self.get_upcoming_questions(3);
@@ -1113,6 +1145,7 @@ impl GameEngine {
                     round_scores: None, // Round scores might be irrelevant now, maybe send? Optional.
                     consecutive_misses: Some(self.get_consecutive_misses()),
                     admin_extra: None, // Admin already knows
+                    lobby_locked: None,
                 },
             );
         } else {
@@ -1149,6 +1182,34 @@ impl GameEngine {
         debug!(from = ?from_phase, to = ?GamePhase::GameClosed, "Phase transition");
         self.log_game_state(&format!("Game closed: {}", reason));
         self.push_update(Recipients::All, GameUpdate::GameClosed { reason });
+    }
+
+    fn handle_lock_lobby(&mut self, ctx: EventContext, locked: bool) {
+        if self.state.locked == locked {
+            return;
+        }
+        self.state.locked = locked;
+        info!(
+            "Lobby {}: {} by admin",
+            self.state.join_code,
+            if locked { "locked" } else { "unlocked" }
+        );
+        self.push_update(
+            Recipients::Single(ctx.sender_id),
+            GameUpdate::StateDelta {
+                phase: None,
+                question_type: None,
+                question_text: None,
+                alternatives: None,
+                question_time_remaining_ms: None,
+                answered_player_names: None,
+                scoreboard: None,
+                round_scores: None,
+                consecutive_misses: None,
+                admin_extra: None,
+                lobby_locked: Some(locked),
+            },
+        );
     }
 
     fn setup_round(&mut self) -> Result<(), String> {

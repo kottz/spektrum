@@ -139,6 +139,7 @@ pub enum AdminAction {
     KickPlayer { player_name: String },
     EndGame { reason: String },
     CloseGame { reason: String },
+    LockLobby { locked: bool },
 }
 
 impl AdminAction {
@@ -152,6 +153,7 @@ impl AdminAction {
             AdminAction::KickPlayer { .. } => "KickPlayer",
             AdminAction::EndGame { .. } => "EndGame",
             AdminAction::CloseGame { .. } => "CloseGame",
+            AdminAction::LockLobby { .. } => "LockLobby",
         }
     }
 }
@@ -347,6 +349,10 @@ pub async fn join_lobby(
 
     if engine.is_full() {
         return Err(ApiError::Lobby("Lobby is full.".into()));
+    }
+
+    if engine.is_locked() {
+        return Err(ApiError::Lobby("Lobby is locked.".into()));
     }
 
     let new_player_id = Uuid::new_v4();
@@ -960,6 +966,7 @@ async fn dispatch_game_action(msg: ClientMessage, conn: &WsConnection, state: &A
                 AdminAction::CloseGame { reason } => GameAction::CloseGame {
                     reason: Arc::from(reason),
                 },
+                AdminAction::LockLobby { locked } => GameAction::LockLobby { locked },
             }
         }
         _ => return, // Connect is handled separately

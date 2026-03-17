@@ -131,6 +131,11 @@ class GameActions {
 		this.sendAdminAction({ type: 'CloseGame', reason });
 	}
 
+	public lockLobby(locked: boolean) {
+		if (gameStore.state.lobbyLocked === locked) return;
+		this.sendAdminAction({ type: 'LockLobby', locked });
+	}
+
 	/**
 	 * Leave the current game (if any), then clean up local state and YouTube player.
 	 */

@@ -75,6 +75,7 @@ export interface GameState {
 	currentAnswers: PlayerAnswer[];
 	questionTimeRemainingMs?: number;
 	answeredPlayerNames?: string[];
+	lobbyLocked: boolean;
 }
 
 /**
@@ -125,6 +126,7 @@ export type GameUpdate =
 			round_scores?: [string, number][];
 			consecutive_misses?: [string, number][];
 			admin_extra?: AdminExtraInfo;
+			lobby_locked?: boolean;
 	  }
 	| {
 			type: 'PlayerLeft';
@@ -192,7 +194,8 @@ export type AdminAction =
 	| { type: 'SkipQuestion' }
 	| { type: 'KickPlayer'; player_name: string }
 	| { type: 'EndGame'; reason: string }
-	| { type: 'CloseGame'; reason: string };
+	| { type: 'CloseGame'; reason: string }
+	| { type: 'LockLobby'; locked: boolean };
 
 /* ------------------------------------------------------------------
    STREAM TYPES FOR BROADCASTING

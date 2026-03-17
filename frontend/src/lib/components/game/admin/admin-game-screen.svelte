@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { gameStore } from '$lib/stores/game.svelte';
+	import { gameActions } from '$lib/stores/game-actions';
 	import { GamePhase } from '$lib/types/game';
 	import JoinCodeCard from '$lib/components/game/admin/join-code-card.svelte';
 	import GameVideo from '$lib/components/game/admin/youtube-player.svelte';
@@ -18,6 +19,7 @@
 
 	const phase = $derived(gameStore.state.phase);
 	const showScoreboard = $derived(phase === GamePhase.Score || phase === GamePhase.GameOver);
+	const lobbyLocked = $derived(gameStore.state.lobbyLocked);
 	let hideGameContent = $state(false);
 </script>
 
@@ -62,6 +64,16 @@
 							<label for="spoiler-mode" class="cursor-pointer text-sm font-medium"
 								>No Spoiler Mode</label
 							>
+						</div>
+						<div class="mb-2 flex items-center gap-2 rounded select-none">
+							<input
+								type="checkbox"
+								id="lock-lobby"
+								checked={lobbyLocked}
+								onchange={() => gameActions.lockLobby(!lobbyLocked)}
+								class="text-primary focus:ring-primary h-4 w-4 rounded border-gray-300"
+							/>
+							<label for="lock-lobby" class="cursor-pointer text-sm font-medium">Lock Lobby</label>
 						</div>
 						{#if phase === GamePhase.Lobby || phase === GamePhase.GameOver}
 							<StartButton />
@@ -133,7 +145,7 @@
 
 	<!-- Mobile-only bottom controls (fixed position) -->
 	<div class="bg-background/95 fixed right-0 bottom-0 left-0 z-10 p-3 backdrop-blur-xs lg:hidden">
-		<div class="mb-3 flex items-center justify-start gap-2 rounded text-xs select-none">
+		<div class="mb-1 flex items-center justify-start gap-2 rounded text-xs select-none">
 			<input
 				type="checkbox"
 				id="spoiler-mode-mobile"
@@ -141,6 +153,16 @@
 				class="text-primary focus:ring-primary h-4 w-4 rounded border-gray-300"
 			/>
 			<label for="spoiler-mode-mobile" class="cursor-pointer font-medium">No Spoiler Mode</label>
+		</div>
+		<div class="mb-3 flex items-center justify-start gap-2 rounded text-xs select-none">
+			<input
+				type="checkbox"
+				id="lock-lobby-mobile"
+				checked={lobbyLocked}
+				onchange={() => gameActions.lockLobby(!lobbyLocked)}
+				class="text-primary focus:ring-primary h-4 w-4 rounded border-gray-300"
+			/>
+			<label for="lock-lobby-mobile" class="cursor-pointer font-medium">Lock Lobby</label>
 		</div>
 		{#if phase === GamePhase.Lobby || phase === GamePhase.GameOver}
 			<StartButton />

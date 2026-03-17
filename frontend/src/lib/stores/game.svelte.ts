@@ -55,7 +55,8 @@ const initialState: GameState = {
 	sessionToken: undefined,
 	roundDuration: 60,
 	players: new Map(),
-	currentAnswers: []
+	currentAnswers: [],
+	lobbyLocked: false
 };
 
 function createGameStore() {
@@ -234,15 +235,15 @@ function createGameStore() {
 					state.players = updated;
 				}
 
-				// Update the current question if alternatives are provided.
+				// Update the current question when alternatives are explicitly provided.
+				// When absent, leave currentQuestion alone — absence in a delta means "no change".
+				// Clearing happens below when the phase transitions away from Question.
 				if (message.alternatives !== undefined) {
 					state.currentQuestion = {
 						type: message.question_type ?? '',
 						text: message.question_text ?? undefined,
 						alternatives: message.alternatives
 					};
-				} else {
-					state.currentQuestion = undefined;
 				}
 
 				if (message.question_time_remaining_ms !== undefined) {
@@ -277,6 +278,7 @@ function createGameStore() {
 					if (currentPhase === GamePhase.Score) {
 						timerStore.stopTimer(true);
 						state.currentAnswers = [];
+						state.currentQuestion = undefined;
 					}
 				}
 
@@ -286,6 +288,10 @@ function createGameStore() {
 					message.question_time_remaining_ms !== undefined
 				) {
 					timerStore.startTimer(state.roundDuration, message.question_time_remaining_ms);
+				}
+
+				if (message.lobby_locked !== undefined) {
+					state.lobbyLocked = message.lobby_locked;
 				}
 
 				break;
