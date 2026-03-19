@@ -599,6 +599,7 @@ impl GameEngine {
             GameAction::StartGame
             | GameAction::StartRound
             | GameAction::EndRound
+            | GameAction::SkipQuestion
             | GameAction::KickPlayer { .. }
             | GameAction::EndGame { .. }
             | GameAction::CloseGame { .. }
