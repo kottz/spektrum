@@ -51,10 +51,11 @@ fn validate_player_name<'a>(
 ) -> Result<(), NameValidationError> {
     let name = name.trim();
 
-    if name.chars().count() < 2 {
+    let char_count = name.chars().count();
+    if char_count < 2 {
         return Err(NameValidationError::TooShort);
     }
-    if name.chars().count() > 16 {
+    if char_count > 16 {
         return Err(NameValidationError::TooLong);
     }
 
