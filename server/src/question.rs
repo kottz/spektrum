@@ -133,7 +133,7 @@ pub struct GameQuestionOption {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct GameQuestion {
-    pub id: u16,
+    pub id: i64,
     pub question_type: QuestionType,
     pub question_text: Option<Arc<str>>,
     pub title: Arc<str>,
@@ -265,22 +265,7 @@ impl GameQuestion {
             .collect()
     }
 
-    fn generate_year_alternatives(&self, correct_year: i32) -> Vec<&'static str> {
-        use std::collections::HashMap;
-        use std::sync::OnceLock;
-
-        static YEAR_CACHE: OnceLock<HashMap<i32, &'static str>> = OnceLock::new();
-
-        let cache = YEAR_CACHE.get_or_init(|| {
-            let mut map = HashMap::new();
-            // Pre-populate common years (1950-2030)
-            for year in 1950..=2030 {
-                let year_str: &'static str = Box::leak(year.to_string().into_boxed_str());
-                map.insert(year, year_str);
-            }
-            map
-        });
-
+    fn generate_year_alternatives(&self, correct_year: i32) -> Vec<String> {
         let mut alternatives = [
             correct_year - 2,
             correct_year - 1,
@@ -290,16 +275,7 @@ impl GameQuestion {
         ];
         fastrand::shuffle(&mut alternatives);
 
-        alternatives
-            .iter()
-            .map(|&y| {
-                cache.get(&y).copied().unwrap_or_else(|| {
-                    // Fallback for years outside our cache range
-                    let year_str: &'static str = Box::leak(y.to_string().into_boxed_str());
-                    year_str
-                })
-            })
-            .collect()
+        alternatives.iter().map(|y| y.to_string()).collect()
     }
 }
 

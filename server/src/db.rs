@@ -681,7 +681,7 @@ impl QuestionDatabase {
                 let options = options_by_question.remove(&question.id).unwrap_or_default();
 
                 Some(GameQuestion {
-                    id: question.id.try_into().ok()?,
+                    id: question.id,
                     question_type: question.question_type,
                     question_text: question.question_text.clone(),
                     title: media.title.clone(),
