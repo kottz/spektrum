@@ -2,7 +2,6 @@ use crate::db::QuestionSet;
 use crate::question::{Color, GameQuestion};
 use crate::uuid::Uuid;
 use axum::extract::ws::Utf8Bytes;
-use bytes::{BufMut, BytesMut};
 use lazy_static::lazy_static;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -519,21 +518,14 @@ impl GameEngine {
     }
 
     fn push_update(&mut self, recipients: Recipients, update: GameUpdate) {
-        let mut writer = BytesMut::with_capacity(2048).writer();
-
-        if let Err(e) = serde_json::to_writer(&mut writer, &update) {
-            error!("Failed to serialize game update to writer: {}", e);
-            return;
-        }
-
-        let bytes = writer.into_inner().freeze();
-        let payload = match Utf8Bytes::try_from(bytes) {
-            Ok(payload) => payload,
+        let json = match serde_json::to_string(&update) {
+            Ok(json) => json,
             Err(e) => {
-                error!("Failed to convert bytes to Utf8Bytes: {}", e);
+                error!("Failed to serialize game update: {}", e);
                 return;
             }
         };
+        let payload = Utf8Bytes::from(json);
 
         match recipients {
             Recipients::Single(target) => {
