@@ -133,14 +133,17 @@
 	}
 }
 
-/* Their scrollbar styling */
-::-webkit-scrollbar {
-	width: 0.5rem;
+/* Scrollbar styling */
+* {
 	scrollbar-width: thin;
 }
 
+::-webkit-scrollbar {
+	width: 0.5rem;
+}
+
 ::-webkit-scrollbar-thumb {
-	background-color: hsl(var(--accent)) !important;
+	background-color: var(--accent) !important;
 	border-radius: 9999px;
 }
 

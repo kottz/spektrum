@@ -74,13 +74,19 @@ function createGameStore() {
 		}
 
 		removeSession();
-		state.playerId = undefined;
-		state.playerName = undefined;
-		state.isAdmin = false;
-		state.joinCode = undefined;
-		state.sessionToken = undefined;
-		// Reset state to initial values.
-		Object.assign(state, initialState);
+		Object.assign(state, {
+			...initialState,
+			players: new Map(),
+			currentAnswers: [],
+			playerId: undefined,
+			playerName: undefined,
+			currentQuestion: undefined,
+			currentSong: undefined,
+			upcomingQuestions: undefined,
+			error: undefined,
+			questionTimeRemainingMs: undefined,
+			answeredPlayerNames: undefined
+		});
 	}
 
 	/**
@@ -316,8 +322,9 @@ function createGameStore() {
 
 			case 'PlayerLeft': {
 				info(`Player left: ${message.name}`);
-				state.players.delete(message.name);
-				// Optionally remove the player from the players map or notify the UI.
+				const updated = new Map(state.players);
+				updated.delete(message.name);
+				state.players = updated;
 				break;
 			}
 

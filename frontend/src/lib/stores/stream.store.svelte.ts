@@ -94,8 +94,17 @@ function createStreamStore() {
 			eventCleanupInterval = null;
 		}
 
-		// Reset state
-		Object.assign(state, initialState);
+		// Reset state with fresh mutable objects
+		Object.assign(state, {
+			...initialState,
+			gameState: {
+				...initialStreamGameState,
+				players: new Map(),
+				currentAnswers: [],
+				realtimeScoreboard: []
+			},
+			activeEvents: []
+		});
 		Object.assign(displayConfig, DEFAULT_DISPLAY_CONFIG);
 
 		isInitialized = false;
@@ -115,7 +124,12 @@ function createStreamStore() {
 			case 'INITIAL_STATE': {
 				state.currentGameType = message.gameType;
 				if (!state.gameState) {
-					state.gameState = { ...initialStreamGameState };
+					state.gameState = {
+						...initialStreamGameState,
+						players: new Map(),
+						currentAnswers: [],
+						realtimeScoreboard: []
+					};
 				}
 				state.gameState.joinCode = message.joinCode;
 
@@ -142,7 +156,12 @@ function createStreamStore() {
 
 	function processServerMessage(message: GameUpdate): void {
 		if (!state.gameState) {
-			state.gameState = { ...initialStreamGameState };
+			state.gameState = {
+				...initialStreamGameState,
+				players: new Map(),
+				currentAnswers: [],
+				realtimeScoreboard: []
+			};
 		}
 
 		switch (message.type) {

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { youtubeStore } from '$lib/stores/youtube-store.svelte';
 	import { gameStore } from '$lib/stores/game.svelte';
 	import { Card, CardContent } from '$lib/components/ui/card';
@@ -6,7 +7,7 @@
 
 	let playerId = 'youtube-player';
 
-	$effect.root(() => {
+	onMount(() => {
 		info('YouTube component mounted');
 		youtubeStore.initializeAPI();
 
@@ -14,10 +15,10 @@
 			info('YouTube API Ready');
 			if (typeof YT === 'undefined') {
 				warn('YouTube API not available');
-				return null;
+				return;
 			}
 
-			return new YT.Player(playerId, {
+			new YT.Player(playerId, {
 				height: '360',
 				width: '640',
 				playerVars: {
@@ -39,10 +40,13 @@
 
 		window.onYouTubeIframeAPIReady = initializePlayer;
 
-		// Cleanup function
+		// Handle case where API already loaded
+		if (typeof YT !== 'undefined' && YT.Player) {
+			initializePlayer();
+		}
+
 		return () => {
 			youtubeStore.cleanup();
-			// Clean up the global callback
 			delete window.onYouTubeIframeAPIReady;
 		};
 	});
