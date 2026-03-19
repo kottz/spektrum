@@ -209,7 +209,7 @@ impl AppState {
     }
 
     fn generate_join_code(&self) -> Result<String, ApiError> {
-        // First try 6-digit codes
+        // First try 6-digit codes (atomic check via entry API)
         for _ in 0..10_000 {
             let code = format!("{:06}", fastrand::u32(0..1_000_000));
             if !self.lobbies.contains_key(&code) {
@@ -312,7 +312,14 @@ pub async fn create_lobby(
     );
     trace!("Creating new lobby {}", join_code);
 
-    state.lobbies.insert(join_code.clone(), engine);
+    match state.lobbies.entry(join_code.clone()) {
+        dashmap::mapref::entry::Entry::Vacant(entry) => {
+            entry.insert(engine);
+        }
+        dashmap::mapref::entry::Entry::Occupied(_) => {
+            return Err(ApiError::Lobby("Join code collision, please retry".into()));
+        }
+    }
     let session_token = format!("{}:{}", join_code, admin_id);
 
     info!(
