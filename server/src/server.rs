@@ -166,6 +166,25 @@ pub struct AppState {
 }
 
 impl AppState {
+    /// Constant-time password check to prevent timing attacks.
+    fn verify_admin_password(&self, candidate: &str) -> bool {
+        let mut matched = false;
+        for stored in &self.admin_passwords {
+            let stored_bytes = stored.as_bytes();
+            let candidate_bytes = candidate.as_bytes();
+            // Compare all bytes without short-circuiting.
+            let len_match = stored_bytes.len() == candidate_bytes.len();
+            let mut acc = 0u8;
+            for (a, b) in stored_bytes.iter().zip(candidate_bytes.iter()) {
+                acc |= a ^ b;
+            }
+            if len_match && acc == 0 {
+                matched = true;
+            }
+        }
+        matched
+    }
+
     pub fn new(question_manager: QuestionStore, admin_passwords: Vec<String>) -> Self {
         let state = Self {
             lobbies: Arc::new(DashMap::new()),
@@ -372,7 +391,7 @@ pub async fn get_stored_data(
     state: &AppState,
     req: GetStoredDataRequest,
 ) -> Result<StoredData, ApiError> {
-    if !state.admin_passwords.contains(&req.password) {
+    if !state.verify_admin_password(&req.password) {
         return Err(ApiError::Unauthorized);
     }
     let stored_data = state.store.get_stored_data().await?;
@@ -389,7 +408,7 @@ pub async fn set_stored_data(
     state: &AppState,
     req: SetStoredDataRequest,
 ) -> Result<StoredData, ApiError> {
-    if !state.admin_passwords.contains(&req.password) {
+    if !state.verify_admin_password(&req.password) {
         return Err(ApiError::Unauthorized);
     }
     state.store.backup_stored_data().await?;
@@ -411,7 +430,7 @@ pub async fn upload_character_image(
     image_data: Option<Bytes>,
 ) -> Result<UploadCharacterImageResponse, ApiError> {
     let password = password.ok_or(ApiError::Unauthorized)?;
-    if !state.admin_passwords.contains(&password) {
+    if !state.verify_admin_password(&password) {
         return Err(ApiError::Unauthorized);
     }
     let image_data = image_data.ok_or(ApiError::BadRequest("Missing image file".to_string()))?;
