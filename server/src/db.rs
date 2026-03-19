@@ -292,6 +292,15 @@ impl Storage {
         character_name: &str,
         data: &[u8],
     ) -> Result<String, DbError> {
+        if character_name.is_empty()
+            || character_name.contains('/')
+            || character_name.contains('\\')
+            || character_name.contains("..")
+        {
+            return Err(DbError::Validation(format!(
+                "Invalid character name: {character_name}"
+            )));
+        }
         let filename = format!("{character_name}.avif");
         let path = format!("img/{filename}");
         self.write_file(&path, data).await?;
