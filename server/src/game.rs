@@ -1230,6 +1230,7 @@ impl GameEngine {
                 }
             }
         }
+        self.state.current_alternatives.sort();
         self.state.current_alternatives.dedup();
         fastrand::shuffle(&mut self.state.current_alternatives);
         Ok(())
