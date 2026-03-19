@@ -433,23 +433,6 @@ pub struct UploadCharacterImageResponse {
     image_url: String,
 }
 
-pub async fn upload_character_image(
-    state: &AppState,
-    character_name: String,
-    password: Option<String>,
-    image_data: Option<Bytes>,
-) -> Result<UploadCharacterImageResponse, ApiError> {
-    let password = password.ok_or(ApiError::Unauthorized)?;
-    if !state.verify_admin_password(&password) {
-        return Err(ApiError::Unauthorized);
-    }
-    let image_data = image_data.ok_or(ApiError::BadRequest("Missing image file".to_string()))?;
-    let url = state
-        .store
-        .store_character_image(&character_name, &image_data)
-        .await?;
-    Ok(UploadCharacterImageResponse { image_url: url })
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionInfo {
@@ -575,7 +558,7 @@ pub async fn upload_character_image_handler(
     Path(character_name): Path<String>,
     mut multipart: Multipart,
 ) -> Result<Json<UploadCharacterImageResponse>, ApiError> {
-    let mut password = None;
+    let mut authenticated = false;
     let mut image_data = None;
     while let Some(field) = multipart
         .next_field()
@@ -584,14 +567,19 @@ pub async fn upload_character_image_handler(
     {
         match field.name().unwrap_or_default() {
             "password" => {
-                password = Some(
-                    field
-                        .text()
-                        .await
-                        .map_err(|e| ApiError::BadRequest(e.to_string()))?,
-                )
+                let password = field
+                    .text()
+                    .await
+                    .map_err(|e| ApiError::BadRequest(e.to_string()))?;
+                if !state.verify_admin_password(&password) {
+                    return Err(ApiError::Unauthorized);
+                }
+                authenticated = true;
             }
             "image" => {
+                if !authenticated {
+                    return Err(ApiError::Unauthorized);
+                }
                 if !field
                     .content_type()
                     .unwrap_or("")
@@ -609,8 +597,15 @@ pub async fn upload_character_image_handler(
             _ => continue,
         }
     }
-    let response = upload_character_image(&state, character_name, password, image_data).await?;
-    Ok(Json(response))
+    if !authenticated {
+        return Err(ApiError::Unauthorized);
+    }
+    let image_data = image_data.ok_or(ApiError::BadRequest("Missing image file".into()))?;
+    let url = state
+        .store
+        .store_character_image(&character_name, &image_data)
+        .await?;
+    Ok(Json(UploadCharacterImageResponse { image_url: url }))
 }
 
 pub async fn check_sessions_handler(
