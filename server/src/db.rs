@@ -656,7 +656,6 @@ impl QuestionDatabase {
     #[instrument(target = "storage", level = "info", skip(self))]
     pub async fn load_questions(&self) -> Result<(Vec<GameQuestion>, Vec<QuestionSet>), DbError> {
         let stored_data = self.read_stored_data().await?;
-        stored_data.validate_stored_data()?;
 
         let media_by_id: HashMap<i64, _> = stored_data.media.iter().map(|m| (m.id, m)).collect();
 
