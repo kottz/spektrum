@@ -432,7 +432,6 @@ pub struct UploadCharacterImageResponse {
     image_url: String,
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionInfo {
     pub player_id: Uuid,

@@ -281,7 +281,7 @@ impl GameEngine {
                 let id_to_index: HashMap<i64, usize> = questions
                     .iter()
                     .enumerate()
-                    .map(|(idx, q)| (i64::from(q.id), idx))
+                    .map(|(idx, q)| (q.id, idx))
                     .collect();
                 let mut set_indices: Vec<usize> = question_set
                     .question_ids
