@@ -1,7 +1,3 @@
-export interface BasePublicGameState {
-	phase: { type: string; data?: Record<string, unknown> };
-}
-
 export interface StreamEvent {
 	id: string;
 	type: string;

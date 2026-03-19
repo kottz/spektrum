@@ -1,19 +1,6 @@
 import { info, warn } from '$lib/utils/logger';
-import type { StreamEvent, BasePublicGameState } from '$lib/types/stream.types';
 
 const BROADCAST_CHANNEL_NAME = 'spektrum-stream';
-
-interface StateUpdateMessage {
-	type: 'STATE_UPDATE';
-	gameType: string;
-	gameState: BasePublicGameState | Record<string, unknown>; // Allow extension
-}
-
-interface StreamEventMessage {
-	type: 'STREAM_EVENT';
-	gameType: string;
-	event: StreamEvent;
-}
 
 interface StreamControlMessage {
 	type: 'STREAM_CONTROL';
@@ -30,7 +17,7 @@ interface InitialStateMessage {
 	type: 'INITIAL_STATE';
 	gameType: string;
 	joinCode: string;
-	gameState: BasePublicGameState | Record<string, unknown>;
+	gameState: Record<string, unknown>;
 }
 
 interface StreamReadyMessage {
@@ -46,8 +33,6 @@ interface StreamDisconnectedMessage {
 }
 
 type BroadcastMessage =
-	| StateUpdateMessage
-	| StreamEventMessage
 	| StreamControlMessage
 	| ServerMessageMessage
 	| InitialStateMessage
@@ -122,51 +107,6 @@ class BroadcastService {
 		});
 	}
 
-	broadcastStateUpdate(
-		gameType: string,
-		gameState: BasePublicGameState | Record<string, unknown>
-	): void {
-		if (!this.isInitialized || !this.channel || this.isStreamWindow) {
-			return; // Only admin windows should broadcast
-		}
-
-		const message: StateUpdateMessage = {
-			type: 'STATE_UPDATE',
-			gameType,
-			gameState
-		};
-
-		try {
-			// Deep clone and serialize to ensure data is safe for broadcast
-			const serializedMessage = JSON.parse(JSON.stringify(message));
-			this.channel.postMessage(serializedMessage);
-			info('BroadcastService: State update sent', { gameType });
-		} catch (error) {
-			warn('BroadcastService: Failed to broadcast state update', error);
-		}
-	}
-
-	broadcastStreamEvent(gameType: string, event: StreamEvent): void {
-		if (!this.isInitialized || !this.channel || this.isStreamWindow) {
-			return; // Only admin windows should broadcast
-		}
-
-		const message: StreamEventMessage = {
-			type: 'STREAM_EVENT',
-			gameType,
-			event
-		};
-
-		try {
-			// Deep clone and serialize to ensure data is safe for broadcast
-			const serializedMessage = JSON.parse(JSON.stringify(message));
-			this.channel.postMessage(serializedMessage);
-			info('BroadcastService: Stream event sent', { gameType, eventType: event.type });
-		} catch (error) {
-			warn('BroadcastService: Failed to broadcast stream event', error);
-		}
-	}
-
 	broadcastStreamControl(action: 'show' | 'hide'): void {
 		if (!this.isInitialized || !this.channel) {
 			return;
@@ -178,9 +118,7 @@ class BroadcastService {
 		};
 
 		try {
-			// Deep clone and serialize to ensure data is safe for broadcast
-			const serializedMessage = JSON.parse(JSON.stringify(message));
-			this.channel.postMessage(serializedMessage);
+			this.channel.postMessage(message);
 			info('BroadcastService: Stream control sent', { action });
 		} catch (error) {
 			warn('BroadcastService: Failed to broadcast stream control', error);
@@ -199,9 +137,7 @@ class BroadcastService {
 		};
 
 		try {
-			// Deep clone and serialize to ensure data is safe for broadcast
-			const serializedMessage = JSON.parse(JSON.stringify(broadcastMessage));
-			this.channel.postMessage(serializedMessage);
+			this.channel.postMessage(broadcastMessage);
 			info('BroadcastService: Server message relayed', { gameType, messageType: message.type });
 		} catch (error) {
 			warn('BroadcastService: Failed to broadcast server message', error);
@@ -211,7 +147,7 @@ class BroadcastService {
 	broadcastInitialState(
 		gameType: string,
 		joinCode: string,
-		gameState: BasePublicGameState | Record<string, unknown>
+		gameState: Record<string, unknown>
 	): void {
 		if (!this.isInitialized || !this.channel || this.isStreamWindow) {
 			return; // Only admin windows should broadcast
@@ -225,9 +161,7 @@ class BroadcastService {
 		};
 
 		try {
-			// Deep clone and serialize to ensure data is safe for broadcast
-			const serializedMessage = JSON.parse(JSON.stringify(message));
-			this.channel.postMessage(serializedMessage);
+			this.channel.postMessage(message);
 			info('BroadcastService: Initial state sent', { gameType, joinCode });
 		} catch (error) {
 			warn('BroadcastService: Failed to broadcast initial state', error);
@@ -304,14 +238,4 @@ class BroadcastService {
 }
 
 export const broadcastService = new BroadcastService();
-export type {
-	BroadcastMessage,
-	StateUpdateMessage,
-	StreamEventMessage,
-	StreamControlMessage,
-	ServerMessageMessage,
-	InitialStateMessage,
-	StreamReadyMessage,
-	StreamCloseMessage,
-	StreamDisconnectedMessage
-};
+export type { BroadcastMessage };

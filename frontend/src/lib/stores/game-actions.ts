@@ -39,7 +39,7 @@ class GameActions {
 			// IMPORTANT: Remove the previously saved session for this lobby/player.
 			removeSession();
 
-			gameStore.setAdmin();
+			gameStore.setAdminTo(true);
 			gameStore.setJoinCode(data.join_code);
 			gameStore.setSessionToken(data.session_token);
 			gameStore.setPlayerId(data.player_id);

@@ -329,7 +329,7 @@ function createGameStore() {
 			case 'PlayerKicked': {
 				info(`Player kicked: ${message.reason}`);
 				cleanup();
-				notifications.add(`${message.reason}`, 'destructive');
+				notifications.add(message.reason, 'destructive');
 				break;
 			}
 
@@ -369,17 +369,13 @@ function createGameStore() {
 
 			case 'Error': {
 				state.error = message.message;
-				notifications.add(`${message.message}`, 'destructive');
+				notifications.add(message.message, 'destructive');
 				break;
 			}
 
 			default:
 				warn('Unhandled message type:', message);
 		}
-	}
-
-	function setAdmin() {
-		state.isAdmin = true;
 	}
 
 	function setAdminTo(value: boolean) {
@@ -409,9 +405,7 @@ function createGameStore() {
 	return {
 		state,
 		checkSessions,
-		loadSession,
 		processServerMessage,
-		setAdmin,
 		setAdminTo,
 		setJoinCode,
 		setSessionToken,

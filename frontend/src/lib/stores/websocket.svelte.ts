@@ -19,7 +19,6 @@ export enum ConnectionState {
 
 interface WebSocketState {
 	connectionState: ConnectionState;
-	messages: GameUpdate[];
 	error: string | null;
 	lastConnectedAt: number | null;
 	lastDisconnectedAt: number | null;
@@ -60,7 +59,6 @@ export function createWebSocketStore() {
 	// Core state with runes
 	const state = $state<WebSocketState>({
 		connectionState: ConnectionState.INITIAL,
-		messages: [],
 		error: null,
 		lastConnectedAt: null,
 		lastDisconnectedAt: null,

@@ -4,14 +4,12 @@
 	import LightSwitch from '$lib/components/ui/light-switch.svelte';
 	import JoinLobbyByCode from '$lib/components/join-lobby-by-code.svelte';
 	import ReconnectCard from '$lib/components/reconnect-card.svelte';
-	import NotificationList from '$lib/components/NotificationList.svelte';
 	import { House } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { gameStore, type ValidatedSession } from '$lib/stores/game.svelte';
 	import { checkAndLoadSession, reconnectToSession as reconnectSession } from '$lib/utils/session';
 	import { onMount } from 'svelte';
-
-	const { data } = $props<{ data: { joinCode: string } }>();
 
 	let currentSession = $state<ValidatedSession | null>(null);
 
@@ -32,7 +30,6 @@
 </script>
 
 <div class="flex min-h-screen flex-col items-center justify-center gap-8 px-3 py-8">
-	<NotificationList />
 	<div class="relative w-full max-w-lg">
 		<!-- House button absolutely positioned on the left -->
 		<div class="absolute top-1/2 left-0 -translate-y-1/2">
@@ -56,7 +53,7 @@
 				onNewLobby={handleNewLobby}
 			/>
 		{:else}
-			<JoinLobbyByCode initialJoinCode={data.joinCode} />
+			<JoinLobbyByCode initialJoinCode={$page.params.code ?? ''} />
 		{/if}
 	</div>
 </div>

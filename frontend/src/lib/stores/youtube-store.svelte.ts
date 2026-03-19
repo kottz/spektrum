@@ -3,7 +3,6 @@ import { info, warn } from '$lib/utils/logger';
 
 interface YouTubeState {
 	player: YT.Player | null;
-	isLoading: boolean;
 	currentVideoId: string | null;
 	isPlayerReady: boolean;
 	pendingVideoId: string | null;
@@ -12,7 +11,6 @@ interface YouTubeState {
 function createYouTubeStore() {
 	const state = $state<YouTubeState>({
 		player: null,
-		isLoading: false,
 		currentVideoId: null,
 		isPlayerReady: false,
 		pendingVideoId: null
@@ -195,7 +193,6 @@ function createYouTubeStore() {
 
 		// Reset the store state
 		state.player = null;
-		state.isLoading = false;
 		state.currentVideoId = null;
 		state.isPlayerReady = false;
 		state.pendingVideoId = null;

@@ -38,10 +38,19 @@ const initialStreamGameState: StreamGameState = {
 	realtimeScoreboard: []
 };
 
+function createFreshGameState(): StreamGameState {
+	return {
+		...initialStreamGameState,
+		players: new Map(),
+		currentAnswers: [],
+		realtimeScoreboard: []
+	};
+}
+
 const initialState: StreamStoreState = {
 	isVisible: true,
 	currentGameType: null,
-	gameState: { ...initialStreamGameState },
+	gameState: createFreshGameState(),
 	activeEvents: []
 };
 
@@ -97,12 +106,7 @@ function createStreamStore() {
 		// Reset state with fresh mutable objects
 		Object.assign(state, {
 			...initialState,
-			gameState: {
-				...initialStreamGameState,
-				players: new Map(),
-				currentAnswers: [],
-				realtimeScoreboard: []
-			},
+			gameState: createFreshGameState(),
 			activeEvents: []
 		});
 		Object.assign(displayConfig, DEFAULT_DISPLAY_CONFIG);
@@ -124,12 +128,7 @@ function createStreamStore() {
 			case 'INITIAL_STATE': {
 				state.currentGameType = message.gameType;
 				if (!state.gameState) {
-					state.gameState = {
-						...initialStreamGameState,
-						players: new Map(),
-						currentAnswers: [],
-						realtimeScoreboard: []
-					};
+					state.gameState = createFreshGameState();
 				}
 				state.gameState.joinCode = message.joinCode;
 
@@ -156,12 +155,7 @@ function createStreamStore() {
 
 	function processServerMessage(message: GameUpdate): void {
 		if (!state.gameState) {
-			state.gameState = {
-				...initialStreamGameState,
-				players: new Map(),
-				currentAnswers: [],
-				realtimeScoreboard: []
-			};
+			state.gameState = createFreshGameState();
 		}
 
 		switch (message.type) {

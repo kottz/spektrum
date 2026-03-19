@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { ModeWatcher } from 'mode-watcher';
+	import NotificationList from '$lib/components/NotificationList.svelte';
 	import '../app.css';
 	import { PUBLIC_TITLE } from '$env/static/public';
 	import { env } from '$env/dynamic/public';
@@ -18,4 +19,5 @@
 </svelte:head>
 
 <ModeWatcher defaultMode={'dark'} />
+<NotificationList />
 {@render children()}
