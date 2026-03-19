@@ -61,11 +61,14 @@ impl IntoResponse for ApiError {
                 (StatusCode::BAD_REQUEST, "Validation error", Some(message))
             }
             ApiError::Unauthorized => (StatusCode::UNAUTHORIZED, "Unauthorized", None),
-            ApiError::Database(message) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Database error",
-                Some(message),
-            ),
+            ApiError::Database(ref message) => {
+                error!(error = %message, "Database error in API handler");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Internal server error",
+                    None,
+                )
+            }
             ApiError::Lobby(message) => (StatusCode::BAD_REQUEST, "Lobby error", Some(message)),
             ApiError::OutOfJoinCodes => (
                 StatusCode::INTERNAL_SERVER_ERROR,
