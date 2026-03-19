@@ -293,9 +293,9 @@ impl Storage {
         data: &[u8],
     ) -> Result<String, DbError> {
         if character_name.is_empty()
-            || character_name.contains('/')
-            || character_name.contains('\\')
-            || character_name.contains("..")
+            || !character_name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
         {
             return Err(DbError::Validation(format!(
                 "Invalid character name: {character_name}"
