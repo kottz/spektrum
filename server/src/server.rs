@@ -422,10 +422,9 @@ pub async fn set_stored_data(
         return Err(ApiError::Unauthorized);
     }
     state.store.backup_stored_data().await?;
-    state.store.set_stored_data(req.stored_data).await?;
+    state.store.set_stored_data(req.stored_data.clone()).await?;
     state.store.reload().await?;
-    let data = state.store.get_stored_data().await?;
-    Ok(data)
+    Ok(req.stored_data)
 }
 
 #[derive(Debug, Serialize, PartialEq)]

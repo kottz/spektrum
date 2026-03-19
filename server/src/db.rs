@@ -637,8 +637,10 @@ impl QuestionDatabase {
 
     #[instrument(target = "storage", level = "debug", skip(self))]
     pub async fn backup_stored_data(&self) -> Result<(), DbError> {
-        let stored_data = self.read_stored_data().await?;
-        let json = serde_json::to_string(&stored_data)?;
+        let json = self.storage.read_file(&self.question_file).await?;
+        if json.is_empty() {
+            return Ok(());
+        }
 
         let file_stem = Path::new(&self.question_file)
             .file_stem()
