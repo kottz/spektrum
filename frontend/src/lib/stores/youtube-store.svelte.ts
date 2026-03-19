@@ -116,7 +116,9 @@ function createYouTubeStore() {
 				if (state.currentVideoId || state.pendingVideoId) {
 					const videoId = state.currentVideoId || state.pendingVideoId;
 					info('Question phase: verifying and playing video:', videoId);
-					verifyAndPlayVideo(videoId!);
+					verifyAndPlayVideo(videoId!).catch((err) =>
+						warn('Failed to verify and play video:', err)
+					);
 
 					// Sometimes users start new round before video player has loaded and
 					// the play command is not executed properly.

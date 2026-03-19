@@ -52,7 +52,9 @@ function createUiStore() {
 		if (streamWindow.window && !streamWindow.window.closed) {
 			streamWindow.window.close();
 		}
-		info('UI Store: Attempted to close stream window.');
+		streamWindow.window = null;
+		streamWindow.isOpen = false;
+		info('UI Store: Closed stream window.');
 	}
 
 	// Determine if stream window can be opened (when admin is in a game)

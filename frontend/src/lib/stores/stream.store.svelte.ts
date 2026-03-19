@@ -187,7 +187,9 @@ function createStreamStore() {
 			}
 
 			case 'StateDelta': {
+				let phaseChanged = false;
 				if (message.phase !== undefined && message.phase !== null) {
+					phaseChanged = message.phase !== state.gameState.phase;
 					state.gameState.phase = message.phase;
 
 					if (message.phase === GamePhase.Question) {
@@ -245,9 +247,11 @@ function createStreamStore() {
 				}
 
 				if (
+					!phaseChanged &&
 					state.gameState.phase === GamePhase.Question &&
 					message.question_time_remaining_ms !== undefined
 				) {
+					// Same phase but got a time snapshot — resync the timer.
 					streamTimerStore.startTimer(
 						state.gameState.roundDuration,
 						message.question_time_remaining_ms

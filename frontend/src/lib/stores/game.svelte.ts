@@ -286,13 +286,11 @@ function createGameStore() {
 						state.currentAnswers = [];
 						state.currentQuestion = undefined;
 					}
-				}
-
-				// If we are in the Question phase and got a time snapshot, (re)start the timer with the remaining time.
-				if (
+				} else if (
 					state.phase === GamePhase.Question &&
 					message.question_time_remaining_ms !== undefined
 				) {
+					// Same phase but got a time snapshot — resync the timer.
 					timerStore.startTimer(state.roundDuration, message.question_time_remaining_ms);
 				}
 
