@@ -149,6 +149,7 @@ pub enum GameUpdate {
 }
 
 #[derive(Clone, Debug, Serialize)]
+#[allow(dead_code)]
 pub enum Recipients {
     Single(Uuid),
     Multiple(Vec<Uuid>),
