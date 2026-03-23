@@ -18,13 +18,17 @@ RUN cargo build --release --bin spektrum
 
 # 3. Runtime
 FROM debian:trixie-slim AS runtime
-WORKDIR /app
 
 RUN apt-get update \
  && apt-get install -y ca-certificates \
- && rm -rf /var/lib/apt/lists/*
+ && rm -rf /var/lib/apt/lists/* \
+ && useradd -r -s /bin/false spektrum \
+ && mkdir -p /data && chown spektrum:spektrum /data
 
 COPY --from=builder /app/target/release/spektrum /usr/local/bin/
+
+USER spektrum
+WORKDIR /data
 
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/spektrum"]
