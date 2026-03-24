@@ -72,11 +72,12 @@ export function createWebSocketStore() {
 		INITIAL_BACKOFF_DELAY: 1000,
 		MAX_BACKOFF_DELAY: 10000,
 		CONNECTION_TIMEOUT: 5000,
-		HEARTBEAT_INTERVAL: 5000,
-		HEARTBEAT_TIMEOUT: 6000,
+		HEARTBEAT_INTERVAL: 3000,
+		HEARTBEAT_TIMEOUT: 4000,
 		LIVENESS_CHECK_INTERVAL: 5000,
 		LIVENESS_TIMEOUT: 20000,
-		OFFLINE_PROBE_INTERVAL: 10000
+		OFFLINE_PROBE_INTERVAL: 10000,
+		STALE_SOCKET_THRESHOLD: 5000
 	} as const;
 
 	// Private variables
@@ -95,6 +96,7 @@ export function createWebSocketStore() {
 	let isVisible = browser ? document.visibilityState === 'visible' : true;
 	let isOnline = browser ? navigator.onLine : true;
 	let lastActivityAt: number | null = null;
+	let hiddenAt: number | null = null;
 	let pendingConnect: {
 		resolve: () => void;
 		reject: (error: Error) => void;
@@ -573,6 +575,7 @@ export function createWebSocketStore() {
 			}
 			case 'VISIBILITY_HIDDEN': {
 				isVisible = false;
+				hiddenAt = Date.now();
 				if (state.connectionState === ConnectionState.CONNECTED) {
 					stopHeartbeat();
 					clearRetryTimer();
@@ -588,19 +591,33 @@ export function createWebSocketStore() {
 			case 'VISIBILITY_VISIBLE': {
 				isVisible = true;
 				isOnline = navigator.onLine;
+				const wasHiddenMs = hiddenAt !== null ? Date.now() - hiddenAt : 0;
+				hiddenAt = null;
 
+				if (!desiredConnection) {
+					markDisconnected();
+					return;
+				}
+
+				// After being hidden for a meaningful duration the underlying TCP
+				// connection is very likely dead, yet the browser may still report
+				// readyState === OPEN. Trusting that stale flag used to cost up to
+				// 11 s (heartbeat interval + timeout) of silent unresponsiveness.
+				// Force a fresh connection instead.
+				if (wasHiddenMs > CONFIG.STALE_SOCKET_THRESHOLD) {
+					resetAttempts();
+					openSocket();
+					return;
+				}
+
+				// Brief tab switch — trust the existing socket
 				if (socket?.readyState === WebSocket.OPEN) {
 					markConnected();
 					startHeartbeat();
 					startLivenessMonitor();
 					return;
 				}
-				if (!desiredConnection) {
-					markDisconnected();
-					return;
-				}
-				// Always try to reconnect - let connection success/failure be the source of truth
-				// rather than trusting potentially stale or incorrect navigator.onLine
+
 				resetAttempts();
 				openSocket();
 				return;
