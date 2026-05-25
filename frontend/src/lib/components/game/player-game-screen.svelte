@@ -6,24 +6,14 @@
 	import LobbyView from './lobby-view.svelte';
 	import GameOver from './game-over.svelte';
 	import { GamePhase } from '../../types/game';
-	import { Card } from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
 	import LightSwitch from '$lib/components/ui/light-switch.svelte';
 	const phase = $derived(gameStore.state.phase);
-	const joinCode = $derived(gameStore.state.joinCode);
 </script>
 
 <div class="flex h-dvh flex-col">
-	<!-- Top bar with join code and leave button - now flex-none -->
-	<div class="flex flex-none items-center justify-between p-4">
-		{#if joinCode}
-			<Card>
-				<div class="flex items-center gap-2 p-4">
-					<span class="text-muted-foreground">Join Code:</span>
-					<span class="font-mono text-lg font-bold">{joinCode}</span>
-				</div>
-			</Card>
-		{/if}
+	<!-- Top bar with leave button and light switch -->
+	<div class="flex flex-none items-center justify-end p-4">
 		<div class="flex gap-4">
 			<Button variant="outline" onclick={() => gameActions.leaveGame()}>Leave Game</Button>
 			<LightSwitch />
