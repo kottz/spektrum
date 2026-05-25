@@ -597,21 +597,21 @@ impl GameEngine {
             | GameAction::KickPlayer { .. }
             | GameAction::EndGame { .. }
             | GameAction::CloseGame { .. }
-            | GameAction::LockLobby { .. } => {
-                if event.context.sender_id != self.state.admin_id {
-                    debug!(
-                        sender_id = %event.context.sender_id,
-                        action = %event.action.kind(),
-                        "Admin action denied: sender is not admin"
-                    );
-                    self.push_update(
-                        Recipients::Single(event.context.sender_id),
-                        GameUpdate::Error {
-                            message: "Admin action requires authorization".into(),
-                        },
-                    );
-                    return;
-                }
+            | GameAction::LockLobby { .. }
+                if event.context.sender_id != self.state.admin_id =>
+            {
+                debug!(
+                    sender_id = %event.context.sender_id,
+                    action = %event.action.kind(),
+                    "Admin action denied: sender is not admin"
+                );
+                self.push_update(
+                    Recipients::Single(event.context.sender_id),
+                    GameUpdate::Error {
+                        message: "Admin action requires authorization".into(),
+                    },
+                );
+                return;
             }
             _ => {}
         }

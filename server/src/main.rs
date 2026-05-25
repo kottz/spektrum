@@ -1,11 +1,15 @@
 use crate::question::QuestionStore;
 use crate::server::{
-    AppState, check_sessions_handler, create_lobby_handler, get_stored_data_handler,
-    join_lobby_handler, list_sets_handler, set_stored_data_handler, upload_character_image_handler,
-    ws_handler,
+    AppState, add_no_store_headers, check_sessions_handler, create_lobby_handler,
+    get_stored_data_handler, join_lobby_handler, list_sets_handler, set_stored_data_handler,
+    upload_character_image_handler, ws_handler,
 };
 use axum::{
     Router,
+    body::Body,
+    extract::Request,
+    middleware::{self, Next},
+    response::Response,
     routing::{any, get, post},
 };
 use config::Config;
@@ -16,7 +20,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::signal;
 use tokio::time::Duration as TokioDuration;
-use tower_governor::{GovernorLayer, governor::GovernorConfigBuilder};
+use tower_governor::{
+    GovernorError, GovernorLayer, governor::GovernorConfigBuilder,
+    key_extractor::SmartIpKeyExtractor,
+};
 use tower_http::compression::{CompressionLayer, CompressionLevel};
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
@@ -28,6 +35,18 @@ mod game;
 mod question;
 mod server;
 mod uuid;
+
+async fn no_store_response_middleware(request: Request, next: Next) -> Response {
+    let mut response = next.run(request).await;
+    add_no_store_headers(response.headers_mut());
+    response
+}
+
+fn governor_error_response(error: GovernorError) -> http::Response<Body> {
+    let mut response: http::Response<Body> = error.into();
+    add_no_store_headers(response.headers_mut());
+    response
+}
 
 #[derive(Debug, Deserialize)]
 struct ServerConfig {
@@ -162,6 +181,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         GovernorConfigBuilder::default()
             .per_millisecond(500)
             .burst_size(30)
+            .key_extractor(SmartIpKeyExtractor)
             .finish()
             .unwrap(),
     );
@@ -216,7 +236,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .quality(CompressionLevel::Default)
                 .gzip(true),
         )
-        .layer(GovernorLayer::new(governor_conf))
+        .layer(GovernorLayer::new(governor_conf).error_handler(governor_error_response))
+        .layer(middleware::from_fn(no_store_response_middleware))
         .layer(cors);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], app_config.server.port));

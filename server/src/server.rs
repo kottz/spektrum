@@ -6,7 +6,7 @@ use crate::question::{QuestionError, QuestionStore};
 use crate::uuid::Uuid;
 use axum::extract::Path;
 use axum::extract::ws::Utf8Bytes;
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::{
     Json,
     extract::Multipart,
@@ -29,6 +29,16 @@ use tokio::task::JoinHandle;
 use tracing::{Instrument, Span, debug, error, info, info_span, trace, warn};
 
 const HEARTBEAT_BYTE: u8 = 0x42;
+pub(crate) const NO_STORE_CACHE_CONTROL: &str = "no-store, no-cache, must-revalidate, max-age=0";
+
+pub(crate) fn add_no_store_headers(headers: &mut HeaderMap) {
+    headers.insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static(NO_STORE_CACHE_CONTROL),
+    );
+    headers.insert(header::PRAGMA, HeaderValue::from_static("no-cache"));
+    headers.insert(header::EXPIRES, HeaderValue::from_static("0"));
+}
 
 #[derive(Error, Debug)]
 pub enum ApiError {
@@ -89,8 +99,16 @@ impl IntoResponse for ApiError {
             error: error.into(),
             details,
         });
-        (status, body).into_response()
+        let mut response = (status, body).into_response();
+        add_no_store_headers(response.headers_mut());
+        response
     }
+}
+
+fn no_store_json<T: Serialize>(value: T) -> axum::response::Response {
+    let mut response = Json(value).into_response();
+    add_no_store_headers(response.headers_mut());
+    response
 }
 
 impl From<DbError> for ApiError {
@@ -347,6 +365,7 @@ pub struct JoinLobbyRequest {
 #[derive(Debug, Serialize, PartialEq)]
 pub struct JoinLobbyResponse {
     pub player_id: Uuid,
+    pub join_code: String,
     pub session_token: String,
 }
 
@@ -388,6 +407,7 @@ pub async fn join_lobby(
     engine.add_player(new_player_id, req.name)?;
     Ok(JoinLobbyResponse {
         player_id: new_player_id,
+        join_code: join_code.to_string(),
         session_token: format!("{}:{}", join_code, new_player_id),
     })
 }
@@ -492,15 +512,7 @@ pub async fn list_sets_handler(
     State(state): State<AppState>,
 ) -> Result<impl axum::response::IntoResponse, ApiError> {
     let response = list_sets(&state).await?;
-    let json = Json(response);
-
-    Ok((
-        [(
-            axum::http::header::CACHE_CONTROL,
-            "no-store, no-cache, must-revalidate, max-age=0",
-        )],
-        json,
-    ))
+    Ok(no_store_json(response))
 }
 
 pub async fn create_lobby_handler(
@@ -508,15 +520,7 @@ pub async fn create_lobby_handler(
     Json(req): Json<CreateLobbyRequest>,
 ) -> Result<impl axum::response::IntoResponse, ApiError> {
     let response = create_lobby(&state, req).await?;
-    let json = Json(response);
-
-    Ok((
-        [(
-            axum::http::header::CACHE_CONTROL,
-            "no-store, no-cache, must-revalidate, max-age=0",
-        )],
-        json,
-    ))
+    Ok(no_store_json(response))
 }
 
 pub async fn join_lobby_handler(
@@ -524,38 +528,30 @@ pub async fn join_lobby_handler(
     Json(req): Json<JoinLobbyRequest>,
 ) -> Result<impl axum::response::IntoResponse, ApiError> {
     let response = join_lobby(&state, req).await?;
-    let json = Json(response);
-
-    Ok((
-        [(
-            axum::http::header::CACHE_CONTROL,
-            "no-store, no-cache, must-revalidate, max-age=0",
-        )],
-        json,
-    ))
+    Ok(no_store_json(response))
 }
 
 pub async fn get_stored_data_handler(
     State(state): State<AppState>,
     Json(req): Json<GetStoredDataRequest>,
-) -> Result<Json<StoredData>, ApiError> {
+) -> Result<impl axum::response::IntoResponse, ApiError> {
     let response = get_stored_data(&state, req).await?;
-    Ok(Json(response))
+    Ok(no_store_json(response))
 }
 
 pub async fn set_stored_data_handler(
     State(state): State<AppState>,
     Json(req): Json<SetStoredDataRequest>,
-) -> Result<Json<StoredData>, ApiError> {
+) -> Result<impl axum::response::IntoResponse, ApiError> {
     let response = set_stored_data(&state, req).await?;
-    Ok(Json(response))
+    Ok(no_store_json(response))
 }
 
 pub async fn upload_character_image_handler(
     State(state): State<AppState>,
     Path(character_name): Path<String>,
     mut multipart: Multipart,
-) -> Result<Json<UploadCharacterImageResponse>, ApiError> {
+) -> Result<impl axum::response::IntoResponse, ApiError> {
     let mut authenticated = false;
     let mut image_data = None;
     while let Some(field) = multipart
@@ -603,7 +599,9 @@ pub async fn upload_character_image_handler(
         .store
         .store_character_image(&character_name, &image_data)
         .await?;
-    Ok(Json(UploadCharacterImageResponse { image_url: url }))
+    Ok(no_store_json(UploadCharacterImageResponse {
+        image_url: url,
+    }))
 }
 
 pub async fn check_sessions_handler(
@@ -611,15 +609,7 @@ pub async fn check_sessions_handler(
     Json(req): Json<CheckSessionsRequest>,
 ) -> Result<impl axum::response::IntoResponse, ApiError> {
     let response = check_sessions(&state, req).await?;
-    let json = Json(response);
-
-    Ok((
-        [(
-            axum::http::header::CACHE_CONTROL,
-            "no-store, no-cache, must-revalidate, max-age=0",
-        )],
-        json,
-    ))
+    Ok(no_store_json(response))
 }
 
 struct WsConnection {
@@ -830,11 +820,13 @@ async fn handle_message(
                 send_error_to_client(text_tx, "Must connect first.".to_string(), "not_connected");
             }
         }
-        Message::Binary(payload) if payload.as_ref() == [HEARTBEAT_BYTE] => {
-            if bin_tx.try_send(payload).is_err() {
-                warn!("Heartbeat channel full");
-            }
+        Message::Binary(payload)
+            if payload.as_ref() == [HEARTBEAT_BYTE]
+                && bin_tx.try_send(payload.clone()).is_err() =>
+        {
+            warn!("Heartbeat channel full");
         }
+        Message::Binary(_) => {}
         Message::Pong(_) => trace!("Received pong from client"),
         Message::Close(_) => {
             if let Some(pid) = conn.player_id {
