@@ -13,11 +13,9 @@
 
 <div class="flex h-dvh flex-col">
 	<!-- Top bar with leave button and light switch -->
-	<div class="flex flex-none items-center justify-end p-4">
-		<div class="flex gap-4">
-			<Button variant="outline" onclick={() => gameActions.leaveGame()}>Leave Game</Button>
-			<LightSwitch />
-		</div>
+	<div class="flex flex-none items-center justify-between p-4">
+		<Button variant="outline" onclick={() => gameActions.leaveGame()}>Leave Game</Button>
+		<LightSwitch />
 	</div>
 
 	<!-- Game content based on phase - now flex-1 with min-h-0 -->
