@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { PUBLIC_TITLE } from '$env/static/public';
+	import { resolve } from '$app/paths';
 	import { env } from '$env/dynamic/public';
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Separator } from '$lib/components/ui/separator';
-	import { Github } from '@lucide/svelte';
+	import { GitFork } from '@lucide/svelte';
 	import SetSelector from '$lib/components/set-selector.svelte';
 	import LightSwitch from '$lib/components/ui/light-switch.svelte';
 	import JoinLobbyCard from '$lib/components/join-lobby-card.svelte';
@@ -77,7 +78,7 @@
 		<Separator class="mt-4" />
 		<footer class="flex flex-col items-center justify-center text-sm">
 			<div class="flex items-center justify-center">
-				<a href="/howto"><span class="text-muted-foreground">How to play</span></a>
+				<a href={resolve('/howto')}><span class="text-muted-foreground">How to play</span></a>
 				<Separator orientation="vertical" class="mx-2 h-4" />
 				<Button
 					href="https://github.com/kottz/spektrum"
@@ -85,7 +86,7 @@
 					variant="outline"
 					size="icon"
 				>
-					<Github class="h-[1.2rem] w-[1.2rem]" />
+					<GitFork class="h-[1.2rem] w-[1.2rem]" />
 					<span class="sr-only">Github repository</span>
 				</Button>
 			</div>

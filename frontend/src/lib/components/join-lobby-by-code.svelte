@@ -9,6 +9,7 @@
 	import { getResponseError } from '$lib/utils/http';
 	import { PUBLIC_SPEKTRUM_SERVER_URL } from '$env/static/public';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 
 	// Accept the join code as a prop
 	const { initialJoinCode } = $props<{ initialJoinCode: string }>();
@@ -78,7 +79,7 @@
 			gameStore.setSessionToken(data.session_token);
 			gameStore.setPlayerId(data.player_id);
 			await gameActions.joinGame(data.session_token);
-			goto('/');
+			goto(resolve('/'));
 		} catch (error) {
 			let errorMessage = 'Failed to join lobby';
 			if (error instanceof Error) {

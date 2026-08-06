@@ -1,8 +1,7 @@
 use clap::{Parser, ValueEnum};
 use futures_util::{SinkExt, StreamExt};
-use rand::Rng;
-use rand::SeedableRng;
-use rand::seq::SliceRandom;
+use rand::RngExt;
+use rand::prelude::IndexedRandom;
 use serde_json::json;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -141,14 +140,16 @@ impl TestPlayer {
             "type": "Connect",
             "session_token": session_token,
         });
-        write.send(Message::Text(connect_msg.to_string())).await?;
+        write
+            .send(Message::Text(connect_msg.to_string().into()))
+            .await?;
         Ok(Self {
             name,
             join_code,
             session_token,
             ws_write: write,
             ws_read: read,
-            rng: rand::rngs::StdRng::from_entropy(),
+            rng: rand::make_rng(),
         })
     }
 
@@ -159,7 +160,7 @@ impl TestPlayer {
             "answer": answer,
         });
         self.ws_write
-            .send(Message::Text(answer_msg.to_string()))
+            .send(Message::Text(answer_msg.to_string().into()))
             .await?;
         Ok(())
     }
@@ -179,13 +180,14 @@ impl TestPlayer {
                     Some("StateDelta") => {
                         if data["phase"].as_str() == Some("question") {
                             // Simulate thinking time before answering.
-                            let delay = self.rng.gen_range(0.0..40.0);
+                            let delay = self.rng.random_range(0.0..40.0);
                             tokio::time::sleep(Duration::from_secs_f32(delay)).await;
                             if let Some(alternatives) = data["alternatives"].as_array()
                                 && let Some(answer_val) = alternatives.choose(&mut self.rng)
-                                    && let Some(answer_str) = answer_val.as_str() {
-                                        self.submit_answer(answer_str.to_string()).await?;
-                                    }
+                                && let Some(answer_str) = answer_val.as_str()
+                            {
+                                self.submit_answer(answer_str.to_string()).await?;
+                            }
                         }
                     }
                     Some("GameOver") | Some("GameClosed") => break,
@@ -234,7 +236,9 @@ impl TestAdmin {
             "type": "Connect",
             "session_token": session_token,
         });
-        write.send(Message::Text(connect_msg.to_string())).await?;
+        write
+            .send(Message::Text(connect_msg.to_string().into()))
+            .await?;
         Ok((
             Self {
                 session_token: session_token.to_string(),
@@ -250,7 +254,9 @@ impl TestAdmin {
             "type": "AdminAction",
             "action": { "type": "StartGame" }
         });
-        self.ws_write.send(Message::Text(msg.to_string())).await?;
+        self.ws_write
+            .send(Message::Text(msg.to_string().into()))
+            .await?;
         Ok(())
     }
 
@@ -259,7 +265,9 @@ impl TestAdmin {
             "type": "AdminAction",
             "action": { "type": "StartRound" }
         });
-        self.ws_write.send(Message::Text(msg.to_string())).await?;
+        self.ws_write
+            .send(Message::Text(msg.to_string().into()))
+            .await?;
         Ok(())
     }
 
@@ -268,7 +276,9 @@ impl TestAdmin {
             "type": "AdminAction",
             "action": { "type": "EndRound" }
         });
-        self.ws_write.send(Message::Text(msg.to_string())).await?;
+        self.ws_write
+            .send(Message::Text(msg.to_string().into()))
+            .await?;
         Ok(())
     }
 
@@ -277,7 +287,9 @@ impl TestAdmin {
             "type": "AdminAction",
             "action": { "type": "EndGame", "reason": "Test complete" }
         });
-        self.ws_write.send(Message::Text(msg.to_string())).await?;
+        self.ws_write
+            .send(Message::Text(msg.to_string().into()))
+            .await?;
         Ok(())
     }
 
@@ -314,7 +326,11 @@ async fn run_throughput_player(
                 "answer": "stress_test"
             });
             let msg_str = msg.to_string();
-            if ws_write.send(Message::Text(msg_str.clone())).await.is_ok() {
+            if ws_write
+                .send(Message::Text(msg_str.clone().into()))
+                .await
+                .is_ok()
+            {
                 sender_metrics.messages_sent.fetch_add(1, Ordering::Relaxed);
                 sender_metrics
                     .bytes_sent
