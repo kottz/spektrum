@@ -6,7 +6,6 @@ use crate::server::{
 };
 use axum::{
     Router,
-    body::Body,
     extract::Request,
     middleware::{self, Next},
     response::Response,
@@ -17,17 +16,11 @@ use http::HeaderValue;
 use serde::Deserialize;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::Arc;
 use tokio::signal;
-use tokio::time::Duration as TokioDuration;
-use tower_governor::{
-    GovernorError, GovernorLayer, governor::GovernorConfigBuilder,
-    key_extractor::SmartIpKeyExtractor,
-};
 use tower_http::compression::{CompressionLayer, CompressionLevel};
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
-use tracing::{Instrument, info, info_span, warn};
+use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod db;
@@ -38,12 +31,6 @@ mod uuid;
 
 async fn no_store_response_middleware(request: Request, next: Next) -> Response {
     let mut response = next.run(request).await;
-    add_no_store_headers(response.headers_mut());
-    response
-}
-
-fn governor_error_response(error: GovernorError) -> http::Response<Body> {
-    let mut response: http::Response<Body> = error.into();
     add_no_store_headers(response.headers_mut());
     response
 }
@@ -135,6 +122,40 @@ async fn shutdown_signal() {
     }
 }
 
+fn build_app(state: AppState, cors: CorsLayer) -> Router {
+    Router::new()
+        .route("/ws", any(ws_handler))
+        .route("/api/list-sets", get(list_sets_handler))
+        .route("/api/create-lobby", post(create_lobby_handler))
+        .route("/api/join-lobby", post(join_lobby_handler))
+        .route("/api/check-sessions", post(check_sessions_handler))
+        .route("/api/questions", post(get_stored_data_handler))
+        .route("/api/update-questions", post(set_stored_data_handler))
+        .route(
+            "/api/upload-character-image/{character_name}",
+            post(upload_character_image_handler),
+        )
+        .with_state(state)
+        .layer(
+            TraceLayer::new_for_http().make_span_with(|request: &http::Request<_>| {
+                let request_id = fastrand::u64(..);
+                tracing::info_span!(
+                    "http_request",
+                    request_id = %request_id,
+                    method = %request.method(),
+                    uri = %request.uri(),
+                )
+            }),
+        )
+        .layer(
+            CompressionLayer::new()
+                .quality(CompressionLevel::Default)
+                .gzip(true),
+        )
+        .layer(middleware::from_fn(no_store_response_middleware))
+        .layer(cors)
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let settings = Config::builder()
@@ -177,68 +198,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             http::header::ACCEPT,
         ]);
 
-    let governor_conf = Arc::new(
-        GovernorConfigBuilder::default()
-            .per_millisecond(500)
-            .burst_size(30)
-            .key_extractor(SmartIpKeyExtractor)
-            .finish()
-            .unwrap(),
-    );
-
-    let governor_limiter = governor_conf.limiter().clone();
-    tokio::spawn(
-        async move {
-            loop {
-                tokio::time::sleep(TokioDuration::from_secs(60)).await;
-                if governor_limiter.len() > 1_000_000 {
-                    warn!(
-                        target: "maintenance",
-                        rate_limiter_size = governor_limiter.len(),
-                        "Rate limiting storage size is large"
-                    );
-                }
-                governor_limiter.retain_recent();
-            }
-        }
-        .instrument(info_span!(target: "maintenance", "rate_limit_cleanup")),
-    );
-
     let question_store = QuestionStore::new(&app_config.storage).await?;
     let state = AppState::new(question_store, app_config.admin_password);
 
-    let app = Router::new()
-        .route("/ws", any(ws_handler))
-        .route("/api/list-sets", get(list_sets_handler))
-        .route("/api/create-lobby", post(create_lobby_handler))
-        .route("/api/join-lobby", post(join_lobby_handler))
-        .route("/api/check-sessions", post(check_sessions_handler))
-        .route("/api/questions", post(get_stored_data_handler))
-        .route("/api/update-questions", post(set_stored_data_handler))
-        .route(
-            "/api/upload-character-image/{character_name}",
-            post(upload_character_image_handler),
-        )
-        .with_state(state)
-        .layer(
-            TraceLayer::new_for_http().make_span_with(|request: &http::Request<_>| {
-                let request_id = fastrand::u64(..);
-                tracing::info_span!(
-                    "http_request",
-                    request_id = %request_id,
-                    method = %request.method(),
-                    uri = %request.uri(),
-                )
-            }),
-        )
-        .layer(
-            CompressionLayer::new()
-                .quality(CompressionLevel::Default)
-                .gzip(true),
-        )
-        .layer(GovernorLayer::new(governor_conf).error_handler(governor_error_response))
-        .layer(middleware::from_fn(no_store_response_middleware))
-        .layer(cors);
+    let app = build_app(state, cors);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], app_config.server.port));
     info!("Starting server on {}", addr);
@@ -253,4 +216,74 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Server shutdown complete");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::server::{CreateLobbyRequest, create_lobby};
+    use axum::body::Body;
+    use futures_util::future::join_all;
+    use http::{Method, Request, StatusCode, header};
+    use std::fs::File;
+    use std::io::Write;
+    use tempfile::tempdir;
+    use tower::ServiceExt;
+
+    async fn test_state() -> (AppState, tempfile::TempDir) {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("questions.json");
+        let mut file = File::create(&file_path).unwrap();
+        writeln!(
+            file,
+            r#"{{
+                "media": [{{"id": 1, "title": "Test Song", "artist": "Test Artist", "release_year": null, "spotify_uri": null, "youtube_id": "test123"}}],
+                "characters": [],
+                "questions": [{{"id": 1, "media_id": 1, "question_type": "color", "question_text": null, "image_url": null, "is_active": true}}],
+                "options": [{{"id": 1, "question_id": 1, "option_text": "Red", "is_correct": true}}],
+                "sets": []
+            }}"#
+        )
+        .unwrap();
+
+        let storage = StorageConfig::Filesystem {
+            base_path: dir.path().to_path_buf(),
+            file_path: "questions.json".to_string(),
+        };
+        let question_store = QuestionStore::new(&storage).await.unwrap();
+        (AppState::new(question_store, vec![]), dir)
+    }
+
+    #[tokio::test]
+    async fn many_players_can_join_at_once() {
+        let (state, _dir) = test_state().await;
+        let lobby = create_lobby(
+            &state,
+            CreateLobbyRequest {
+                round_duration: Some(60),
+                set_id: None,
+            },
+        )
+        .await
+        .unwrap();
+        let app = build_app(state, CorsLayer::new());
+
+        let joins = (0..100).map(|number| {
+            let body = serde_json::json!({
+                "join_code": lobby.join_code,
+                "name": format!("Player{number}"),
+            });
+            let request = Request::builder()
+                .method(Method::POST)
+                .uri("/api/join-lobby")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(body.to_string()))
+                .unwrap();
+            app.clone().oneshot(request)
+        });
+
+        for response in join_all(joins).await {
+            assert_eq!(response.unwrap().status(), StatusCode::OK);
+        }
+    }
 }

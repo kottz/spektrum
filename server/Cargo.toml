@@ -23,8 +23,8 @@ chrono = "0.4.42"
 flate2 = "1.1.9"
 aws-sdk-s3 = "1.123.0"
 dashmap = "6.1.0"
-tower_governor = "0.8.0"
 arc-swap = "1.8.1"
 
 [dev-dependencies]
 tempfile = "3.25.0"
+tower = { version = "0.5.3", features = ["util"] }

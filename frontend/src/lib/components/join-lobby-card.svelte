@@ -6,6 +6,7 @@
 	import { notifications } from '$lib/stores/notification-store.svelte';
 	import { warn } from '$lib/utils/logger';
 	import { gameStore } from '$lib/stores/game.svelte';
+	import { getResponseError } from '$lib/utils/http';
 	import { PUBLIC_SPEKTRUM_SERVER_URL } from '$env/static/public';
 
 	let lobbyCode = $state('');
@@ -60,9 +61,7 @@
 			});
 
 			if (!response.ok) {
-				const errorData = await response.json();
-				const errorMessage = errorData.details || errorData.error || 'Failed to join lobby';
-				throw new Error(errorMessage);
+				throw new Error(await getResponseError(response, 'Failed to join lobby'));
 			}
 
 			gameStore.setPlayerName(playerName.trim());
