@@ -17,6 +17,7 @@ interface InitialStateMessage {
 	type: 'INITIAL_STATE';
 	gameType: string;
 	joinCode: string;
+	roundDuration: number;
 	gameState: Record<string, unknown>;
 }
 
@@ -147,6 +148,7 @@ class BroadcastService {
 	broadcastInitialState(
 		gameType: string,
 		joinCode: string,
+		roundDuration: number,
 		gameState: Record<string, unknown>
 	): void {
 		if (!this.isInitialized || !this.channel || this.isStreamWindow) {
@@ -157,6 +159,7 @@ class BroadcastService {
 			type: 'INITIAL_STATE',
 			gameType,
 			joinCode,
+			roundDuration,
 			gameState
 		};
 

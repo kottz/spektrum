@@ -60,6 +60,7 @@ function createStreamStore() {
 
 	let isInitialized = false;
 	let eventCleanupInterval: ReturnType<typeof setInterval> | null = null;
+	let initialStateRequestInterval: ReturnType<typeof setInterval> | null = null;
 
 	const hasActiveGame = $derived(state.currentGameType !== null && state.gameState !== null);
 
@@ -83,8 +84,12 @@ function createStreamStore() {
 		isInitialized = true;
 		info('StreamStore: Initialized');
 
-		// Signal that the stream window is ready to receive data
+		// Keep requesting a complete snapshot until the admin responds. BroadcastChannel
+		// does not queue messages for listeners that have not initialized yet.
 		broadcastService.broadcastStreamReady();
+		initialStateRequestInterval = setInterval(() => {
+			broadcastService.broadcastStreamReady();
+		}, 1000);
 
 		// Listen for window close/refresh to notify admin
 		window.addEventListener('beforeunload', () => {
@@ -101,6 +106,10 @@ function createStreamStore() {
 		if (eventCleanupInterval) {
 			clearInterval(eventCleanupInterval);
 			eventCleanupInterval = null;
+		}
+		if (initialStateRequestInterval) {
+			clearInterval(initialStateRequestInterval);
+			initialStateRequestInterval = null;
 		}
 
 		// Reset state with fresh mutable objects
@@ -126,11 +135,16 @@ function createStreamStore() {
 			}
 
 			case 'INITIAL_STATE': {
+				if (initialStateRequestInterval) {
+					clearInterval(initialStateRequestInterval);
+					initialStateRequestInterval = null;
+				}
 				state.currentGameType = message.gameType;
 				if (!state.gameState) {
 					state.gameState = createFreshGameState();
 				}
 				state.gameState.joinCode = message.joinCode;
+				state.gameState.roundDuration = message.roundDuration;
 
 				if (message.gameState && typeof message.gameState === 'object') {
 					processServerMessage(message.gameState as GameUpdate);

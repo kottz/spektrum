@@ -8,6 +8,7 @@
 	import { MonitorPlay, Eye, EyeOff, ExternalLink } from '@lucide/svelte';
 	import { onDestroy } from 'svelte';
 	import { info } from '$lib/utils/logger';
+	import { createStreamStateSnapshot } from '$lib/utils/stream-state';
 
 	const streamWindowState = $derived(uiStore.streamWindow);
 	const gameState = $derived(gameStore.state);
@@ -15,43 +16,32 @@
 
 	function handleStreamReady() {
 		if (gameState.joinCode) {
-			// Create a simplified state object for the stream including current phase
-			const streamState = {
-				type: 'StateDelta', // Make it look like a StateDelta message for processing
-				phase: gameState.phase,
-				scoreboard: Array.from(gameState.players.entries()).map(([name, player]) => [
-					name,
-					player.score
-				]),
-				round_scores: Array.from(gameState.players.entries()).map(([name, player]) => [
-					name,
-					player.roundScore || 0
-				]),
-				currentQuestion: gameState.currentQuestion,
-				question_type: gameState.currentQuestion?.type,
-				question_text: gameState.currentQuestion?.text,
-				alternatives: gameState.currentQuestion?.alternatives
-			};
+			const streamState = createStreamStateSnapshot(gameState);
 
 			info('StreamControls: Stream ready, sending initial state with join code and phase', {
 				joinCode: gameState.joinCode,
 				phase: gameState.phase
 			});
-			broadcastService.broadcastInitialState('SpektrumGame', gameState.joinCode, streamState);
+			broadcastService.broadcastInitialState(
+				'SpektrumGame',
+				gameState.joinCode,
+				gameState.roundDuration,
+				streamState
+			);
 		}
 	}
 
 	function handleOpenStreamWindow(): void {
 		info('StreamControls: Opening stream window');
-		uiStore.openStreamWindow();
 
 		// Initialize broadcast service for admin if not already done
 		if (!broadcastService.getIsInitialized() && !broadcastService.getIsStreamWindow()) {
 			broadcastService.initialize(false); // false = admin window
 		}
 
-		// Listen for stream ready signal
+		// Listen before opening so the new window's ready signal cannot race us.
 		broadcastService.addListener(handleBroadcastMessage);
+		uiStore.openStreamWindow();
 	}
 
 	function handleBroadcastMessage(message: BroadcastMessage) {
