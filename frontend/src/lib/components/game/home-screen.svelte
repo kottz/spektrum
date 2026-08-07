@@ -5,7 +5,6 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Separator } from '$lib/components/ui/separator';
-	import { GitFork } from '@lucide/svelte';
 	import SetSelector from '$lib/components/set-selector.svelte';
 	import LightSwitch from '$lib/components/ui/light-switch.svelte';
 	import JoinLobbyCard from '$lib/components/join-lobby-card.svelte';
@@ -86,7 +85,24 @@
 					variant="outline"
 					size="icon"
 				>
-					<GitFork class="h-[1.2rem] w-[1.2rem]" />
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="24"
+						height="24"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						class="h-[1.2rem] w-[1.2rem]"
+						aria-hidden="true"
+					>
+						<path
+							d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3.28-.36 6.72-1.61 6.72-7A5.4 5.4 0 0 0 19.22 4 5 5 0 0 0 19.13.5S17.95.14 15 1.84a13.4 13.4 0 0 0-7 0C5.05.14 3.87.5 3.87.5A5 5 0 0 0 3.78 4a5.4 5.4 0 0 0-1.5 3.5c0 5.42 3.44 6.66 6.72 7A4.8 4.8 0 0 0 8 18v4"
+						></path>
+						<path d="M9 18c-4.51 2-5-2-7-2"></path>
+					</svg>
 					<span class="sr-only">Github repository</span>
 				</Button>
 			</div>
