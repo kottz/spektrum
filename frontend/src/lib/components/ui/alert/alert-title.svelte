@@ -2,7 +2,7 @@
 	import type { Snippet } from 'svelte';
 	import type { HTMLAttributes } from 'svelte/elements';
 	import type { HeadingLevel } from './index.js';
-	import { cn, type WithElementRef } from '$lib/utils.js';
+	import { cn, type WithElementRef } from '#lib/utils.ts';
 
 	type AlertTitleProps = WithElementRef<HTMLAttributes<HTMLHeadingElement>> & {
 		level?: HeadingLevel;

@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { youtubeStore } from '$lib/stores/youtube-store.svelte';
-	import { gameStore } from '$lib/stores/game.svelte';
-	import { Card, CardContent } from '$lib/components/ui/card';
-	import { info, warn } from '$lib/utils/logger';
+	import { youtubeStore } from '#lib/stores/youtube-store.svelte.ts';
+	import { gameStore } from '#lib/stores/game.svelte.ts';
+	import { Card, CardContent } from '#lib/components/ui/card/index.ts';
+	import { info, warn } from '#lib/utils/logger.ts';
 
 	let playerId = 'youtube-player';
 

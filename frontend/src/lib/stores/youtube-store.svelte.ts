@@ -1,5 +1,5 @@
 // src/lib/stores/youtube-store.ts
-import { info, warn } from '$lib/utils/logger';
+import { info, warn } from '#lib/utils/logger.ts';
 
 interface YouTubeState {
 	player: YT.Player | null;

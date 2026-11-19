@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { timerStore } from '$lib/stores/timer.svelte';
-	import { gameStore } from '$lib/stores/game.svelte';
+	import { timerStore } from '#lib/stores/timer.svelte.ts';
+	import { gameStore } from '#lib/stores/game.svelte.ts';
 
 	const actualTimeLeftInRound = $derived(timerStore.state.timeLeft);
 	const timeLeftForPoints = $derived(

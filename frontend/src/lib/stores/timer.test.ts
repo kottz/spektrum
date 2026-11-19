@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$app/environment', () => ({ browser: true }));
-vi.mock('$lib/utils/logger', () => ({ info: () => {}, warn: () => {} }));
+vi.mock('$app/env', () => ({ browser: true }));
+vi.mock('#lib/utils/logger.ts', () => ({ info: () => {}, warn: () => {} }));
 
 describe('createTimer', () => {
 	let createTimer: typeof import('./timer.svelte').createTimer;

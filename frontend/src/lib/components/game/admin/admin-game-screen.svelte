@@ -1,24 +1,23 @@
 <script lang="ts">
-	import { gameStore } from '$lib/stores/game.svelte';
-	import { gameActions } from '$lib/stores/game-actions';
-	import { GamePhase } from '$lib/types/game';
-	import JoinCodeCard from '$lib/components/game/admin/join-code-card.svelte';
-	import GameVideo from '$lib/components/game/admin/youtube-player.svelte';
-	import PlayersList from '$lib/components/game/admin/player-list.svelte';
-	import Scoreboard from '$lib/components/game/scoreboard.svelte';
-	import QuestionView from '$lib/components/game/admin/admin-question-view.svelte';
-	import UpcomingQuestions from '$lib/components/game/admin/upcoming-questions.svelte';
-	import RoundTimer from '$lib/components/game/round-timer.svelte';
-	import AnswerProgress from '$lib/components/game/answer-progress.svelte';
-	import StartButton from '$lib/components/game/admin/controls/start-game-button.svelte';
-	import EndLeaveButton from '$lib/components/game/admin/controls/end-leave-button.svelte';
-	import RoundButton from '$lib/components/game/admin/controls/round-control-button.svelte';
-	import SkipButton from '$lib/components/game/admin/controls/skip-control-button.svelte';
-	import CoverableElement from '$lib/components/coverable-element.svelte';
+	import { gameStore } from '#lib/stores/game.svelte.ts';
+	import { gameActions } from '#lib/stores/game-actions.ts';
+	import JoinCodeCard from '#lib/components/game/admin/join-code-card.svelte';
+	import GameVideo from '#lib/components/game/admin/youtube-player.svelte';
+	import PlayersList from '#lib/components/game/admin/player-list.svelte';
+	import Scoreboard from '#lib/components/game/scoreboard.svelte';
+	import QuestionView from '#lib/components/game/admin/admin-question-view.svelte';
+	import UpcomingQuestions from '#lib/components/game/admin/upcoming-questions.svelte';
+	import RoundTimer from '#lib/components/game/round-timer.svelte';
+	import AnswerProgress from '#lib/components/game/answer-progress.svelte';
+	import StartButton from '#lib/components/game/admin/controls/start-game-button.svelte';
+	import EndLeaveButton from '#lib/components/game/admin/controls/end-leave-button.svelte';
+	import RoundButton from '#lib/components/game/admin/controls/round-control-button.svelte';
+	import SkipButton from '#lib/components/game/admin/controls/skip-control-button.svelte';
+	import CoverableElement from '#lib/components/coverable-element.svelte';
 	import StreamControls from './stream-controls.svelte';
 
 	const phase = $derived(gameStore.state.phase);
-	const showScoreboard = $derived(phase === GamePhase.Score || phase === GamePhase.GameOver);
+	const showScoreboard = $derived(phase === 'score' || phase === 'gameover');
 	const lobbyLocked = $derived(gameStore.state.lobbyLocked);
 	let hideGameContent = $state(false);
 </script>
@@ -41,17 +40,13 @@
 					</div>
 					<div class="aspect-video w-full">
 						<CoverableElement covered={hideGameContent} coverText="Video Hidden">
-							{#snippet children()}
-								<GameVideo />
-							{/snippet}
+							<GameVideo />
 						</CoverableElement>
 					</div>
 				</div>
 				<div class="space-y-4">
 					<CoverableElement covered={hideGameContent} coverText="Questions Hidden">
-						{#snippet children()}
-							<UpcomingQuestions />
-						{/snippet}
+						<UpcomingQuestions />
 					</CoverableElement>
 					<div class="hidden lg:block">
 						<div class="mb-2 flex items-center gap-2 rounded select-none">
@@ -75,7 +70,7 @@
 							/>
 							<label for="lock-lobby" class="cursor-pointer text-sm font-medium">Lock Lobby</label>
 						</div>
-						{#if phase === GamePhase.Lobby || phase === GamePhase.GameOver}
+						{#if phase === 'lobby' || phase === 'gameover'}
 							<StartButton />
 						{:else}
 							<div class="flex gap-2">
@@ -96,13 +91,11 @@
 		<div class="flex min-h-0 flex-1 flex-col lg:col-span-8">
 			<!-- Mobile Layout in Right Column -->
 			<div class="flex min-h-0 flex-1 flex-col lg:hidden">
-				{#if phase === GamePhase.Question}
+				{#if phase === 'question'}
 					<div class="flex min-h-0 flex-1 flex-col">
 						<div class="flex-none">
 							<CoverableElement covered={hideGameContent} coverText="Answers Hidden">
-								{#snippet children()}
-									<QuestionView />
-								{/snippet}
+								<QuestionView />
 							</CoverableElement>
 						</div>
 						<div class="mt-4 flex-none space-y-4">
@@ -114,7 +107,7 @@
 					<div class="flex min-h-0 flex-1 flex-col">
 						<Scoreboard />
 					</div>
-				{:else if phase === GamePhase.Lobby}
+				{:else if phase === 'lobby'}
 					<div class="flex min-h-0 flex-1">
 						<PlayersList />
 					</div>
@@ -123,16 +116,14 @@
 
 			<!-- Desktop Layout in Right Column -->
 			<div class="hidden min-h-0 flex-1 flex-col lg:flex">
-				{#if phase === GamePhase.Lobby}
+				{#if phase === 'lobby'}
 					<div class="flex min-h-0 flex-1">
 						<PlayersList />
 					</div>
 				{:else}
 					<div class="mb-4 flex-none">
 						<CoverableElement covered={hideGameContent} coverText="Answers Hidden">
-							{#snippet children()}
-								<QuestionView />
-							{/snippet}
+							<QuestionView />
 						</CoverableElement>
 					</div>
 					<div class="flex min-h-0 flex-1">
@@ -164,7 +155,7 @@
 			/>
 			<label for="lock-lobby-mobile" class="cursor-pointer font-medium">Lock Lobby</label>
 		</div>
-		{#if phase === GamePhase.Lobby || phase === GamePhase.GameOver}
+		{#if phase === 'lobby' || phase === 'gameover'}
 			<StartButton />
 		{:else}
 			<div class="flex w-full gap-2">

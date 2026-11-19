@@ -1,8 +1,7 @@
 <script lang="ts">
-	import { streamTimerStore } from '$lib/stores/timer.svelte';
-	import { streamStore } from '$lib/stores/stream.store.svelte';
-	import { GamePhase } from '$lib/types/game';
-	import { Separator } from '$lib/components/ui/separator';
+	import { streamTimerStore } from '#lib/stores/timer.svelte.ts';
+	import { streamStore } from '#lib/stores/stream.store.svelte.ts';
+	import { Separator } from '#lib/components/ui/separator/index.ts';
 
 	const timeLeft = $derived(streamTimerStore.state.timeLeft);
 	const isActive = $derived(streamTimerStore.state.isActive);
@@ -16,7 +15,7 @@
 
 	const timeDisplay = $derived(isActive && timeLeft > 0 ? timeLeft.toFixed(1) : '0.0');
 	const points = $derived(totalDuration > 0 ? (timeLeft / totalDuration) * 5000 : 0);
-	const shouldShow = $derived(phase === GamePhase.Question);
+	const shouldShow = $derived(phase === 'question');
 </script>
 
 {#if shouldShow}

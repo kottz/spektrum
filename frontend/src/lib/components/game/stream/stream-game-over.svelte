@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Card } from '$lib/components/ui/card';
-	import { streamStore } from '$lib/stores/stream.store.svelte';
-	import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
+	import { Card } from '#lib/components/ui/card/index.ts';
+	import { streamStore } from '#lib/stores/stream.store.svelte.ts';
+	import { ScrollArea } from '#lib/components/ui/scroll-area/index.ts';
 
 	const PAGE_SIZE = 25;
 

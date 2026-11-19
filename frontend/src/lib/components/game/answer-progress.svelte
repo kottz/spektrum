@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { gameStore } from '$lib/stores/game.svelte';
-	import { Progress } from '$lib/components/ui/progress';
-	import { ScrollArea } from '$lib/components/ui/scroll-area';
+	import { gameStore } from '#lib/stores/game.svelte.ts';
+	import { Progress } from '#lib/components/ui/progress/index.ts';
+	import { ScrollArea } from '#lib/components/ui/scroll-area/index.ts';
 
 	interface DisplayListItem {
 		name: string;

@@ -47,14 +47,6 @@ impl Uuid {
         Uuid(bytes)
     }
 
-    /// Returns a reference to the inner 16-byte array.
-    #[allow(dead_code)]
-    pub fn as_bytes(&self) -> &[u8; 16] {
-        &self.0
-    }
-
-    pub const _NIL: Self = Uuid([0; 16]);
-
     /// Encodes the UUID into a fixed 36-byte hyphenated lowercase representation.
     /// This function is allocation-free and designed for efficient serialization.
     #[inline]
@@ -122,6 +114,10 @@ impl fmt::Debug for Uuid {
 /// must be exactly 32 hexadecimal digits. Then the code parses two characters
 /// at a time into a byte. Finally, it validates that the version and variant bits
 /// are as required for a version 4 UUID.
+fn hex_value(digit: u8) -> Option<u8> {
+    (digit as char).to_digit(16).map(|v| v as u8)
+}
+
 impl FromStr for Uuid {
     type Err = UuidError;
 
@@ -139,16 +135,20 @@ impl FromStr for Uuid {
             s
         };
 
-        let s: String = s.replace("-", "");
+        // Work on bytes: input is untrusted, and slicing a `str` at byte offsets
+        // would panic inside a multibyte character
+        let digits: Vec<u8> = s.bytes().filter(|&b| b != b'-').collect();
 
-        if s.len() != 32 {
+        if digits.len() != 32 {
             return Err(UuidError::Length);
         }
 
         let mut bytes = [0u8; 16];
-        for i in 0..16 {
-            let hex_byte = &s[i * 2..i * 2 + 2];
-            bytes[i] = u8::from_str_radix(hex_byte, 16).map_err(|_| UuidError::Character)?;
+        let (pairs, _) = digits.as_chunks::<2>();
+        for (byte, &[hi, lo]) in bytes.iter_mut().zip(pairs) {
+            let hi = hex_value(hi).ok_or(UuidError::Character)?;
+            let lo = hex_value(lo).ok_or(UuidError::Character)?;
+            *byte = (hi << 4) | lo;
         }
 
         // Validate that the version is 4.
@@ -182,6 +182,20 @@ impl Serialize for Uuid {
     }
 }
 
+/// On the wire a UUID is its hyphenated string form.
+impl ts_rs::TS for Uuid {
+    type WithoutGenerics = Self;
+    type OptionInnerType = Self;
+
+    fn name(_: &ts_rs::Config) -> String {
+        "string".to_owned()
+    }
+
+    fn inline(cfg: &ts_rs::Config) -> String {
+        Self::name(cfg)
+    }
+}
+
 /// Deserialize a UUID from a string in the standard hyphenated format (or one
 /// of the acceptable alternate formats).
 impl<'de> Deserialize<'de> for Uuid {
@@ -211,7 +225,7 @@ mod tests {
     #[test]
     fn test_new_v4_sets_version_and_variant() {
         let uuid = Uuid::new_v4();
-        let bytes = uuid.as_bytes();
+        let bytes = &uuid.0;
         // Check version (should be 4).
         assert_eq!(bytes[6] >> 4, 0x4, "Version should be 4");
         // Check variant (should be 0b10 in the two highest bits).
@@ -288,7 +302,7 @@ mod tests {
     #[test]
     fn test_from_str_invalid_version() {
         let uuid = Uuid::new_v4();
-        let mut bytes = *uuid.as_bytes();
+        let mut bytes = uuid.0;
         // Change version from 4 to 5.
         bytes[6] = (bytes[6] & 0x0f) | 0x50;
         let s = Uuid(bytes).to_string();
@@ -299,7 +313,7 @@ mod tests {
     #[test]
     fn test_from_str_invalid_variant() {
         let uuid = Uuid::new_v4();
-        let mut bytes = *uuid.as_bytes();
+        let mut bytes = uuid.0;
         // Change the variant bits to an invalid setting.
         bytes[8] &= 0x3f;
         let s = Uuid(bytes).to_string();
@@ -350,7 +364,7 @@ mod tests {
             0x0c, 0x8a,
         ];
         let uuid = Uuid::from(bytes);
-        assert_eq!(uuid.as_bytes(), &bytes);
+        assert_eq!(&uuid.0, &bytes);
     }
 
     #[test]
@@ -386,5 +400,13 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
         assert!(err.contains("invalid"));
+    }
+
+    #[test]
+    fn test_from_str_multibyte_input_is_an_error_not_a_panic() {
+        // 32 bytes, but the two-byte 'é' straddles a hex-pair boundary
+        let input = format!("{}é{}", "a".repeat(29), "b");
+        assert_eq!(input.len(), 32);
+        assert!(input.parse::<Uuid>().is_err());
     }
 }

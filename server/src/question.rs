@@ -1,11 +1,11 @@
 use crate::StorageConfig;
-use crate::db::{DbError, QuestionDatabase, QuestionSet, StoredData};
+use crate::db::{DataVersion, DbError, QuestionDatabase, QuestionSet, StoredData};
 use arc_swap::ArcSwap;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use thiserror::Error;
+use ts_rs::TS;
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum QuestionType {
     Color,
@@ -14,7 +14,7 @@ pub enum QuestionType {
     Year,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 pub enum Color {
     Red,
     Green,
@@ -116,22 +116,13 @@ impl std::str::FromStr for Color {
     }
 }
 
-#[derive(Error, Debug)]
-pub enum QuestionError {
-    #[error("No questions found")]
-    NoQuestions,
-
-    #[error("Database error: {0}")]
-    DbError(#[from] crate::db::DbError),
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 pub struct GameQuestionOption {
     pub option: Arc<str>,
     pub is_correct: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 pub struct GameQuestion {
     pub id: i64,
     pub question_type: QuestionType,
@@ -143,17 +134,22 @@ pub struct GameQuestion {
 }
 
 impl GameQuestion {
-    pub fn get_correct_options(&self) -> Vec<&GameQuestionOption> {
-        self.options.iter().filter(|opt| opt.is_correct).collect()
+    /// Whether a round can be played from this question: it needs an answer to
+    /// score as correct, and a year question needs that answer to be a year.
+    pub fn is_playable(&self) -> bool {
+        let mut correct = self.options.iter().filter(|opt| opt.is_correct);
+        match self.question_type {
+            QuestionType::Year => correct
+                .next()
+                .is_some_and(|opt| opt.option.parse::<i32>().is_ok()),
+            QuestionType::Color | QuestionType::Character | QuestionType::Text => {
+                correct.next().is_some()
+            }
+        }
     }
 
-    pub fn get_question_type(&self) -> &'static str {
-        match self.question_type {
-            QuestionType::Color => "color",
-            QuestionType::Character => "character",
-            QuestionType::Text => "text",
-            QuestionType::Year => "year",
-        }
+    pub fn get_correct_options(&self) -> Vec<&GameQuestionOption> {
+        self.options.iter().filter(|opt| opt.is_correct).collect()
     }
 
     pub fn get_correct_answer(&self) -> Vec<Arc<str>> {
@@ -315,18 +311,15 @@ fn calculate_color_weights_global(questions: &[GameQuestion]) -> [f64; Color::CO
     weights
 }
 
-fn build_snapshot(
-    game_questions: Vec<GameQuestion>,
-    sets: Vec<QuestionSet>,
-) -> Result<QuestionSnapshot, QuestionError> {
-    if game_questions.is_empty() {
-        return Err(QuestionError::NoQuestions);
-    }
-
+/// Builds the in-memory question snapshot, failing if the data is invalid or has
+/// nothing playable. Pure, so a candidate can be checked before it is persisted.
+fn build_snapshot(data: &StoredData) -> Result<QuestionSnapshot, DbError> {
+    data.validate_stored_data()?;
+    let game_questions = data.game_questions()?;
     let color_weights = calculate_color_weights_global(&game_questions);
     Ok(QuestionSnapshot {
         questions: Arc::new(game_questions),
-        sets: Arc::new(sets),
+        sets: Arc::new(data.sets().to_vec()),
         color_weights,
     })
 }
@@ -334,47 +327,50 @@ fn build_snapshot(
 pub struct QuestionStore {
     snapshot: ArcSwap<QuestionSnapshot>,
     db: QuestionDatabase,
+    /// Serialises `replace` so backup → write → swap never interleaves
+    update_lock: tokio::sync::Mutex<()>,
 }
 
 impl QuestionStore {
-    pub async fn new(config: &StorageConfig) -> Result<Self, QuestionError> {
-        let db = QuestionDatabase::new(config).map_err(QuestionError::DbError)?;
-
-        let (game_questions, sets) = db.load_questions().await.map_err(QuestionError::DbError)?;
-        let snapshot = build_snapshot(game_questions, sets)?;
+    pub async fn new(config: &StorageConfig) -> Result<Self, DbError> {
+        let db = QuestionDatabase::new(config)?;
+        let snapshot = build_snapshot(&db.read_stored_data().await?)?;
 
         Ok(Self {
             snapshot: ArcSwap::from_pointee(snapshot),
             db,
+            update_lock: tokio::sync::Mutex::new(()),
         })
-    }
-
-    pub async fn reload(&self) -> Result<(), QuestionError> {
-        let (game_questions, sets) = self
-            .db
-            .load_questions()
-            .await
-            .map_err(QuestionError::DbError)?;
-
-        let snapshot = build_snapshot(game_questions, sets)?;
-        self.snapshot.store(Arc::new(snapshot));
-        Ok(())
     }
 
     pub fn snapshot(&self) -> Arc<QuestionSnapshot> {
         self.snapshot.load_full()
     }
 
-    pub async fn get_stored_data(&self) -> Result<StoredData, DbError> {
-        self.db.read_stored_data().await
+    pub async fn get_stored_data(&self) -> Result<(StoredData, DataVersion), DbError> {
+        let data = self.db.read_stored_data().await?;
+        let version = data.version()?;
+        Ok((data, version))
     }
 
-    pub async fn set_stored_data(&self, stored_data: StoredData) -> Result<(), DbError> {
-        self.db.set_stored_data(stored_data).await
-    }
-
-    pub async fn backup_stored_data(&self) -> Result<(), DbError> {
-        self.db.backup_stored_data().await
+    /// Replaces the question data, provided it is still at `base` (the version the
+    /// editor started from). Nothing is written unless the data would load
+    /// successfully, so storage never holds data the server cannot start from.
+    pub async fn replace(
+        &self,
+        data: &StoredData,
+        base: &DataVersion,
+    ) -> Result<DataVersion, DbError> {
+        let snapshot = build_snapshot(data)?;
+        let version = data.version()?;
+        let _guard = self.update_lock.lock().await;
+        if self.db.read_stored_data().await?.version()? != *base {
+            return Err(DbError::StaleVersion);
+        }
+        self.db.backup_stored_data().await?;
+        self.db.write_stored_data(data).await?;
+        self.snapshot.store(Arc::new(snapshot));
+        Ok(version)
     }
 
     pub async fn store_character_image(

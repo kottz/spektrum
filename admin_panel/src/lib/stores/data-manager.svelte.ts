@@ -1,20 +1,19 @@
-import type {
-	StoredData,
-	Media,
-	Character,
-	Question,
-	QuestionOption,
-	QuestionSet
-} from '$lib/types';
+import type { Character } from '#lib/types.ts';
+import type { Media } from '#lib/generated/Media.ts';
+import type { Question } from '#lib/generated/Question.ts';
+import type { QuestionOption } from '#lib/generated/QuestionOption.ts';
+import type { QuestionSet } from '#lib/generated/QuestionSet.ts';
+import type { DataVersion } from '#lib/generated/DataVersion.ts';
+import type { StoredData } from '#lib/generated/StoredData.ts';
+import type { StoredDataResponse } from '#lib/generated/StoredDataResponse.ts';
 
+/** The editor's working copy of the stored data. */
 interface AdminState {
 	media: Media[];
 	characters: Character[];
 	questions: Question[];
 	options: QuestionOption[];
 	sets: QuestionSet[];
-	isLoading: boolean;
-	error: string | null;
 }
 
 interface HistoryItem {
@@ -23,6 +22,11 @@ interface HistoryItem {
 }
 
 interface AdminStoreState extends AdminState {
+	/**
+	 * The server version these edits start from; a save is refused if the server
+	 * has moved on. Null until data is loaded, i.e. until the admin logs in.
+	 */
+	baseVersion: DataVersion | null;
 	snapshots: HistoryItem[];
 	currentIndex: number;
 	maxSnapshots: number;
@@ -35,14 +39,13 @@ const initialState: AdminState = {
 	characters: [],
 	questions: [],
 	options: [],
-	sets: [],
-	isLoading: false,
-	error: null
+	sets: []
 };
 
 function createAdminStore() {
 	const state = $state<AdminStoreState>({
 		...initialState,
+		baseVersion: null,
 		snapshots: [],
 		currentIndex: -1,
 		maxSnapshots: 100,
@@ -51,21 +54,6 @@ function createAdminStore() {
 	});
 
 	function takeSnapshot(message: string) {
-		// handle pending images
-		function cloneCharacter(c: Character): Character {
-			return {
-				...c,
-				_pendingImage: c._pendingImage
-					? {
-							dataUrl: c._pendingImage.dataUrl,
-							file: new File([c._pendingImage.file], c._pendingImage.file.name, {
-								type: c._pendingImage.file.type,
-								lastModified: c._pendingImage.file.lastModified
-							})
-						}
-					: undefined
-			};
-		}
 		if (state.isBatching) return;
 
 		// Truncate forward history if we're not at the end
@@ -77,12 +65,12 @@ function createAdminStore() {
 		const snapshot: HistoryItem = {
 			state: {
 				media: [...state.media],
-				characters: state.characters.map(cloneCharacter),
+				// Entities are replaced, never mutated, and pending File objects are
+				// immutable, so snapshots can share them
+				characters: [...state.characters],
 				questions: [...state.questions],
 				options: [...state.options],
-				sets: [...state.sets],
-				isLoading: state.isLoading,
-				error: state.error
+				sets: [...state.sets]
 			},
 			message
 		};
@@ -98,21 +86,17 @@ function createAdminStore() {
 	}
 
 	return {
-		setData: (data: StoredData) => {
-			state.media = data.media;
-			state.characters = data.characters;
-			state.questions = data.questions;
-			state.options = data.options;
-			state.sets = data.sets;
+		/** Loads server data as a fresh starting point, discarding any previous history. */
+		setData: ({ stored_data, version }: StoredDataResponse) => {
+			Object.assign(state, {
+				...stored_data,
+				baseVersion: version,
+				snapshots: [],
+				currentIndex: -1,
+				isBatching: false,
+				preBatchState: null
+			});
 			takeSnapshot('Initial state');
-		},
-
-		setLoading: (loading: boolean) => {
-			state.isLoading = loading;
-		},
-
-		setError: (error: string | null) => {
-			state.error = error;
 		},
 
 		startBatch: () => {
@@ -126,9 +110,7 @@ function createAdminStore() {
 				characters: [...state.characters],
 				questions: [...state.questions],
 				options: [...state.options],
-				sets: [...state.sets],
-				isLoading: state.isLoading,
-				error: state.error
+				sets: [...state.sets]
 			};
 		},
 
@@ -153,19 +135,27 @@ function createAdminStore() {
 			state.questions = [...pb.questions];
 			state.options = [...pb.options];
 			state.sets = [...pb.sets];
-			state.isLoading = pb.isLoading;
-			state.error = pb.error;
 			state.isBatching = false;
 			state.preBatchState = null;
 		},
 
-		addEntity: (entityType: keyof StoredData, entity: any) => {
-			state[entityType] = [...state[entityType], entity];
-			takeSnapshot(`Added ${entityType} ${entity.id}`);
+		/**
+		 * Adds an entity and returns its id. Ids are allocated here, at insertion,
+		 * so a form opened earlier can never claim an id that undo/redo has since
+		 * handed back to another entity.
+		 */
+		addEntity: <K extends keyof AdminState>(
+			entityType: K,
+			entity: Omit<AdminState[K][number], 'id'>
+		): number => {
+			const id = Math.max(0, ...state[entityType].map((e) => e.id)) + 1;
+			state[entityType] = [...state[entityType], { ...entity, id }] as AdminStoreState[K];
+			takeSnapshot(`Added ${entityType} ${id}`);
+			return id;
 		},
 
 		modifyEntity: (
-			entityType: keyof StoredData,
+			entityType: keyof AdminState,
 			id: number,
 			changes: Partial<Media | Character | Question | QuestionOption | QuestionSet>
 		) => {
@@ -209,8 +199,8 @@ function createAdminStore() {
 			takeSnapshot(message);
 		},
 
-		deleteEntity: (entityType: keyof StoredData, id: number) => {
-			let message = `Deleted ${entityType} ${id}`;
+		deleteEntity: (entityType: keyof AdminState, id: number) => {
+			const message = `Deleted ${entityType} ${id}`;
 			let additionalInfo = '';
 
 			switch (entityType) {
@@ -276,55 +266,6 @@ function createAdminStore() {
 			takeSnapshot(message + additionalInfo);
 		},
 
-		addPendingCharacter: async (name: string, file: File) => {
-			const dataUrl = await new Promise<string>((resolve) => {
-				const reader = new FileReader();
-				reader.onload = () => resolve(reader.result as string);
-				reader.readAsDataURL(file);
-			});
-
-			const existingIndex = state.characters.findIndex((c) => c.name === name);
-
-			if (existingIndex > -1) {
-				// Update existing character with pending image
-				state.characters = state.characters.map((c, i) =>
-					i === existingIndex
-						? {
-								...c,
-								_pendingImage: { dataUrl, file }
-							}
-						: c
-				);
-			} else {
-				// Add new pending character
-				const newChar: Character = {
-					id: -Date.now(), // Temporary negative ID
-					name,
-					image_url: '', // Will be populated after server upload
-					_pendingImage: { dataUrl, file }
-				};
-				state.characters = [...state.characters, newChar];
-			}
-
-			takeSnapshot(`Added pending character: ${name}`);
-		},
-
-		getCharacterImage: (name: string) => {
-			const char = state.characters.find((c) => c.name === name);
-			return char?._pendingImage?.dataUrl || char?.image_url;
-		},
-
-		finalizeCharacterUpload: (name: string, imageUrl: string) => {
-			state.characters = state.characters.map((c) => {
-				if (c.name === name) {
-					const { _pendingImage, ...rest } = c;
-					return { ...rest, image_url: imageUrl };
-				}
-				return c;
-			});
-			takeSnapshot(`Finalized character upload: ${name}`);
-		},
-
 		undo: () => {
 			if (state.currentIndex > 0) {
 				state.currentIndex--;
@@ -352,16 +293,6 @@ function createAdminStore() {
 		canUndo: () => state.currentIndex > 0,
 		canRedo: () => state.currentIndex < state.snapshots.length - 1,
 
-		reset: () => {
-			Object.assign(state, {
-				...initialState,
-				snapshots: [],
-				currentIndex: -1,
-				isBatching: false,
-				preBatchState: null
-			});
-		},
-
 		getState: () => ({
 			media: state.media,
 			characters: state.characters,
@@ -371,8 +302,17 @@ function createAdminStore() {
 		}),
 		getSnapshots: () => state.snapshots,
 		getSnapshotIndex: () => state.currentIndex,
-		isLoading: () => state.isLoading,
-		getError: () => state.error
+		isLoaded: () => state.baseVersion !== null,
+		getBaseVersion: () => state.baseVersion,
+
+		/** The data as the server stores it, without client-only pending uploads. */
+		exportData: (): StoredData => ({
+			media: state.media,
+			characters: state.characters.map(({ _pendingImage, ...character }) => character),
+			questions: state.questions,
+			options: state.options,
+			sets: state.sets
+		})
 	};
 }
 

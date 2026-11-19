@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { gameStore } from '$lib/stores/game.svelte';
+	import { gameStore } from '#lib/stores/game.svelte.ts';
 	import { gameActions } from '../../stores/game-actions';
-	import { Card, CardContent } from '$lib/components/ui/card';
-	import { Button } from '$lib/components/ui/button';
+	import { Card, CardContent } from '#lib/components/ui/card/index.ts';
+	import { Button } from '#lib/components/ui/button/index.ts';
 	import Scoreboard from './scoreboard.svelte';
 	const isAdmin = $derived(gameStore.state.isAdmin);
 </script>

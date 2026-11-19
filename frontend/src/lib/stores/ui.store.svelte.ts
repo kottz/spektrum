@@ -1,8 +1,4 @@
-import { info } from '$lib/utils/logger';
-import { gameStore } from '$lib/stores/game.svelte';
-import { GamePhase } from '$lib/types/game';
-
-export type AppScreen = 'home' | 'lobby' | 'adminGame' | 'playerGame';
+import { info } from '#lib/utils/logger.ts';
 
 interface StreamWindowInfo {
 	window: Window | null;
@@ -57,17 +53,9 @@ function createUiStore() {
 		info('UI Store: Closed stream window.');
 	}
 
-	// Determine if stream window can be opened (when admin is in a game)
-	const canOpenStreamWindow = $derived(
-		gameStore.state.isAdmin && gameStore.state.phase !== GamePhase.GameClosed
-	);
-
 	return {
 		get streamWindow() {
 			return streamWindow;
-		},
-		get canOpenStreamWindow() {
-			return canOpenStreamWindow;
 		},
 		openStreamWindow,
 		closeStreamWindow

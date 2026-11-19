@@ -11,12 +11,14 @@ use flate2::Compression;
 use flate2::{read::GzDecoder, write::GzEncoder};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 use std::io::Read;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use thiserror::Error;
 use tracing::{info, instrument, warn};
+use ts_rs::TS;
 
 #[derive(Error, Debug)]
 pub enum DbError {
@@ -28,6 +30,8 @@ pub enum DbError {
     NoQuestions,
     #[error("Validation error: {0}")]
     Validation(String),
+    #[error("The data changed since it was loaded")]
+    StaleVersion,
     #[error("S3 error: {msg}")]
     S3 {
         msg: String,
@@ -46,7 +50,7 @@ fn s3_error<E: std::error::Error + Send + Sync + 'static>(
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 struct Media {
     id: i64,
     title: Arc<str>,
@@ -56,14 +60,14 @@ struct Media {
     youtube_id: Arc<str>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 struct Character {
     id: i64,
     name: Arc<str>,
     image_url: Arc<str>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 struct Question {
     id: i64,
     media_id: i64,
@@ -73,7 +77,7 @@ struct Question {
     is_active: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 struct QuestionOption {
     id: i64,
     question_id: i64,
@@ -81,14 +85,19 @@ struct QuestionOption {
     is_correct: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct QuestionSet {
     pub id: i64,
     pub name: Arc<str>,
     pub question_ids: Vec<i64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+/// Identifies one state of the stored data, so a save based on an older state
+/// can be refused instead of silently overwriting someone else's changes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct DataVersion(String);
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 pub struct StoredData {
     media: Vec<Media>,
     characters: Vec<Character>,
@@ -98,6 +107,14 @@ pub struct StoredData {
 }
 
 impl StoredData {
+    /// A digest of the data's content. Equal data always has the same version,
+    /// including across server restarts.
+    pub fn version(&self) -> Result<DataVersion, DbError> {
+        let mut hasher = std::hash::DefaultHasher::new();
+        serde_json::to_vec(self)?.hash(&mut hasher);
+        Ok(DataVersion(format!("{:016x}", hasher.finish())))
+    }
+
     /// Validates the integrity of the stored data by checking:
     /// - Duplicate IDs of any type (media, characters, questions, options, sets)
     /// - Duplicate character names or image URLs
@@ -317,13 +334,10 @@ pub struct FilesystemBackend {
 impl FilesystemBackend {
     #[instrument(target = "storage", level = "debug", skip(self), fields(path = %path))]
     async fn read_file(&self, path: &str) -> Result<String, DbError> {
-        let full_path = self.base_path.join(path);
-        if full_path.exists() {
-            tokio::fs::read_to_string(&full_path)
-                .await
-                .map_err(DbError::from)
-        } else {
-            Ok(String::new())
+        match tokio::fs::read_to_string(self.base_path.join(path)).await {
+            Ok(content) => Ok(content),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+            Err(e) => Err(e.into()),
         }
     }
 
@@ -338,9 +352,14 @@ impl FilesystemBackend {
                 .map_err(DbError::from)?;
         }
 
-        tokio::fs::write(full_path, data)
-            .await
-            .map_err(DbError::from)
+        // Write a sibling temp file and rename it into place, so readers and crashes
+        // only ever see the old file or the complete new one
+        let mut temp_name = full_path.file_name().unwrap_or_default().to_os_string();
+        temp_name.push(".tmp");
+        let temp_path = full_path.with_file_name(temp_name);
+        tokio::fs::write(&temp_path, data).await?;
+        tokio::fs::rename(&temp_path, &full_path).await?;
+        Ok(())
     }
 
     #[instrument(target = "storage", level = "debug", skip(self, content), fields(file_stem = %file_stem))]
@@ -615,10 +634,10 @@ impl QuestionDatabase {
         Ok(json_content)
     }
 
+    /// Persists `data` as-is; callers validate first.
     #[instrument(target = "storage", level = "debug", skip(self, data))]
-    pub async fn set_stored_data(&self, data: StoredData) -> Result<(), DbError> {
-        data.validate_stored_data()?;
-        let json = serde_json::to_string(&data)?;
+    pub async fn write_stored_data(&self, data: &StoredData) -> Result<(), DbError> {
+        let json = serde_json::to_string(data)?;
         self.storage
             .write_file(&self.question_file, json.as_bytes())
             .await
@@ -654,15 +673,19 @@ impl QuestionDatabase {
 
         self.storage.create_backup(&json, file_stem).await
     }
+}
 
-    #[instrument(target = "storage", level = "info", skip(self))]
-    pub async fn load_questions(&self) -> Result<(Vec<GameQuestion>, Vec<QuestionSet>), DbError> {
-        let stored_data = self.read_stored_data().await?;
+impl StoredData {
+    pub fn sets(&self) -> &[QuestionSet] {
+        &self.sets
+    }
 
-        let media_by_id: HashMap<i64, _> = stored_data.media.iter().map(|m| (m.id, m)).collect();
+    /// The playable questions: active questions joined with their media and options.
+    pub fn game_questions(&self) -> Result<Vec<GameQuestion>, DbError> {
+        let media_by_id: HashMap<i64, _> = self.media.iter().map(|m| (m.id, m)).collect();
 
         let mut options_by_question: HashMap<i64, Vec<GameQuestionOption>> = HashMap::new();
-        for opt in &stored_data.options {
+        for opt in &self.options {
             options_by_question
                 .entry(opt.question_id)
                 .or_default()
@@ -672,15 +695,13 @@ impl QuestionDatabase {
                 });
         }
 
-        let game_questions: Vec<GameQuestion> = stored_data
+        let game_questions: Vec<GameQuestion> = self
             .questions
             .iter()
             .filter(|q| q.is_active)
             .filter_map(|question| {
                 let media = media_by_id.get(&question.media_id)?;
-
                 let options = options_by_question.remove(&question.id).unwrap_or_default();
-
                 Some(GameQuestion {
                     id: question.id,
                     question_type: question.question_type,
@@ -691,14 +712,22 @@ impl QuestionDatabase {
                     options,
                 })
             })
+            .filter(|question| {
+                let playable = question.is_playable();
+                if !playable {
+                    warn!(
+                        question_id = question.id,
+                        "Skipping question without a usable correct answer"
+                    );
+                }
+                playable
+            })
             .collect();
 
         if game_questions.is_empty() {
             return Err(DbError::NoQuestions);
         }
-
-        info!("Loaded {} questions", game_questions.len());
-        Ok((game_questions, stored_data.sets))
+        Ok(game_questions)
     }
 }
 
@@ -1395,5 +1424,34 @@ mod tests {
                 is_correct: self.is_correct,
             }
         }
+    }
+
+    #[test]
+    fn game_questions_skip_questions_without_a_usable_answer() {
+        let data: StoredData = serde_json::from_str(
+            r#"{"media": [{"id": 1, "title": "T", "artist": "A", "release_year": null, "spotify_uri": null, "youtube_id": "y"}],
+                "characters": [],
+                "questions": [
+                    {"id": 1, "media_id": 1, "question_type": "color", "question_text": null, "image_url": null, "is_active": true},
+                    {"id": 2, "media_id": 1, "question_type": "color", "question_text": null, "image_url": null, "is_active": true},
+                    {"id": 3, "media_id": 1, "question_type": "year", "question_text": null, "image_url": null, "is_active": true},
+                    {"id": 4, "media_id": 1, "question_type": "year", "question_text": null, "image_url": null, "is_active": true},
+                    {"id": 5, "media_id": 1, "question_type": "year", "question_text": null, "image_url": null, "is_active": true}],
+                "options": [
+                    {"id": 1, "question_id": 1, "option_text": "Red", "is_correct": true},
+                    {"id": 2, "question_id": 2, "option_text": "Red", "is_correct": false},
+                    {"id": 3, "question_id": 3, "option_text": "1997", "is_correct": true},
+                    {"id": 4, "question_id": 4, "option_text": "soon", "is_correct": true}],
+                "sets": []}"#,
+        )
+        .unwrap();
+
+        let ids: Vec<i64> = data
+            .game_questions()
+            .unwrap()
+            .iter()
+            .map(|q| q.id)
+            .collect();
+        assert_eq!(ids, vec![1, 3]);
     }
 }

@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Button } from '$lib/components/ui/button';
-	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
-	import type { ValidatedSession } from '$lib/stores/game.svelte';
+	import { Button } from '#lib/components/ui/button/index.ts';
+	import { Card, CardContent, CardHeader, CardTitle } from '#lib/components/ui/card/index.ts';
+	import type { ValidatedSession } from '#lib/stores/game.svelte.ts';
 
 	interface ReconnectCardProps {
 		session: ValidatedSession;

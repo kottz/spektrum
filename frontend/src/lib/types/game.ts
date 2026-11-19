@@ -1,31 +1,8 @@
-// src/lib/types/game.ts
+import type { GamePhase } from '#lib/generated/GamePhase.ts';
+import type { GameQuestion } from '#lib/generated/GameQuestion.ts';
+import type { QuestionType } from '#lib/generated/QuestionType.ts';
 
-/**
- * Core phases as defined by the backend.
- * Matches the enum GamePhase { Lobby, Score, Question, GameOver }.
- */
-export enum GamePhase {
-	Lobby = 'lobby',
-	Score = 'score',
-	Question = 'question',
-	GameOver = 'gameover',
-	GameClosed = 'gameclosed'
-}
-
-/**
- * Possible error codes the server can send for invalid actions or states.
- */
-export enum ErrorCode {
-	NotAuthorized = 'NotAuthorized',
-	InvalidPhase = 'InvalidPhase',
-	InvalidAction = 'InvalidAction',
-	GameClosed = 'GameClosed',
-	PlayerNotFound = 'PlayerNotFound',
-	AlreadyAnswered = 'AlreadyAnswered',
-	TimeExpired = 'TimeExpired',
-	LobbyNotFound = 'LobbyNotFound',
-	InvalidName = 'InvalidName'
-}
+/* Client-side state; the wire types are generated from the server in #lib/generated. */
 
 /**
  * Information for a single answer in the current round.
@@ -45,7 +22,6 @@ export interface PlayerState {
 	roundScore: number;
 	hasAnswered: boolean;
 	consecutiveMisses: number;
-	answer: string | null;
 }
 
 /**
@@ -61,152 +37,12 @@ export interface GameState {
 	roundDuration: number;
 	players: Map<string, PlayerState>;
 	currentQuestion?: {
-		type: string;
+		type: QuestionType;
 		text?: string;
 		alternatives: string[];
 	};
-	currentSong?: {
-		songName: string;
-		artist: string | undefined;
-		youtubeId: string;
-	};
-	error?: string;
 	upcomingQuestions?: GameQuestion[];
 	currentAnswers: PlayerAnswer[];
 	questionTimeRemainingMs?: number;
-	answeredPlayerNames?: string[];
 	lobbyLocked: boolean;
-}
-
-/**
- * Represents a single quiz question.
- */
-export interface GameQuestion {
-	id: number;
-	question_type: string;
-	question_text: string;
-	title: string;
-	artist?: string;
-	youtube_id: string;
-	options: GameQuestionOption[];
-}
-
-export interface GameQuestionOption {
-	option: string;
-	is_correct: boolean;
-}
-
-/* ------------------------------------------------------------------
-   SERVER -> CLIENT MESSAGES
------------------------------------------------------------------- */
-
-export type GameUpdate =
-	| {
-			type: 'Connected';
-			player_id: string;
-			name: string;
-			round_duration: number;
-	  }
-	| {
-			type: 'StateDelta';
-			phase?: GamePhase;
-			question_type?: string;
-			question_text?: string;
-			alternatives?: string[];
-			question_time_remaining_ms?: number;
-			answered_player_names?: string[];
-			scoreboard?: [string, number][];
-			round_scores?: [string, number][];
-			consecutive_misses?: [string, number][];
-			admin_extra?: { upcoming_questions: GameQuestion[] };
-			lobby_locked?: boolean;
-	  }
-	| {
-			type: 'PlayerLeft';
-			name: string;
-	  }
-	| {
-			type: 'PlayerKicked';
-			reason: string;
-	  }
-	| {
-			type: 'Answered';
-			name: string;
-			score: number;
-	  }
-	| {
-			type: 'GameOver';
-			final_scores: [string, number][];
-			reason: string;
-	  }
-	| {
-			type: 'GameClosed';
-			reason: string;
-	  }
-	| {
-			type: 'Error';
-			message: string;
-	  }
-	| {
-			type: 'AdminInfo';
-			current_question: GameQuestion;
-	  }
-	| {
-			type: 'AdminNextQuestions';
-			upcoming_questions: GameQuestion[];
-	  };
-
-/* ------------------------------------------------------------------
-   CLIENT -> SERVER MESSAGES
------------------------------------------------------------------- */
-
-export type ClientMessage =
-	| {
-			type: 'Connect';
-			session_token: string;
-	  }
-	| {
-			type: 'Leave';
-	  }
-	| {
-			type: 'Answer';
-			answer: string;
-	  }
-	| {
-			type: 'AdminAction';
-			action: AdminAction;
-	  };
-
-/**
- * Administrative actions that can be performed in the lobby.
- */
-export type AdminAction =
-	| { type: 'StartGame' }
-	| { type: 'StartRound' }
-	| { type: 'EndRound' }
-	| { type: 'SkipQuestion' }
-	| { type: 'KickPlayer'; player_name: string }
-	| { type: 'EndGame'; reason: string }
-	| { type: 'CloseGame'; reason: string }
-	| { type: 'LockLobby'; locked: boolean };
-
-/**
- * Common name validation errors that might be returned by the server or client.
- */
-export type NameValidationError = 'TooShort' | 'TooLong' | 'InvalidCharacters' | 'AlreadyTaken';
-
-/**
- * Returns a user-friendly description for a name validation error.
- */
-export function getNameValidationErrorMessage(error: NameValidationError): string {
-	switch (error) {
-		case 'TooShort':
-			return 'Name must be at least 2 characters long.';
-		case 'TooLong':
-			return 'Name cannot be longer than 16 characters.';
-		case 'InvalidCharacters':
-			return 'Name can only contain letters, numbers, spaces, and the symbols: _ - .';
-		case 'AlreadyTaken':
-			return 'This name is already taken.';
-	}
 }

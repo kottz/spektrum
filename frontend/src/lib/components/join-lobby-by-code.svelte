@@ -1,18 +1,15 @@
 <script lang="ts">
-	import { Button } from '$lib/components/ui/button';
-	import { Card, CardContent } from '$lib/components/ui/card';
-	import { Input } from '$lib/components/ui/input';
-	import { gameActions } from '$lib/stores/game-actions';
-	import { notifications } from '$lib/stores/notification-store.svelte';
-	import { warn } from '$lib/utils/logger';
-	import { gameStore } from '$lib/stores/game.svelte';
-	import { getResponseError } from '$lib/utils/http';
-	import { PUBLIC_SPEKTRUM_SERVER_URL } from '$env/static/public';
+	import { Button } from '#lib/components/ui/button/index.ts';
+	import { Card, CardContent } from '#lib/components/ui/card/index.ts';
+	import { Input } from '#lib/components/ui/input/index.ts';
+	import { gameActions } from '#lib/stores/game-actions.ts';
+	import { notifications } from '#lib/stores/notification-store.svelte.ts';
+	import { warn } from '#lib/utils/logger.ts';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 
 	// Accept the join code as a prop
-	const { initialJoinCode } = $props<{ initialJoinCode: string }>();
+	const { initialJoinCode }: { initialJoinCode: string } = $props();
 
 	// State for player name and joining status
 	let playerName = $state('');
@@ -58,35 +55,10 @@
 		try {
 			isJoining = true;
 
-			const response = await fetch(`${PUBLIC_SPEKTRUM_SERVER_URL}/api/join-lobby`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					// Use the prop directly
-					join_code: initialJoinCode.trim(),
-					name: playerName.trim()
-				}),
-				cache: 'no-store'
-			});
-
-			if (!response.ok) {
-				throw new Error(await getResponseError(response, 'Failed to join lobby'));
-			}
-
-			gameStore.setPlayerName(playerName.trim());
-			const data = await response.json();
-			gameStore.setJoinCode(data.join_code);
-			gameStore.setSessionToken(data.session_token);
-			gameStore.setPlayerId(data.player_id);
-			await gameActions.joinGame(data.session_token);
+			await gameActions.joinLobby(initialJoinCode.trim(), playerName.trim());
 			goto(resolve('/'));
 		} catch (error) {
-			let errorMessage = 'Failed to join lobby';
-			if (error instanceof Error) {
-				errorMessage = error.message;
-			} else {
-				errorMessage = String(error);
-			}
+			const errorMessage = error instanceof Error ? error.message : String(error);
 			warn('Error joining game:', error);
 			notifications.add(errorMessage, 'destructive');
 		} finally {

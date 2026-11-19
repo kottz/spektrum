@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { gameStore } from '$lib/stores/game.svelte';
+	import { gameStore } from '#lib/stores/game.svelte.ts';
 	const upcomingQuestions = $derived(gameStore.state.upcomingQuestions || []);
 </script>
 
 <div class="space-y-1">
-	{#each upcomingQuestions as question, i}
+	{#each upcomingQuestions as question, i (question.id)}
 		<div class="bg-secondary space-y-1 rounded p-2">
 			<div class="flex justify-between text-sm">
 				<span class="flex-1 truncate font-medium">{question.title}</span>
@@ -45,6 +45,6 @@
 			</div>
 		</div>
 	{:else}
-		<div class="text-sm text-muted-foreground text-center p-2">No upcoming questions</div>
+		<div class="text-muted-foreground p-2 text-center text-sm">No upcoming questions</div>
 	{/each}
 </div>

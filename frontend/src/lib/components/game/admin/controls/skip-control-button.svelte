@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Button } from '$lib/components/ui/button';
-	import { gameStore } from '$lib/stores/game.svelte';
-	import { gameActions } from '$lib/stores/game-actions';
+	import { Button } from '#lib/components/ui/button/index.ts';
+	import { gameStore } from '#lib/stores/game.svelte.ts';
+	import { gameActions } from '#lib/stores/game-actions.ts';
 
 	const phase = $derived(gameStore.state.phase?.toLowerCase() || 'lobby');
 	const isGameRunning = $derived(phase !== 'lobby' && phase !== 'gameover');

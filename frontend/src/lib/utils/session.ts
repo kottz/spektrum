@@ -1,6 +1,6 @@
-import { gameStore, type ValidatedSession } from '$lib/stores/game.svelte';
-import { gameActions } from '$lib/stores/game-actions';
-import { info, warn } from '$lib/utils/logger';
+import { gameStore, type ValidatedSession } from '#lib/stores/game.svelte.ts';
+import { gameActions } from '#lib/stores/game-actions.ts';
+import { info, warn } from '#lib/utils/logger.ts';
 
 export async function checkAndLoadSession(): Promise<ValidatedSession | null> {
 	try {

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { ScrollArea as ScrollAreaPrimitive } from 'bits-ui';
-	import { cn, type WithElementRef } from '$lib/utils.js';
+	import { cn, type WithElementRef } from '#lib/utils.ts';
 
 	type ScrollbarProps = WithElementRef<ScrollAreaPrimitive.ScrollbarProps> & {
 		children?: Snippet;

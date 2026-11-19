@@ -2,7 +2,7 @@
 	import type { Snippet } from 'svelte';
 	import type { HTMLAttributes } from 'svelte/elements';
 	import { type Variant, alertVariants } from './index.js';
-	import { cn, type WithElementRef } from '$lib/utils.js';
+	import { cn, type WithElementRef } from '#lib/utils.ts';
 
 	type AlertProps = WithElementRef<HTMLAttributes<HTMLDivElement>> & {
 		variant?: Variant;

@@ -1,19 +1,15 @@
 <script lang="ts">
-	import { Button } from '$lib/components/ui/button';
+	import { Button } from '#lib/components/ui/button/index.ts';
 
-	let {
-		currentPage,
-		totalPages,
-		totalItems,
-		itemsPerPage = 10,
-		onPageChange
-	} = $props<{
+	interface Props {
 		currentPage: number;
 		totalPages: number;
 		totalItems: number;
 		itemsPerPage?: number;
 		onPageChange: (page: number) => void;
-	}>();
+	}
+
+	let { currentPage, totalPages, totalItems, itemsPerPage = 10, onPageChange }: Props = $props();
 
 	function nextPage() {
 		if (currentPage < totalPages - 1) {
@@ -32,33 +28,28 @@
 </script>
 
 <div class="flex items-center justify-between border-t p-4">
-	<div class="text-sm text-muted-foreground">
+	<div class="text-muted-foreground text-sm">
 		Showing {startItem} to {endItem} of {totalItems} entries
 	</div>
 	<div class="flex gap-2">
 		<Button
 			variant="outline"
 			size="sm"
-			on:click={() => onPageChange(0)}
+			onclick={() => onPageChange(0)}
 			disabled={currentPage === 0}
 		>
 			First
 		</Button>
-		<Button variant="outline" size="sm" on:click={previousPage} disabled={currentPage === 0}>
+		<Button variant="outline" size="sm" onclick={previousPage} disabled={currentPage === 0}>
 			Previous
 		</Button>
-		<Button
-			variant="outline"
-			size="sm"
-			on:click={nextPage}
-			disabled={currentPage >= totalPages - 1}
-		>
+		<Button variant="outline" size="sm" onclick={nextPage} disabled={currentPage >= totalPages - 1}>
 			Next
 		</Button>
 		<Button
 			variant="outline"
 			size="sm"
-			on:click={() => onPageChange(totalPages - 1)}
+			onclick={() => onPageChange(totalPages - 1)}
 			disabled={currentPage >= totalPages - 1}
 		>
 			Last

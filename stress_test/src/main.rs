@@ -20,19 +20,27 @@ enum TestError {
     Json(#[from] serde_json::Error),
     #[error("HTTP error: {0}")]
     Http(#[from] reqwest::Error),
-    #[error("UUID error: {0}")]
-    Uuid(#[from] uuid::Error),
     #[error("Generic error: {0}")]
     Other(String),
 }
 
+/// How long the gameplay test keeps each round open.
+const GAMEPLAY_ROUND: Duration = Duration::from_secs(5);
+/// Gameplay players answer well inside the round, so answers exercise scoring, not rejection.
+const GAMEPLAY_MAX_THINK: Duration = Duration::from_secs(4);
+/// UI-test rounds are run by a human host with the default 60 s round.
+const UI_TEST_MAX_THINK: Duration = Duration::from_secs(40);
+
 /// Command‐line options.
 #[derive(Debug, Clone, Copy, ValueEnum, Default)]
 enum TestMode {
-    ThroughputTest,
-    GameplayTest,
+    #[value(name = "throughput-test")]
+    Throughput,
+    #[value(name = "gameplay-test")]
+    Gameplay,
     #[default]
-    UiTest,
+    #[value(name = "ui-test")]
+    Ui,
 }
 
 #[derive(Parser)]
@@ -61,6 +69,11 @@ struct Args {
     /// Host address (e.g., "localhost:8765")
     #[arg(long, default_value = "localhost:8765")]
     host: String,
+
+    /// Messages per second each throughput-test player sends. The server closes
+    /// connections that send more than 30 in a second.
+    #[arg(long, default_value_t = 20, value_parser = clap::value_parser!(u32).range(1..=30))]
+    rate: u32,
 }
 
 /// Shared metrics for throughput testing.
@@ -102,9 +115,6 @@ impl GameplayMetrics {
 /// A test player simulates a client joining a lobby via HTTP and then opening a WebSocket.
 /// After joining, it sends a Connect message (using the new protocol) and later submits answers.
 struct TestPlayer {
-    name: String,
-    join_code: String,
-    session_token: String,
     ws_write: futures_util::stream::SplitSink<WsStream, Message>,
     ws_read: futures_util::stream::SplitStream<WsStream>,
     rng: rand::rngs::StdRng,
@@ -144,9 +154,6 @@ impl TestPlayer {
             .send(Message::Text(connect_msg.to_string().into()))
             .await?;
         Ok(Self {
-            name,
-            join_code,
-            session_token,
             ws_write: write,
             ws_read: read,
             rng: rand::make_rng(),
@@ -165,10 +172,9 @@ impl TestPlayer {
         Ok(())
     }
 
-    /// Process incoming WebSocket messages.
-    /// For example, when a StateDelta is received with phase "question", wait a random delay
-    /// then pick one of the alternatives and submit it as the answer.
-    async fn handle_messages(&mut self) -> Result<(), TestError> {
+    /// Process incoming WebSocket messages. When a question starts, think for up to
+    /// `max_think`, then submit a random alternative.
+    async fn handle_messages(&mut self, max_think: Duration) -> Result<(), TestError> {
         while let Some(msg) = self.ws_read.next().await {
             let msg = msg?;
             if let Message::Text(text) = msg {
@@ -180,7 +186,7 @@ impl TestPlayer {
                     Some("StateDelta") => {
                         if data["phase"].as_str() == Some("question") {
                             // Simulate thinking time before answering.
-                            let delay = self.rng.random_range(0.0..40.0);
+                            let delay = self.rng.random_range(0.0..max_think.as_secs_f32());
                             tokio::time::sleep(Duration::from_secs_f32(delay)).await;
                             if let Some(alternatives) = data["alternatives"].as_array()
                                 && let Some(answer_val) = alternatives.choose(&mut self.rng)
@@ -202,7 +208,6 @@ impl TestPlayer {
 /// A test admin joins a lobby (using the HTTP create endpoint) and then opens a WebSocket connection
 /// to send admin actions.
 struct TestAdmin {
-    session_token: String,
     ws_write: futures_util::stream::SplitSink<WsStream, Message>,
     ws_read: futures_util::stream::SplitStream<WsStream>,
 }
@@ -241,7 +246,6 @@ impl TestAdmin {
             .await?;
         Ok((
             Self {
-                session_token: session_token.to_string(),
                 ws_write: write,
                 ws_read: read,
             },
@@ -306,21 +310,24 @@ impl TestAdmin {
     }
 }
 
-/// Throughput test: Each player repeatedly sends answer messages (with a fixed “stress_test” answer)
-/// and we count the messages and bytes.
+/// Throughput test: each player sends answer messages at `rate` per second, staying
+/// within the server's per-connection limit, and we count the messages and bytes.
 async fn run_throughput_player(
     join_code: String,
     name: String,
     host: &str,
     metrics: Arc<ThroughputMetrics>,
     test_duration: Duration,
+    rate: u32,
 ) -> Result<(), TestError> {
     let player = TestPlayer::new(name, join_code, host).await?;
     let sender_metrics = Arc::clone(&metrics);
     let mut ws_write = player.ws_write;
     let sender = tokio::spawn(async move {
         let start = Instant::now();
+        let mut pace = tokio::time::interval(Duration::from_secs(1) / rate);
         while start.elapsed() < test_duration {
+            pace.tick().await;
             let msg = json!({
                 "type": "Answer",
                 "answer": "stress_test"
@@ -416,6 +423,7 @@ async fn run_throughput_test(
     num_lobbies: usize,
     players_per_lobby: usize,
     test_duration: Duration,
+    rate: u32,
     host: &str,
 ) -> Result<(), TestError> {
     let metrics = Arc::new(ThroughputMetrics::new());
@@ -459,6 +467,7 @@ async fn run_throughput_test(
                     &host_clone,
                     metrics_clone,
                     test_duration,
+                    rate,
                 )
                 .await
                 {
@@ -518,12 +527,16 @@ async fn run_game_batch(
         let metrics_clone = Arc::clone(&metrics);
         let game_handle = tokio::spawn(async move {
             metrics_clone.active_games.fetch_add(1, Ordering::SeqCst);
-            if let Err(e) = run_single_game(game_idx, players_per_game, rounds, &host_clone).await {
-                eprintln!("Game {} error: {}", game_idx, e);
-                metrics_clone.errors.fetch_add(1, Ordering::SeqCst);
+            match run_single_game(game_idx, players_per_game, rounds, &host_clone).await {
+                Ok(()) => {
+                    metrics_clone.completed_games.fetch_add(1, Ordering::SeqCst);
+                }
+                Err(e) => {
+                    eprintln!("Game {} error: {}", game_idx, e);
+                    metrics_clone.errors.fetch_add(1, Ordering::SeqCst);
+                }
             }
             metrics_clone.active_games.fetch_sub(1, Ordering::SeqCst);
-            metrics_clone.completed_games.fetch_add(1, Ordering::SeqCst);
         });
         game_handles.push(game_handle);
 
@@ -568,24 +581,8 @@ async fn run_single_game(
     rounds: usize,
     host: &str,
 ) -> Result<(), TestError> {
-    // Create lobby via HTTP
-    let create_url = format!("http://{}/api/create-lobby", host);
-    let client = reqwest::Client::new();
-    let res = client
-        .post(&create_url)
-        .json(&json!({ "round_duration": 60 }))
-        .send()
-        .await?;
-    let lobby_data: serde_json::Value = res.json().await?;
-    let join_code = lobby_data["join_code"].as_str().unwrap().to_string();
-    // Admin's session_token is returned in the create response (kept for completeness).
-    let _admin_session = lobby_data["session_token"]
-        .as_str()
-        .unwrap_or_default()
-        .to_string();
-
-    // Create admin via TestAdmin::new (which also connects via WS)
-    let (mut admin, _) = TestAdmin::new(host).await?;
+    // The admin creates the lobby and connects via WS; players join that lobby
+    let (mut admin, join_code) = TestAdmin::new(host).await?;
 
     // Create players (HTTP join then WS connect)
     let mut players = Vec::new();
@@ -600,7 +597,7 @@ async fn run_single_game(
     let mut player_handles = Vec::new();
     for mut player in players {
         player_handles.push(tokio::spawn(async move {
-            if let Err(e) = player.handle_messages().await {
+            if let Err(e) = player.handle_messages(GAMEPLAY_MAX_THINK).await {
                 eprintln!("Player error in game {}: {}", game_idx, e);
             }
         }));
@@ -611,7 +608,7 @@ async fn run_single_game(
             admin.start_game().await?;
             for _ in 0..rounds {
                 admin.start_round().await?;
-                tokio::time::sleep(Duration::from_secs(5)).await;
+                tokio::time::sleep(GAMEPLAY_ROUND).await;
                 admin.end_round().await?;
                 tokio::time::sleep(Duration::from_secs(2)).await;
             }
@@ -659,12 +656,16 @@ async fn run_ui_test(
         let metrics = Arc::clone(&metrics);
         let handle = tokio::spawn(async move {
             metrics.active_games.fetch_add(1, Ordering::SeqCst);
-            if let Err(e) = player.handle_messages().await {
-                eprintln!("Player error: {}", e);
-                metrics.errors.fetch_add(1, Ordering::SeqCst);
+            match player.handle_messages(UI_TEST_MAX_THINK).await {
+                Ok(()) => {
+                    metrics.completed_games.fetch_add(1, Ordering::SeqCst);
+                }
+                Err(e) => {
+                    eprintln!("Player error: {}", e);
+                    metrics.errors.fetch_add(1, Ordering::SeqCst);
+                }
             }
             metrics.active_games.fetch_sub(1, Ordering::SeqCst);
-            metrics.completed_games.fetch_add(1, Ordering::SeqCst);
         });
         player_handles.push(handle);
     }
@@ -695,20 +696,22 @@ async fn main() -> Result<(), TestError> {
     let host = args.host.clone();
 
     match args.mode {
-        TestMode::ThroughputTest => {
+        TestMode::Throughput => {
             println!("Starting throughput test with:");
             println!("Number of lobbies: {}", args.num_lobbies);
             println!("Players per lobby: {}", args.players_per_lobby);
             println!("Test duration: {} seconds", args.duration_or_rounds);
+            println!("Messages per second per player: {}", args.rate);
             run_throughput_test(
                 args.num_lobbies,
                 args.players_per_lobby,
                 Duration::from_secs(args.duration_or_rounds),
+                args.rate,
                 &host,
             )
             .await
         }
-        TestMode::GameplayTest => {
+        TestMode::Gameplay => {
             println!("Starting gameplay test with:");
             println!("Batch size: {}", args.num_lobbies);
             println!("Players per game: {}", args.players_per_lobby);
@@ -721,7 +724,7 @@ async fn main() -> Result<(), TestError> {
             )
             .await
         }
-        TestMode::UiTest => {
+        TestMode::Ui => {
             let join_code = args.join_code.ok_or_else(|| {
                 TestError::Other("Join code is required for UI test mode".to_string())
             })?;

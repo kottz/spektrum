@@ -1,6 +1,6 @@
 <script lang="ts">
-	import * as Alert from '$lib/components/ui/alert';
-	import { notifications } from '$lib/stores/notification-store.svelte';
+	import * as Alert from '#lib/components/ui/alert/index.ts';
+	import { notifications } from '#lib/stores/notification-store.svelte.ts';
 	import { fly } from 'svelte/transition';
 </script>
 

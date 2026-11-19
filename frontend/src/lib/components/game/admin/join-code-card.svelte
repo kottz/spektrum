@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { Card } from '$lib/components/ui/card';
-	import { gameStore } from '$lib/stores/game.svelte';
+	import { Card } from '#lib/components/ui/card/index.ts';
+	import { gameStore } from '#lib/stores/game.svelte.ts';
 	import { Copy, Link } from '@lucide/svelte';
-	import { Button } from '$lib/components/ui/button';
-	import { notifications } from '$lib/stores/notification-store.svelte';
+	import { Button } from '#lib/components/ui/button/index.ts';
+	import { notifications } from '#lib/stores/notification-store.svelte.ts';
 	const joinCode = $derived(gameStore.state.joinCode);
 
 	async function copyCodeToClipboard() {

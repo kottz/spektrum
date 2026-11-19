@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
+	import { Card, CardContent, CardHeader, CardTitle } from '#lib/components/ui/card/index.ts';
 	import Scoreboard from './scoreboard.svelte';
-	import { gameStore } from '$lib/stores/game.svelte';
+	import { gameStore } from '#lib/stores/game.svelte.ts';
 
 	// Replace reactive statements with derived computations
 	const players = $derived(

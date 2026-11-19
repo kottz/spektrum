@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { Card, CardContent } from '$lib/components/ui/card';
-	import { PUBLIC_SPEKTRUM_CDN_URL } from '$env/static/public';
+	import { Card, CardContent } from '#lib/components/ui/card/index.ts';
+	import { PUBLIC_SPEKTRUM_CDN_URL } from '$app/env/public';
 
 	const imageBaseUrl = `${PUBLIC_SPEKTRUM_CDN_URL}/img`;
 
@@ -162,7 +162,7 @@
 			</div>
 
 			<div class="grid grid-cols-3 gap-2">
-				{#each currentQuestion.alternatives as alternative}
+				{#each currentQuestion.alternatives as alternative (alternative)}
 					<button
 						class={getButtonStyles(alternative)}
 						disabled={clickedAnswer !== null}

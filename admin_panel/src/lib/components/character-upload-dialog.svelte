@@ -1,141 +1,126 @@
 <script lang="ts">
-	import * as Dialog from '$lib/components/ui/dialog';
-	import { Button } from '$lib/components/ui/button';
-	import { adminStore } from '$lib/stores/data-manager.svelte';
+	import * as Dialog from '#lib/components/ui/dialog/index.ts';
+	import { Button } from '#lib/components/ui/button/index.ts';
+	import { adminStore } from '#lib/stores/data-manager.svelte.ts';
 
-	type FileStatus = 'pending' | 'success' | 'error' | 'overwrite';
+	/**
+	 * Per-file lifecycle: pending → added | invalid | conflict; conflict → (Overwrite) → added.
+	 * A conflict is a valid image whose name already exists.
+	 */
+	type FileStatus =
+		| { kind: 'pending' }
+		| { kind: 'added' }
+		| { kind: 'invalid'; reason: string }
+		| { kind: 'conflict' };
+
+	interface UploadEntry {
+		id: string;
+		name: string;
+		file: File;
+		dataUrl: string;
+		status: FileStatus;
+	}
 
 	const state = $state({
 		isDragging: false,
-		files: [] as Array<{
-			id: string;
-			name: string;
-			file: File;
-			status: FileStatus;
-			error?: string;
-			dataUrl?: string;
-		}>
+		files: [] as UploadEntry[]
 	});
 
-	async function validateFile(file: File) {
-		// Basic validation
-		if (!file.type.includes('avif')) {
-			return { valid: false, error: 'Only AVIF images are allowed' };
-		}
+	/** Mirrors the server's rule for character names (they become file names). */
+	const CHARACTER_NAME = /^[A-Za-z0-9_-]+$/;
 
-		// Dimension validation
-		const dimensionPromise = new Promise<{ width: number; height: number }>((resolve, reject) => {
-			const img = new Image();
-			img.onload = () => resolve({ width: img.width, height: img.height });
-			img.onerror = reject;
-			img.src = URL.createObjectURL(file);
-		});
-
-		try {
-			const { width, height } = await dimensionPromise;
-			if (width !== 300 || height !== 300) {
-				return { valid: false, error: 'Image must be exactly 300x300 pixels' };
-			}
-		} catch {
-			return { valid: false, error: 'Failed to load image' };
-		}
-
-		// Name check
-		const fileName = file.name.replace(/\.avif$/i, '');
-		const exists = adminStore.getState().characters.some((c) => c.name === fileName);
-
-		return {
-			valid: !exists,
-			error: exists ? `Character "${fileName}" exists` : undefined,
-			exists
-		};
+	function setStatus(id: string, status: FileStatus) {
+		state.files = state.files.map((f) => (f.id === id ? { ...f, status } : f));
 	}
 
-	async function readFile(file: File): Promise<string> {
-		return new Promise((resolve) => {
+	/** Returns why the image is unusable, or null when it is a valid character image. */
+	async function invalidReason(file: File, name: string): Promise<string | null> {
+		if (!file.type.includes('avif')) return 'Only AVIF images are allowed';
+		if (!CHARACTER_NAME.test(name)) {
+			return 'File name may only contain letters, digits, _ and -';
+		}
+		const url = URL.createObjectURL(file);
+		try {
+			const { width, height } = await new Promise<{ width: number; height: number }>(
+				(resolve, reject) => {
+					const img = new Image();
+					img.onload = () => resolve({ width: img.width, height: img.height });
+					img.onerror = reject;
+					img.src = url;
+				}
+			);
+			if (width !== 300 || height !== 300) return 'Image must be exactly 300x300 pixels';
+			return null;
+		} catch {
+			return 'Failed to load image';
+		} finally {
+			URL.revokeObjectURL(url);
+		}
+	}
+
+	function readFile(file: File): Promise<string> {
+		return new Promise((resolve, reject) => {
 			const reader = new FileReader();
 			reader.onload = () => resolve(reader.result as string);
+			reader.onerror = () => reject(reader.error ?? new Error('Failed to read file'));
 			reader.readAsDataURL(file);
 		});
 	}
 
-	function generateUniqueId(existingCharacters: any[]) {
-		const maxId = Math.max(...existingCharacters.map((c) => c.id), 0);
-		return maxId + 1;
+	function findCharacter(name: string) {
+		return adminStore.getState().characters.find((c) => c.name === name);
 	}
 
 	async function processFile(file: File) {
 		const id = crypto.randomUUID();
-		const fileName = file.name.replace(/\.avif$/i, '');
-		const dataUrl = await readFile(file);
-
-		state.files = [{ id, name: fileName, file, status: 'pending', dataUrl }, ...state.files];
-
+		const name = file.name.replace(/\.avif$/i, '');
+		let dataUrl: string;
 		try {
-			const validation = await validateFile(file);
-			const existing = adminStore.getState().characters.find((c) => c.name === fileName);
-
-			if (validation.exists && existing) {
-				// If file exists but user hasn't chosen to overwrite yet
-				state.files = state.files.map((f) =>
-					f.id === id ? { ...f, status: 'error', error: validation.error } : f
-				);
-				return;
-			}
-
-			adminStore.startBatch();
-
-			if (existing) {
-				// Update existing character
-				adminStore.modifyEntity('characters', existing.id, {
-					_pendingImage: { dataUrl, file }
-				});
-			} else {
-				// Create new character
-				const newId = generateUniqueId(adminStore.getState().characters);
-				adminStore.addEntity('characters', {
-					id: newId,
-					name: fileName,
-					image_url: `img/${fileName}.avif`,
-					_pendingImage: { dataUrl, file }
-				});
-			}
-
-			adminStore.commitBatch();
-			state.files = state.files.map((f) => (f.id === id ? { ...f, status: 'success' } : f));
+			dataUrl = await readFile(file);
 		} catch (error) {
-			adminStore.cancelBatch();
-			state.files = state.files.map((f) =>
-				f.id === id ? { ...f, status: 'error', error: error.message } : f
-			);
+			const reason = error instanceof Error ? error.message : 'Failed to read file';
+			state.files = [
+				{ id, name, file, dataUrl: '', status: { kind: 'invalid', reason } },
+				...state.files
+			];
+			return;
 		}
+		state.files = [{ id, name, file, dataUrl, status: { kind: 'pending' } }, ...state.files];
+
+		const reason = await invalidReason(file, name);
+		if (reason) {
+			setStatus(id, { kind: 'invalid', reason });
+			return;
+		}
+		if (findCharacter(name)) {
+			setStatus(id, { kind: 'conflict' });
+			return;
+		}
+
+		adminStore.addEntity('characters', {
+			name,
+			image_url: `img/${name}.avif`,
+			_pendingImage: { dataUrl, file }
+		});
+		setStatus(id, { kind: 'added' });
 	}
 
-	async function handleOverwrite(fileId: string) {
-		const file = state.files.find((f) => f.id === fileId);
-		if (!file) return;
-
-		try {
-			adminStore.startBatch();
-			const existing = adminStore.getState().characters.find((c) => c.name === file.name);
-
-			if (existing) {
-				// Update existing character with new image
-				adminStore.modifyEntity('characters', existing.id, {
-					_pendingImage: { dataUrl: file.dataUrl!, file: file.file }
-				});
-			}
-
-			adminStore.commitBatch();
-			state.files = state.files.map((f) =>
-				f.id === fileId ? { ...f, status: 'success', error: undefined } : f
-			);
-		} catch (error) {
-			adminStore.cancelBatch();
-			state.files = state.files.map((f) =>
-				f.id === fileId ? { ...f, status: 'error', error: error.message } : f
-			);
+	function handleOverwrite(entry: UploadEntry) {
+		const existing = findCharacter(entry.name);
+		if (!existing) {
+			setStatus(entry.id, { kind: 'invalid', reason: 'Character no longer exists' });
+			return;
 		}
+		adminStore.modifyEntity('characters', existing.id, {
+			_pendingImage: { dataUrl: entry.dataUrl, file: entry.file }
+		});
+		setStatus(entry.id, { kind: 'added' });
+	}
+
+	let fileInput: HTMLInputElement | undefined;
+
+	function openFilePicker() {
+		fileInput?.click();
 	}
 
 	async function handleFileSelect(event: Event) {
@@ -185,7 +170,8 @@
 			ondragover={handleDragOver}
 			ondragleave={handleDragLeave}
 			ondrop={handleDrop}
-			tabindex="0"
+			role="region"
+			aria-label="Character image upload"
 		>
 			<div
 				class={`
@@ -193,7 +179,15 @@
 					rounded-lg border-2 border-dashed transition-colors
 					${state.isDragging ? 'border-primary bg-primary/10' : 'border-gray-300'}
 				`}
-				onclick={() => document.getElementById('file-upload')?.click()}
+				role="button"
+				tabindex="0"
+				onclick={openFilePicker}
+				onkeydown={(e) => {
+					if (e.key === 'Enter' || e.key === ' ') {
+						e.preventDefault();
+						openFilePicker();
+					}
+				}}
 			>
 				{#if state.files.length === 0}
 					<p class="text-sm text-gray-600">Drag files here or click to upload</p>
@@ -202,9 +196,10 @@
 						{#each state.files as file (file.id)}
 							<div
 								class="group flex items-center justify-between rounded-lg border p-2"
-								class:border-green-500={file.status === 'success'}
-								class:border-red-500={file.status === 'error'}
-								class:border-blue-500={file.status === 'pending'}
+								class:border-green-500={file.status.kind === 'added'}
+								class:border-red-500={file.status.kind === 'invalid' ||
+									file.status.kind === 'conflict'}
+								class:border-blue-500={file.status.kind === 'pending'}
 							>
 								<div class="flex items-center gap-2">
 									{#if file.dataUrl}
@@ -213,26 +208,26 @@
 									<span class="text-sm font-medium">{file.name}</span>
 								</div>
 
-								{#if file.status === 'error'}
+								{#if file.status.kind === 'invalid'}
+									<span class="text-sm text-red-500">{file.status.reason}</span>
+								{:else if file.status.kind === 'conflict'}
 									<div class="flex items-center gap-2">
-										<span class="text-sm text-red-500">{file.error}</span>
-										{#if file.error?.includes('exists')}
-											<Button
-												variant="destructive"
-												size="sm"
-												onclick={(e) => {
-													e.stopPropagation();
-													e.preventDefault();
-													handleOverwrite(file.id);
-												}}
-											>
-												Overwrite
-											</Button>
-										{/if}
+										<span class="text-sm text-red-500">Character "{file.name}" exists</span>
+										<Button
+											variant="destructive"
+											size="sm"
+											onclick={(e) => {
+												e.stopPropagation();
+												e.preventDefault();
+												handleOverwrite(file);
+											}}
+										>
+											Overwrite
+										</Button>
 									</div>
-								{:else if file.status === 'pending'}
+								{:else if file.status.kind === 'pending'}
 									<div class="flex items-center gap-2">
-										<div class="h-2 w-2 animate-pulse rounded-full bg-blue-500" />
+										<div class="h-2 w-2 animate-pulse rounded-full bg-blue-500"></div>
 										<span class="text-sm text-gray-500">Processing...</span>
 									</div>
 								{:else}
@@ -245,7 +240,7 @@
 			</div>
 
 			<input
-				id="file-upload"
+				bind:this={fileInput}
 				type="file"
 				accept="image/avif"
 				multiple
@@ -258,8 +253,8 @@
 			<Dialog.Close>
 				<Button
 					variant="outline"
-					on:click={() => {
-						state.files = state.files.filter((f) => f.status !== 'success');
+					onclick={() => {
+						state.files = state.files.filter((f) => f.status.kind !== 'added');
 					}}
 				>
 					Close

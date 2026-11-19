@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { ScrollArea } from '$lib/components/ui/scroll-area';
-	import { streamStore } from '$lib/stores/stream.store.svelte';
+	import { ScrollArea } from '#lib/components/ui/scroll-area/index.ts';
+	import { streamStore } from '#lib/stores/stream.store.svelte.ts';
 
 	interface DisplayListItem {
 		name: string;

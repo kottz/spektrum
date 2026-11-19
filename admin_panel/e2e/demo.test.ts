@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
-test('home page has expected h1', async ({ page }) => {
+test('shows the login screen before data is loaded', async ({ page }) => {
 	await page.goto('/');
-	await expect(page.locator('h1')).toBeVisible();
+	await expect(page.getByText('Authentication Required')).toBeVisible();
+	await expect(page.getByPlaceholder('Enter admin password')).toBeVisible();
 });

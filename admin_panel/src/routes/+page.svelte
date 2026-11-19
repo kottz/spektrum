@@ -1,5 +1,5 @@
 <script lang="ts">
-	import AdminEditor from '$lib/components/admin-editor.svelte';
+	import AdminEditor from '#lib/components/admin-editor.svelte';
 </script>
 
 <div class="h-screen">

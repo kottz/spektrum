@@ -1,11 +1,12 @@
 import { websocketStore } from './websocket.svelte';
-import { gameStore } from '$lib/stores/game.svelte';
-import { youtubeStore } from '$lib/stores/youtube-store.svelte';
-import { timerStore } from '$lib/stores/timer.svelte';
-import { info, warn } from '$lib/utils/logger';
-import type { ClientMessage, AdminAction } from '../types/game';
-import { PUBLIC_SPEKTRUM_SERVER_URL } from '$env/static/public';
-import { removeSession } from '$lib/stores/game.svelte';
+import { gameStore } from '#lib/stores/game.svelte.ts';
+import { youtubeStore } from '#lib/stores/youtube-store.svelte.ts';
+import { info, warn } from '#lib/utils/logger.ts';
+import { notifications } from '#lib/stores/notification-store.svelte.ts';
+import type { ClientMessage } from '#lib/generated/ClientMessage.ts';
+import type { AdminAction } from '#lib/generated/AdminAction.ts';
+import { api } from '#lib/api.ts';
+import { removeSession } from '#lib/stores/game.svelte.ts';
 
 class GameActions {
 	/**
@@ -21,20 +22,23 @@ class GameActions {
 	}
 
 	/**
+	 * Join a lobby by its code as a new player, then connect.
+	 */
+	public async joinLobby(joinCode: string, name: string) {
+		const data = await api.joinLobby({ join_code: joinCode, name });
+		gameStore.setPlayerName(name);
+		gameStore.setJoinCode(data.join_code);
+		gameStore.setSessionToken(data.session_token);
+		gameStore.setPlayerId(data.player_id);
+		await this.joinGame(data.session_token);
+	}
+
+	/**
 	 * Create a new lobby, then automatically join it as admin.
 	 */
 	public async createGame(set: number | null = null) {
 		try {
-			const response = await fetch(`${PUBLIC_SPEKTRUM_SERVER_URL}/api/create-lobby`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ round_duration: 60, set_id: set }),
-				cache: 'no-store'
-			});
-			if (!response.ok) {
-				throw new Error('Failed to create lobby');
-			}
-			const data = await response.json();
+			const data = await api.createLobby({ round_duration: 60, set_id: set });
 
 			// IMPORTANT: Remove the previously saved session for this lobby/player.
 			removeSession();
@@ -54,49 +58,35 @@ class GameActions {
 	}
 
 	/**
-	 * Attempt to reconnect using any credentials stored in localStorage.
+	 * Sends a message, telling the user when it could not go out (e.g. while
+	 * reconnecting) instead of letting the UI assume it did.
 	 */
-	public async reconnectGame(sessionToken: string) {
-		try {
-			info('Attempting to reconnect...');
-			await websocketStore.connect(sessionToken);
-		} catch (error) {
-			warn('Failed to reconnect:', error);
+	private send(message: ClientMessage): boolean {
+		const sent = websocketStore.send(message);
+		if (!sent) {
+			notifications.add('Not connected — please try again in a moment', 'destructive');
 		}
+		return sent;
 	}
 
 	/**
-	 * Submit an answer to the current question.
+	 * Submit an answer to the current question. Returns whether it was sent.
 	 */
-	public submitAnswer(answer: string) {
-		// Ensure we have a valid player ID (stored after joining).
+	public submitAnswer(answer: string): boolean {
 		if (!gameStore.state.playerId) {
 			warn('No active player');
-			return;
+			return false;
 		}
-
-		const message: ClientMessage = {
-			type: 'Answer',
-			answer
-		};
-		websocketStore.send(message);
+		return this.send({ type: 'Answer', answer });
 	}
 
-	/**
-	 * Helper to send an admin action if the user is authorized as admin.
-	 */
-	private sendAdminAction(action: AdminAction) {
+	private sendAdminAction(action: AdminAction): boolean {
 		if (!gameStore.state.isAdmin) {
 			warn('Not authorized to perform admin action');
-			return;
+			return false;
 		}
-
-		const message: ClientMessage = {
-			type: 'AdminAction',
-			action
-		};
-		info('Sending admin action:', message);
-		websocketStore.send(message);
+		info('Sending admin action:', action);
+		return this.send({ type: 'AdminAction', action });
 	}
 
 	public startGame() {
@@ -108,7 +98,6 @@ class GameActions {
 	}
 
 	public endRound() {
-		timerStore.stopTimer(true);
 		this.sendAdminAction({ type: 'EndRound' });
 	}
 
@@ -121,17 +110,14 @@ class GameActions {
 	}
 
 	public endGame(reason: string = 'Game ended by admin') {
-		timerStore.resetTimer();
 		this.sendAdminAction({ type: 'EndGame', reason });
 	}
 
 	public closeGame(reason: string = 'Game closed by admin') {
-		timerStore.resetTimer();
 		this.sendAdminAction({ type: 'CloseGame', reason });
 	}
 
 	public lockLobby(locked: boolean) {
-		if (gameStore.state.lobbyLocked === locked) return;
 		this.sendAdminAction({ type: 'LockLobby', locked });
 	}
 
@@ -142,12 +128,8 @@ class GameActions {
 		// Ensure we have a valid player ID.
 		if (!gameStore.state.playerId) return;
 
-		const message: ClientMessage = {
-			type: 'Leave'
-		};
-		websocketStore.send(message);
+		websocketStore.send({ type: 'Leave' });
 		websocketStore.disconnect();
-		timerStore.resetTimer();
 		gameStore.cleanup();
 		youtubeStore.cleanup();
 	}

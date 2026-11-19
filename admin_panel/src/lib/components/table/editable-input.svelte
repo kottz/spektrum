@@ -1,54 +1,46 @@
 <script lang="ts">
-	import { Input } from '$lib/components/ui/input';
+	import type { HTMLInputAttributes } from 'svelte/elements';
+	import { Input } from '#lib/components/ui/input/index.ts';
 
-	let {
-		value = '',
-		type = 'text',
-		placeholder = '',
-		onCommit = (value: string) => {},
-		onChange = (value: string) => {}
-	} = $props<{
+	interface Props extends Omit<HTMLInputAttributes, 'value' | 'type' | 'files'> {
 		value: string;
-		type?: string;
-		placeholder?: string;
+		type?: 'text' | 'number';
 		onCommit?: (value: string) => void;
 		onChange?: (value: string) => void;
-	}>();
+	}
+
+	let { value, type = 'text', onCommit, onChange, ...restProps }: Props = $props();
 
 	function handleInput(event: Event & { currentTarget: HTMLInputElement }) {
-		onChange(event.currentTarget.value); // Notify parent of potential changes
+		onChange?.(event.currentTarget.value);
 	}
 
 	function handleBlur(event: FocusEvent & { currentTarget: HTMLInputElement }) {
 		const currentValue = event.currentTarget.value;
 		if (currentValue !== value) {
-			onCommit(currentValue);
+			onCommit?.(currentValue);
 		}
 	}
 
 	function handleKeyDown(event: KeyboardEvent & { currentTarget: HTMLInputElement }) {
-		const currentValue = event.currentTarget.value;
-
 		if (event.key === 'Enter') {
-			event.preventDefault(); // Prevent default form submission
-			if (currentValue !== value) {
-				onCommit(currentValue);
-			}
+			event.preventDefault();
+			// Blurring commits through handleBlur
 			event.currentTarget.blur();
 		} else if (event.key === 'Escape') {
 			event.preventDefault();
 			event.currentTarget.value = value;
-			onChange(value);
+			onChange?.(value);
 			event.currentTarget.blur();
 		}
 	}
 </script>
 
 <Input
+	{...restProps}
 	{type}
 	{value}
-	{placeholder}
-	on:input={handleInput}
-	on:blur={handleBlur}
-	on:keydown={handleKeyDown}
+	oninput={handleInput}
+	onblur={handleBlur}
+	onkeydown={handleKeyDown}
 />

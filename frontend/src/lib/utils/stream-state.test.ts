@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { GamePhase, type GameState } from '$lib/types/game';
+import type { GameState } from '#lib/types/game.ts';
 import { createStreamStateSnapshot } from './stream-state';
 
 describe('createStreamStateSnapshot', () => {
 	it('captures the complete current state for a stream opened mid-question', () => {
 		const gameState: GameState = {
-			phase: GamePhase.Question,
+			phase: 'question',
 			isAdmin: true,
 			joinCode: '123456',
 			roundDuration: 60,
@@ -34,7 +34,7 @@ describe('createStreamStateSnapshot', () => {
 
 		expect(createStreamStateSnapshot(gameState)).toEqual({
 			type: 'StateDelta',
-			phase: GamePhase.Question,
+			phase: 'question',
 			scoreboard: [['Ada', 120]],
 			round_scores: [['Ada', 20]],
 			answered_player_names: ['Ada'],

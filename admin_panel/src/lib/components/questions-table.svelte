@@ -1,45 +1,61 @@
 <script lang="ts">
-	import { PUBLIC_SPEKTRUM_CDN_URL } from '$env/static/public';
-	import type { Character, Media } from '$lib/types';
-	import type { Question, QuestionOption } from '$lib/types';
-	import { QuestionType, Color } from '$lib/types';
+	import { characterImageSrc, mediaUrl } from '#lib/media.ts';
+	import { COLORS, QUESTION_TYPES, type Character } from '#lib/types.ts';
+	import type { Color } from '#lib/generated/Color.ts';
+	import type { Media } from '#lib/generated/Media.ts';
+	import type { Question } from '#lib/generated/Question.ts';
+	import type { QuestionOption } from '#lib/generated/QuestionOption.ts';
+	import type { QuestionType } from '#lib/generated/QuestionType.ts';
 
-	import { adminStore } from '$lib/stores/data-manager.svelte';
+	import { adminStore } from '#lib/stores/data-manager.svelte.ts';
+	import { questionProblem } from '#lib/question-rules.ts';
 
-	import * as Table from '$lib/components/ui/table';
-	import { Button } from '$lib/components/ui/button';
-	import { ScrollArea } from '$lib/components/ui/scroll-area';
-	import { Input } from '$lib/components/ui/input';
-	import { Switch } from '$lib/components/ui/switch';
-	import * as Popover from '$lib/components/ui/popover/index.js';
-	import * as Command from '$lib/components/ui/command';
-	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import CharacterBank from '$lib/components/character-bank.svelte';
+	import * as Table from '#lib/components/ui/table/index.ts';
+	import { Button } from '#lib/components/ui/button/index.ts';
+	import { ScrollArea } from '#lib/components/ui/scroll-area/index.ts';
+	import { Input } from '#lib/components/ui/input/index.ts';
+	import { Switch } from '#lib/components/ui/switch/index.ts';
+	import * as Popover from '#lib/components/ui/popover/index.ts';
+	import * as Command from '#lib/components/ui/command/index.ts';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.ts';
+	import CharacterBank from '#lib/components/character-bank.svelte';
 
 	import TableContainer from './table/table-container.svelte';
 	import SearchInput from './table/search-input.svelte';
 	import Pagination from './table/pagination.svelte';
 	import EditableInput from './table/editable-input.svelte';
 
-	import { Check, ChevronsUpDown } from 'lucide-svelte';
-	import { cn } from '$lib/utils';
+	import { Check, ChevronsUpDown } from '@lucide/svelte';
+	import { cn } from '#lib/utils.ts';
+	import { SvelteSet } from 'svelte/reactivity';
+
+	/**
+	 * A question being composed. It has no real id until saved (DRAFT_ID only
+	 * routes drops to the draft row); its type stays empty until one is picked.
+	 */
+	type QuestionDraft = Omit<Question, 'question_type'> & { question_type: QuestionType | '' };
+	const DRAFT_ID = 0;
+
+	function emptyQuestionDraft(): QuestionDraft {
+		return {
+			id: DRAFT_ID,
+			media_id: 0,
+			question_type: '',
+			question_text: '',
+			image_url: null,
+			is_active: true
+		};
+	}
 
 	const state = $state({
 		currentPage: 0,
 		itemsPerPage: 10,
 		searchTerm: '',
 		forceShowCharacterBank: false,
-		selectedTypes: new Set(Object.values(QuestionType)),
+		selectedTypes: new SvelteSet(QUESTION_TYPES),
 		mediaSearchTerm: '',
 		isAddingQuestion: false,
-		newQuestionData: {
-			id: 0,
-			media_id: 0,
-			question_type: '',
-			question_text: '',
-			image_url: null,
-			is_active: true
-		},
+		newQuestionData: emptyQuestionDraft(),
 		tempOptions: [] as QuestionOption[],
 		tempOptionCounter: -1,
 		sortKey: 'id' as 'id' | 'media',
@@ -47,8 +63,7 @@
 	});
 
 	const showCharacterBank = $derived(
-		() =>
-			(state.isAddingQuestion && state.newQuestionData.question_type === QuestionType.Character) ||
+		(state.isAddingQuestion && state.newQuestionData.question_type === 'character') ||
 			state.forceShowCharacterBank
 	);
 
@@ -61,7 +76,7 @@
 		}, new Map<number, QuestionOption[]>())
 	);
 
-	const filteredData = $derived(() => {
+	const filteredData = $derived.by(() => {
 		const s = state.searchTerm.toLowerCase();
 		return adminStore
 			.getState()
@@ -87,15 +102,15 @@
 			});
 	});
 
-	const totalPages = $derived(Math.ceil(filteredData().length / state.itemsPerPage));
-	const paginatedData = $derived(() =>
-		filteredData().slice(
+	const totalPages = $derived(Math.ceil(filteredData.length / state.itemsPerPage));
+	const paginatedData = $derived.by(() =>
+		filteredData.slice(
 			state.currentPage * state.itemsPerPage,
 			(state.currentPage + 1) * state.itemsPerPage
 		)
 	);
 
-	const filteredMediaOptions = $derived(() =>
+	const filteredMediaOptions = $derived.by(() =>
 		adminStore
 			.getState()
 			.media.filter((m) => {
@@ -139,7 +154,6 @@
 			];
 		} else {
 			adminStore.addEntity('options', {
-				id: Math.max(0, ...adminStore.getState().options.map((o) => o.id)) + 1,
 				question_id: qId,
 				option_text: name,
 				is_correct: false
@@ -155,9 +169,11 @@
 	}
 
 	function toggleQuestionType(t: QuestionType) {
-		const s = new Set(state.selectedTypes);
-		s.has(t) ? s.delete(t) : s.add(t);
-		state.selectedTypes = s;
+		if (state.selectedTypes.has(t)) {
+			state.selectedTypes.delete(t);
+		} else {
+			state.selectedTypes.add(t);
+		}
 	}
 
 	function toggleColorOption(c: Color) {
@@ -175,57 +191,72 @@
 	}
 
 	function handleAddQuestion() {
-		const id = Math.max(0, ...adminStore.getState().questions.map((q) => q.id)) + 1;
-		state.newQuestionData = {
-			id,
-			media_id: 0,
-			question_type: '',
-			question_text: '',
-			image_url: null,
-			is_active: true
-		};
+		state.newQuestionData = emptyQuestionDraft();
 		state.tempOptions = [];
 		state.isAddingQuestion = true;
 	}
 
 	function handleSaveQuestion() {
-		try {
-			adminStore.startBatch();
-			adminStore.addEntity('questions', { ...state.newQuestionData });
-
-			let next = Math.max(0, ...adminStore.getState().options.map((o) => o.id)) + 1;
-			state.tempOptions.forEach((o) =>
-				adminStore.addEntity('options', { ...o, id: next++, question_id: state.newQuestionData.id })
-			);
-
-			adminStore.commitBatch();
-		} finally {
-			adminStore.cancelBatch();
+		const { question_type } = state.newQuestionData;
+		if (!question_type || !state.newQuestionData.media_id) {
+			alert('Select media and a question type before saving.');
+			return;
+		}
+		const problem = questionProblem(
+			question_type,
+			state.newQuestionData.question_text,
+			state.tempOptions
+		);
+		if (problem) {
+			alert(problem);
+			return;
 		}
 
-		state.isAddingQuestion = false;
-		state.newQuestionData = {
-			id: 0,
-			media_id: 0,
-			question_type: '',
-			question_text: '',
-			image_url: null,
-			is_active: true
-		};
-		state.tempOptions = [];
+		adminStore.startBatch();
+		try {
+			const { id: _draftId, ...draft } = state.newQuestionData;
+			const questionId = adminStore.addEntity('questions', { ...draft, question_type });
+			for (const { id: _tempId, ...option } of state.tempOptions) {
+				adminStore.addEntity('options', { ...option, question_id: questionId });
+			}
+
+			adminStore.commitBatch();
+		} catch (error) {
+			adminStore.cancelBatch();
+			throw error;
+		}
+
+		resetQuestionDraft();
+	}
+
+	/** A year question has one option: the correct year. */
+	function setDraftYear(value: string) {
+		const year = value.trim();
+		state.tempOptions = year
+			? [{ id: -1, question_id: state.newQuestionData.id, option_text: year, is_correct: true }]
+			: [];
+	}
+
+	function setYear(questionId: number, option: QuestionOption | undefined, value: string) {
+		const year = value.trim();
+		if (option) {
+			adminStore.modifyEntity('options', option.id, { option_text: year, is_correct: true });
+		} else if (year) {
+			adminStore.addEntity('options', {
+				question_id: questionId,
+				option_text: year,
+				is_correct: true
+			});
+		}
 	}
 
 	function handleCancelAdd() {
-		adminStore.cancelBatch();
+		resetQuestionDraft();
+	}
+
+	function resetQuestionDraft() {
 		state.isAddingQuestion = false;
-		state.newQuestionData = {
-			id: 0,
-			media_id: 0,
-			question_type: '',
-			question_text: '',
-			image_url: null,
-			is_active: true
-		};
+		state.newQuestionData = emptyQuestionDraft();
 		state.tempOptions = [];
 		state.tempOptionCounter = -1;
 	}
@@ -240,10 +271,10 @@
 </script>
 
 <div class="flex h-full flex-col">
-	<div class={showCharacterBank() ? 'h-1/2' : 'h-full'}>
+	<div class={showCharacterBank ? 'h-1/2' : 'h-full'}>
 		<TableContainer>
 			<!-- header -->
-			<svelte:fragment slot="header-left">
+			{#snippet headerLeft()}
 				<div class="flex items-center gap-4">
 					<SearchInput
 						value={state.searchTerm}
@@ -255,16 +286,16 @@
 					/>
 					<Button
 						variant="outline"
-						on:click={() => (state.forceShowCharacterBank = !state.forceShowCharacterBank)}
+						onclick={() => (state.forceShowCharacterBank = !state.forceShowCharacterBank)}
 					>
 						Toggle Character Bank
 					</Button>
 				</div>
-			</svelte:fragment>
+			{/snippet}
 
-			<svelte:fragment slot="header-right">
-				<Button on:click={handleAddQuestion}>Add Question</Button>
-			</svelte:fragment>
+			{#snippet headerRight()}
+				<Button onclick={handleAddQuestion}>Add Question</Button>
+			{/snippet}
 
 			<!-- table -->
 			<ScrollArea class="h-[calc(100%-4rem)]">
@@ -274,7 +305,7 @@
 							<Table.Head>
 								<div class="flex items-center gap-1">
 									ID
-									<Button variant="ghost" size="sm" on:click={() => handleSort('id')}>
+									<Button variant="ghost" size="sm" onclick={() => handleSort('id')}>
 										{state.sortKey === 'id' ? (state.sortDirection === 'asc' ? '↑' : '↓') : '↕'}
 									</Button>
 								</div>
@@ -282,20 +313,22 @@
 							<Table.Head class="w-48">
 								<div class="flex items-center gap-1">
 									Media
-									<Button variant="ghost" size="sm" on:click={() => handleSort('media')}>
+									<Button variant="ghost" size="sm" onclick={() => handleSort('media')}>
 										{state.sortKey === 'media' ? (state.sortDirection === 'asc' ? '↑' : '↓') : '↕'}
 									</Button>
 								</div>
 							</Table.Head>
 							<Table.Head class="pl-1">
 								<DropdownMenu.Root>
-									<DropdownMenu.Trigger asChild let:builder>
-										<Button variant="outline" size="sm" builders={[builder]}>Type ↓</Button>
+									<DropdownMenu.Trigger>
+										{#snippet child({ props })}
+											<Button variant="outline" size="sm" {...props}>Type ↓</Button>
+										{/snippet}
 									</DropdownMenu.Trigger>
 									<DropdownMenu.Content class="w-56">
 										<DropdownMenu.Label>Question Types</DropdownMenu.Label>
 										<DropdownMenu.Separator />
-										{#each Object.values(QuestionType) as t}
+										{#each QUESTION_TYPES as t (t)}
 											<DropdownMenu.CheckboxItem
 												checked={state.selectedTypes.has(t)}
 												onCheckedChange={() => toggleQuestionType(t)}
@@ -317,23 +350,25 @@
 						<!-- new row -->
 						{#if state.isAddingQuestion}
 							<Table.Row class="bg-blue-50 dark:bg-gray-800">
-								<Table.Cell>{state.newQuestionData.id}</Table.Cell>
+								<Table.Cell class="text-muted-foreground">New</Table.Cell>
 
 								<!-- media picker -->
 								<Table.Cell>
 									<Popover.Root>
-										<Popover.Trigger asChild let:builder>
-											<Button
-												builders={[builder]}
-												variant="outline"
-												role="combobox"
-												class="w-full justify-between"
-											>
-												{state.newQuestionData.media_id
-													? getMediaInfo(state.newQuestionData.media_id)?.title
-													: 'Select media...'}
-												<ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
-											</Button>
+										<Popover.Trigger>
+											{#snippet child({ props })}
+												<Button
+													{...props}
+													variant="outline"
+													role="combobox"
+													class="w-full justify-between"
+												>
+													{state.newQuestionData.media_id
+														? getMediaInfo(state.newQuestionData.media_id)?.title
+														: 'Select media...'}
+													<ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
+												</Button>
+											{/snippet}
 										</Popover.Trigger>
 										<Popover.Content class="w-[300px] p-2">
 											<Input
@@ -343,9 +378,10 @@
 												class="mb-2"
 											/>
 											<div class="max-h-[200px] overflow-y-auto">
-												{#each filteredMediaOptions() as m}
-													<div
-														class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800"
+												{#each filteredMediaOptions as m (m.id)}
+													<button
+														type="button"
+														class="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-gray-100 dark:hover:bg-gray-800"
 														onclick={() => {
 															state.newQuestionData.media_id = m.id;
 															state.mediaSearchTerm = '';
@@ -360,9 +396,9 @@
 															)}
 														/>
 														<span>{m.title} - {m.artist}</span>
-													</div>
+													</button>
 												{/each}
-												{#if filteredMediaOptions().length === 0}
+												{#if filteredMediaOptions.length === 0}
 													<div class="px-2 py-1.5 text-gray-500">No media found</div>
 												{/if}
 											</div>
@@ -373,38 +409,42 @@
 								<!-- type picker -->
 								<Table.Cell>
 									<Popover.Root>
-										<Popover.Trigger asChild let:builder>
-											<Button
-												builders={[builder]}
-												variant="outline"
-												role="combobox"
-												class="w-full justify-between"
-											>
-												{state.newQuestionData.question_type || 'Select type...'}
-												<ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
-											</Button>
+										<Popover.Trigger>
+											{#snippet child({ props })}
+												<Button
+													{...props}
+													variant="outline"
+													role="combobox"
+													class="w-full justify-between"
+												>
+													{state.newQuestionData.question_type || 'Select type...'}
+													<ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
+												</Button>
+											{/snippet}
 										</Popover.Trigger>
 										<Popover.Content class="w-[200px] p-0">
 											<Command.Root>
-												<Command.Group>
-													{#each Object.values(QuestionType) as t}
-														<Command.Item
-															value={t}
-															onSelect={() => {
-																state.newQuestionData.question_type = t;
-																state.tempOptions = [];
-															}}
-														>
-															<Check
-																class={cn(
-																	'mr-2 h-4 w-4',
-																	state.newQuestionData.question_type !== t && 'text-transparent'
-																)}
-															/>
-															{t}
-														</Command.Item>
-													{/each}
-												</Command.Group>
+												<Command.List>
+													<Command.Group>
+														{#each QUESTION_TYPES as t (t)}
+															<Command.Item
+																value={t}
+																onSelect={() => {
+																	state.newQuestionData.question_type = t;
+																	state.tempOptions = [];
+																}}
+															>
+																<Check
+																	class={cn(
+																		'mr-2 h-4 w-4',
+																		state.newQuestionData.question_type !== t && 'text-transparent'
+																	)}
+																/>
+																{t}
+															</Command.Item>
+														{/each}
+													</Command.Group>
+												</Command.List>
 											</Command.Root>
 										</Popover.Content>
 									</Popover.Root>
@@ -421,28 +461,26 @@
 
 								<!-- temp options -->
 								<Table.Cell class="w-[400px] min-w-[200px]">
-									{#if state.newQuestionData.question_type === QuestionType.Color}
+									{#if state.newQuestionData.question_type === 'color'}
 										<!-- unchanged color logic -->
 										<Popover.Root>
-											<Popover.Trigger asChild let:builder>
-												<Button
-													builders={[builder]}
-													variant="outline"
-													class="w-full justify-between"
-												>
-													{#if state.tempOptions.length > 0}
-														{state.tempOptions.length}
-														{#each state.tempOptions as o}{' - ' + o.option_text}{/each}
-													{:else}
-														Select colors...
-													{/if}
-													<ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
-												</Button>
+											<Popover.Trigger>
+												{#snippet child({ props })}
+													<Button {...props} variant="outline" class="w-full justify-between">
+														{#if state.tempOptions.length > 0}
+															{state.tempOptions.length}
+															{#each state.tempOptions as o (o.id)}{' - ' + o.option_text}{/each}
+														{:else}
+															Select colors...
+														{/if}
+														<ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
+													</Button>
+												{/snippet}
 											</Popover.Trigger>
 											<Popover.Content class="w-[200px] p-0">
 												<Command.Root>
 													<Command.Group>
-														{#each Object.values(Color) as c}
+														{#each COLORS as c (c)}
 															<Command.Item value={c} onSelect={() => toggleColorOption(c)}>
 																<Check
 																	class={cn(
@@ -459,9 +497,11 @@
 												</Command.Root>
 											</Popover.Content>
 										</Popover.Root>
-									{:else if state.newQuestionData.question_type === QuestionType.Character}
+									{:else if state.newQuestionData.question_type === 'character'}
 										<!-- character drag-drop -->
 										<div
+											role="region"
+											aria-label="Character options, drop characters here"
 											class="flex min-h-[60px] flex-wrap gap-2 rounded-lg border-2 border-dashed border-gray-300 p-2"
 											ondragover={(e) => e.preventDefault()}
 											ondrop={(e) => handleDrop(e, state.newQuestionData.id)}
@@ -471,7 +511,9 @@
 													.getState()
 													.characters.find((c: Character) => c.name === o.option_text)}
 												<div class="group relative">
-													<div
+													<button
+														type="button"
+														aria-pressed={o.is_correct}
 														class="flex cursor-pointer flex-col items-center"
 														onclick={() => {
 															o.is_correct = !o.is_correct;
@@ -479,11 +521,9 @@
 														}}
 													>
 														<img
-															src={char?._pendingImage?.dataUrl ||
-																(char?.image_url && PUBLIC_SPEKTRUM_CDN_URL
-																	? `${PUBLIC_SPEKTRUM_CDN_URL}/${char.image_url}`
-																	: char?.image_url) ||
-																`/img/${o.option_text}.avif`}
+															src={char
+																? characterImageSrc(char)
+																: mediaUrl(`img/${o.option_text}.avif`)}
 															alt={o.option_text}
 															class="h-12 w-12 rounded transition-transform hover:scale-105"
 															class:ring-2={o.is_correct}
@@ -492,9 +532,11 @@
 														<span class="mt-1 w-12 truncate text-center text-xs">
 															{o.option_text}
 														</span>
-													</div>
+													</button>
 													<button
-														class="absolute -right-2 -top-2 hidden h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white group-hover:flex"
+														type="button"
+														aria-label="Remove option"
+														class="absolute -top-2 -right-2 hidden h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white group-hover:flex"
 														onclick={() =>
 															(state.tempOptions = state.tempOptions.filter((x) => x.id !== o.id))}
 													>
@@ -503,7 +545,7 @@
 												</div>
 											{/each}
 										</div>
-									{:else if state.newQuestionData.question_type === QuestionType.Text}
+									{:else if state.newQuestionData.question_type === 'text'}
 										<!-- use EditableInput instead of textarea -->
 										<div class="flex flex-col gap-2">
 											{#each state.tempOptions as o (o.id)}
@@ -528,7 +570,7 @@
 													<Button
 														size="icon"
 														variant="outline"
-														on:click={() => {
+														onclick={() => {
 															o.is_correct = !o.is_correct;
 															state.tempOptions = [...state.tempOptions];
 														}}>✓</Button
@@ -537,7 +579,7 @@
 														size="icon"
 														variant="outline"
 														class="text-red-600"
-														on:click={() =>
+														onclick={() =>
 															(state.tempOptions = state.tempOptions.filter((x) => x.id !== o.id))}
 														>×</Button
 													>
@@ -546,7 +588,7 @@
 											<Button
 												variant="ghost"
 												size="sm"
-												on:click={() =>
+												onclick={() =>
 													(state.tempOptions = [
 														...state.tempOptions,
 														{
@@ -560,18 +602,26 @@
 												Add option
 											</Button>
 										</div>
+									{:else if state.newQuestionData.question_type === 'year'}
+										<Input
+											type="text"
+											inputmode="numeric"
+											placeholder="Correct year, e.g. 1997"
+											value={state.tempOptions[0]?.option_text ?? ''}
+											oninput={(e) => setDraftYear(e.currentTarget.value)}
+										/>
 									{/if}
 								</Table.Cell>
 
 								<Table.Cell><Switch bind:checked={state.newQuestionData.is_active} /></Table.Cell>
 								<Table.Cell class="text-right">
 									<div class="flex justify-end gap-2">
-										<Button size="sm" variant="outline" on:click={handleSaveQuestion}>Save</Button>
+										<Button size="sm" variant="outline" onclick={handleSaveQuestion}>Save</Button>
 										<Button
 											size="sm"
 											variant="outline"
 											class="text-red-600"
-											on:click={handleCancelAdd}>Cancel</Button
+											onclick={handleCancelAdd}>Cancel</Button
 										>
 									</div>
 								</Table.Cell>
@@ -579,7 +629,7 @@
 						{/if}
 
 						<!-- existing rows -->
-						{#each paginatedData() as q (q.id)}
+						{#each paginatedData as q (q.id)}
 							<Table.Row class="hover:bg-gray-50 dark:hover:bg-gray-800">
 								<Table.Cell>{q.id}</Table.Cell>
 								<Table.Cell>
@@ -603,9 +653,7 @@
 									{#if q.image_url}
 										<div class="mb-2">
 											<img
-												src={PUBLIC_SPEKTRUM_CDN_URL
-													? `${PUBLIC_SPEKTRUM_CDN_URL}/${q.image_url}`
-													: q.image_url}
+												src={mediaUrl(q.image_url)}
 												alt="Question"
 												class="h-12 w-12 rounded object-cover"
 											/>
@@ -622,28 +670,30 @@
 
 								<!-- option column -->
 								<Table.Cell class="w-[400px] min-w-[200px]">
-									{#if q.question_type === QuestionType.Character}
+									{#if q.question_type === 'character'}
 										<!-- character viewer -->
 										<div
+											role="region"
+											aria-label="Character options, drop characters here"
 											class="flex min-h-[60px] flex-wrap gap-2 rounded-lg border-2 border-dashed border-gray-300 p-2"
 											ondragover={(e) => e.preventDefault()}
 											ondrop={(e) => handleDrop(e, q.id)}
 										>
-											{#each getQuestionOptions(q.id) as opt}
+											{#each getQuestionOptions(q.id) as opt (opt.id)}
 												{@const char = adminStore
 													.getState()
 													.characters.find((c: Character) => c.name === opt.option_text)}
 												<div class="group relative">
-													<div
+													<button
+														type="button"
+														aria-pressed={opt.is_correct}
 														class="flex cursor-pointer flex-col items-center"
 														onclick={() => toggleCorrectOption(opt)}
 													>
 														<img
-															src={char?._pendingImage?.dataUrl ||
-																(char?.image_url && PUBLIC_SPEKTRUM_CDN_URL
-																	? `${PUBLIC_SPEKTRUM_CDN_URL}/${char.image_url}`
-																	: char?.image_url) ||
-																`/img/${opt.option_text}.avif`}
+															src={char
+																? characterImageSrc(char)
+																: mediaUrl(`img/${opt.option_text}.avif`)}
 															alt={opt.option_text}
 															class="h-12 w-12 rounded transition-transform hover:scale-105"
 															class:ring-2={opt.is_correct}
@@ -653,9 +703,11 @@
 															class="mt-1 w-12 truncate text-center text-xs"
 															class:text-green-600={opt.is_correct}>{opt.option_text}</span
 														>
-													</div>
+													</button>
 													<button
-														class="absolute -right-2 -top-2 hidden h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white group-hover:flex"
+														type="button"
+														aria-label="Remove option"
+														class="absolute -top-2 -right-2 hidden h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white group-hover:flex"
 														onclick={(e) => {
 															e.stopPropagation();
 															removeOption(q.id, opt.id);
@@ -664,10 +716,10 @@
 												</div>
 											{/each}
 										</div>
-									{:else if q.question_type === QuestionType.Text}
+									{:else if q.question_type === 'text'}
 										<!-- text options w/EditableInput -->
 										<div class="flex flex-col gap-2">
-											{#each getQuestionOptions(q.id) as opt}
+											{#each getQuestionOptions(q.id) as opt (opt.id)}
 												<div class="flex items-start gap-2">
 													<div
 														class="flex-1 rounded border-2 p-1"
@@ -687,36 +739,52 @@
 													<Button
 														size="icon"
 														variant="outline"
-														on:click={() => toggleCorrectOption(opt)}>✓</Button
+														onclick={() => toggleCorrectOption(opt)}>✓</Button
 													>
 													<Button
 														size="icon"
 														variant="outline"
 														class="text-red-600"
-														on:click={() => removeOption(q.id, opt.id)}>×</Button
+														onclick={() => removeOption(q.id, opt.id)}>×</Button
 													>
 												</div>
 											{/each}
 											<Button
 												variant="ghost"
 												size="sm"
-												on:click={() =>
+												onclick={() =>
 													adminStore.addEntity('options', {
-														id: Math.max(0, ...adminStore.getState().options.map((o) => o.id)) + 1,
 														question_id: q.id,
 														option_text: '',
 														is_correct: false
 													})}>Add option</Button
 											>
 										</div>
+									{:else if q.question_type === 'year'}
+										{@const yearOption = getQuestionOptions(q.id)[0]}
+										<EditableInput
+											value={yearOption?.option_text ?? ''}
+											inputmode="numeric"
+											placeholder="Correct year"
+											onCommit={(v) => setYear(q.id, yearOption, v)}
+											onChange={() => {}}
+										/>
 									{:else}
 										<div>
-											{#each getQuestionOptions(q.id) as opt, i}
+											{#each getQuestionOptions(q.id) as opt, i (opt.id)}
 												<span class:text-green-600={opt.is_correct}>
 													{opt.option_text}{i < getQuestionOptions(q.id).length - 1 ? ', ' : ''}
 												</span>
 											{/each}
 										</div>
+									{/if}
+									{@const problem = questionProblem(
+										q.question_type,
+										q.question_text,
+										getQuestionOptions(q.id)
+									)}
+									{#if problem}
+										<p class="mt-1 text-xs text-red-600">{problem} It is skipped in games.</p>
 									{/if}
 								</Table.Cell>
 
@@ -738,7 +806,7 @@
 										variant="outline"
 										size="sm"
 										class="text-red-600"
-										on:click={() => handleDeleteQuestion(q.id)}>Delete</Button
+										onclick={() => handleDeleteQuestion(q.id)}>Delete</Button
 									>
 								</Table.Cell>
 							</Table.Row>
@@ -750,14 +818,14 @@
 			<Pagination
 				currentPage={state.currentPage}
 				{totalPages}
-				totalItems={filteredData().length}
+				totalItems={filteredData.length}
 				itemsPerPage={state.itemsPerPage}
 				onPageChange={(p) => (state.currentPage = p)}
 			/>
 		</TableContainer>
 	</div>
 
-	{#if showCharacterBank()}
+	{#if showCharacterBank}
 		<div class="h-1/2">
 			<CharacterBank />
 		</div>

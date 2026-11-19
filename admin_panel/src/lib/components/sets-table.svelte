@@ -1,29 +1,26 @@
 <script lang="ts">
-	import * as Table from '$lib/components/ui/table';
-	import { Button } from '$lib/components/ui/button';
-	import { adminStore } from '$lib/stores/data-manager.svelte';
-	import type { QuestionOption, QuestionSet, Question } from '$lib/types';
+	import * as Table from '#lib/components/ui/table/index.ts';
+	import { Button } from '#lib/components/ui/button/index.ts';
+	import { adminStore } from '#lib/stores/data-manager.svelte.ts';
+	import type { Question } from '#lib/generated/Question.ts';
+	import type { QuestionOption } from '#lib/generated/QuestionOption.ts';
+	import type { QuestionSet } from '#lib/generated/QuestionSet.ts';
 	import TableContainer from './table/table-container.svelte';
 	import SearchInput from './table/search-input.svelte';
 	import Pagination from './table/pagination.svelte';
 	import EditableInput from './table/editable-input.svelte';
-	import { Checkbox } from '$lib/components/ui/checkbox';
-	import { Separator } from '$lib/components/ui/separator';
+	import { Checkbox } from '#lib/components/ui/checkbox/index.ts';
+	import { SvelteSet } from 'svelte/reactivity';
 
 	const state = $state({
 		currentPage: 0,
 		itemsPerPage: 10,
 		searchTerm: '',
 		isAddingSet: false,
-		editingValues: new Map<string, string>(),
-		newSetData: {
-			id: 0,
-			name: '',
-			question_ids: []
-		} as Partial<QuestionSet>,
+		newSetData: { name: '', question_ids: [] } as Omit<QuestionSet, 'id'>,
 		editingSet: null as QuestionSet | null,
 		questionSearch: '',
-		selectedQuestionIds: new Set<number>(),
+		selectedQuestionIds: new SvelteSet<number>(),
 		bulkActionState: 'none' as 'none' | 'select' | 'deselect',
 		splitView: false,
 		selectedSearch: '',
@@ -31,7 +28,7 @@
 	});
 
 	// Derived state
-	const filteredData = $derived(() => {
+	const filteredData = $derived.by(() => {
 		const sets = adminStore.getState().sets;
 		return sets.filter(
 			(set) =>
@@ -40,10 +37,10 @@
 		);
 	});
 
-	const totalPages = $derived(Math.ceil(filteredData().length / state.itemsPerPage));
+	const totalPages = $derived(Math.ceil(filteredData.length / state.itemsPerPage));
 
-	const paginatedData = $derived(() => {
-		return filteredData().slice(
+	const paginatedData = $derived.by(() => {
+		return filteredData.slice(
 			state.currentPage * state.itemsPerPage,
 			(state.currentPage + 1) * state.itemsPerPage
 		);
@@ -60,7 +57,7 @@
 		}, new Map<number, QuestionOption[]>())
 	);
 
-	const filteredQuestions = $derived(() => {
+	const filteredQuestions = $derived.by(() => {
 		if (!state.editingSet) return [];
 		const searchLower = state.questionSearch.toLowerCase();
 		return allQuestions.filter((q) => {
@@ -76,7 +73,7 @@
 	});
 
 	const allFilteredSelected = $derived(
-		filteredQuestions().every((q) => state.selectedQuestionIds.has(q.id))
+		filteredQuestions.every((q) => state.selectedQuestionIds.has(q.id))
 	);
 
 	const allSelectedQuestions = $derived(
@@ -106,72 +103,28 @@
 	}
 
 	function getQuestionDetails(questionIds: number[]) {
-		return questionIds
-			.map((id) => {
-				const question = allQuestions.find((q) => q.id === id);
-				if (!question) return null;
-				const media = mediaMap.get(question.media_id);
-				return { question, media };
-			})
-			.filter(Boolean);
-	}
-
-	function getEditKey(id: number, field: string): string {
-		return `${id}-${field}`;
-	}
-
-	function getEditingValue(id: number, field: keyof QuestionSet, currentValue: string): string {
-		const editKey = getEditKey(id, field);
-		return state.editingValues.has(editKey) ? state.editingValues.get(editKey)! : currentValue;
-	}
-
-	function handleSetFieldChange(id: number, field: keyof QuestionSet, value: string) {
-		const editKey = getEditKey(id, field);
-		state.editingValues.set(editKey, value);
-	}
-
-	function commitChanges(id: number, field: keyof QuestionSet) {
-		const editKey = getEditKey(id, field);
-		const newValue = state.editingValues.get(editKey);
-
-		if (newValue !== undefined) {
-			adminStore.modifyEntity('sets', id, { [field]: newValue });
-			state.editingValues.delete(editKey);
-		}
-	}
-
-	function handleKeyDown(
-		event: KeyboardEvent & { currentTarget: HTMLInputElement },
-		id: number,
-		field: keyof QuestionSet
-	) {
-		if (event.key === 'Enter') {
-			commitChanges(id, field);
-			event.currentTarget.blur();
-		}
+		return questionIds.flatMap((id) => {
+			const question = allQuestions.find((q) => q.id === id);
+			return question ? [{ question, media: mediaMap.get(question.media_id) }] : [];
+		});
 	}
 
 	function handleAddSet() {
-		const maxId = Math.max(0, ...adminStore.getState().sets.map((s) => s.id));
-		state.newSetData = {
-			id: maxId + 1,
-			name: '',
-			question_ids: []
-		};
+		state.newSetData = { name: '', question_ids: [] };
 		state.isAddingSet = true;
 	}
 
 	function handleSaveSet() {
 		if (state.newSetData.name) {
-			adminStore.addEntity('sets', state.newSetData as QuestionSet);
+			adminStore.addEntity('sets', state.newSetData);
 			state.isAddingSet = false;
-			state.newSetData = { id: 0, name: '', question_ids: [] };
+			state.newSetData = { name: '', question_ids: [] };
 		}
 	}
 
 	function handleCancelAdd() {
 		state.isAddingSet = false;
-		state.newSetData = { id: 0, name: '', question_ids: [] };
+		state.newSetData = { name: '', question_ids: [] };
 	}
 
 	function handleDeleteSet(setId: number) {
@@ -180,7 +133,7 @@
 
 	function startEditSet(set: QuestionSet) {
 		state.editingSet = { ...set };
-		state.selectedQuestionIds = new Set(set.question_ids);
+		state.selectedQuestionIds = new SvelteSet(set.question_ids);
 		state.questionSearch = '';
 	}
 
@@ -203,20 +156,26 @@
 	}
 
 	function toggleQuestionSelection(id: number) {
-		const newSelection = new Set(state.selectedQuestionIds);
-		newSelection.has(id) ? newSelection.delete(id) : newSelection.add(id);
-		state.selectedQuestionIds = newSelection;
+		const selected = state.selectedQuestionIds;
+		if (selected.has(id)) {
+			selected.delete(id);
+		} else {
+			selected.add(id);
+		}
 	}
 
 	function toggleAllFiltered() {
-		const newSelection = new Set(state.selectedQuestionIds);
-		const currentlyAllSelected = filteredQuestions().every((q) => newSelection.has(q.id));
+		const selected = state.selectedQuestionIds;
+		const questions = filteredQuestions;
+		const currentlyAllSelected = questions.every((q) => selected.has(q.id));
 
-		filteredQuestions().forEach((q) => {
-			currentlyAllSelected ? newSelection.delete(q.id) : newSelection.add(q.id);
-		});
-
-		state.selectedQuestionIds = newSelection;
+		for (const q of questions) {
+			if (currentlyAllSelected) {
+				selected.delete(q.id);
+			} else {
+				selected.add(q.id);
+			}
+		}
 	}
 
 	function handleManageQuestions(set: QuestionSet) {
@@ -224,23 +183,19 @@
 	}
 
 	function deselectAllFiltered() {
-		const newSelection = new Set(state.selectedQuestionIds);
-		filteredSelected.forEach((q) => newSelection.delete(q.id));
-		state.selectedQuestionIds = newSelection;
+		for (const q of filteredSelected) state.selectedQuestionIds.delete(q.id);
 	}
 
 	function selectAllFiltered() {
-		const newSelection = new Set(state.selectedQuestionIds);
-		filteredUnselected.forEach((q) => newSelection.add(q.id));
-		state.selectedQuestionIds = newSelection;
+		for (const q of filteredUnselected) state.selectedQuestionIds.add(q.id);
 	}
 </script>
 
 <TableContainer>
-	<svelte:fragment slot="header-left">
+	{#snippet headerLeft()}
 		{#if state.editingSet}
 			<div class="flex items-center gap-2">
-				<Button variant="outline" size="sm" on:click={cancelEdit}>← Back</Button>
+				<Button variant="outline" size="sm" onclick={cancelEdit}>← Back</Button>
 				{#if !state.splitView}
 					<SearchInput
 						value={state.questionSearch}
@@ -248,7 +203,7 @@
 						onInput={(value) => (state.questionSearch = value)}
 					/>
 				{/if}
-				<Button variant="outline" size="sm" on:click={() => (state.splitView = !state.splitView)}>
+				<Button variant="outline" size="sm" onclick={() => (state.splitView = !state.splitView)}>
 					{state.splitView ? 'Single View' : 'Split View'}
 				</Button>
 			</div>
@@ -262,31 +217,31 @@
 				}}
 			/>
 		{/if}
-	</svelte:fragment>
+	{/snippet}
 
-	<svelte:fragment slot="header-right">
+	{#snippet headerRight()}
 		{#if state.editingSet}
-			<Button on:click={saveSetQuestions}>Save Changes</Button>
+			<Button onclick={saveSetQuestions}>Save Changes</Button>
 		{:else}
 			<div class="flex gap-2">
-				<Button on:click={handleAddSet}>Add Set</Button>
+				<Button onclick={handleAddSet}>Add Set</Button>
 				<Button
 					variant="outline"
 					disabled={!adminStore.canUndo()}
-					on:click={() => adminStore.undo()}
+					onclick={() => adminStore.undo()}
 				>
 					Undo
 				</Button>
 				<Button
 					variant="outline"
 					disabled={!adminStore.canRedo()}
-					on:click={() => adminStore.redo()}
+					onclick={() => adminStore.redo()}
 				>
 					Redo
 				</Button>
 			</div>
 		{/if}
-	</svelte:fragment>
+	{/snippet}
 
 	{#if state.editingSet}
 		{#if state.splitView}
@@ -307,7 +262,7 @@
 										variant="outline"
 										size="icon"
 										class="h-7 w-7"
-										on:click={deselectAllFiltered}
+										onclick={deselectAllFiltered}
 										disabled={filteredSelected.length === 0}
 									>
 										→
@@ -321,7 +276,7 @@
 							</Table.Row>
 						</Table.Header>
 						<Table.Body>
-							{#each filteredSelected as question}
+							{#each filteredSelected as question (question.id)}
 								<Table.Row>
 									<Table.Cell class="h-14">
 										<Checkbox
@@ -368,7 +323,7 @@
 										variant="outline"
 										size="icon"
 										class="h-7 w-7"
-										on:click={selectAllFiltered}
+										onclick={selectAllFiltered}
 										disabled={filteredUnselected.length === 0}
 									>
 										←
@@ -382,7 +337,7 @@
 							</Table.Row>
 						</Table.Header>
 						<Table.Body>
-							{#each filteredUnselected as question}
+							{#each filteredUnselected as question (question.id)}
 								<Table.Row>
 									<Table.Cell class="h-14">
 										<Checkbox
@@ -428,7 +383,7 @@
 					</Table.Row>
 				</Table.Header>
 				<Table.Body>
-					{#each filteredQuestions() as question}
+					{#each filteredQuestions as question (question.id)}
 						<Table.Row>
 							<Table.Cell class="h-14">
 								<Checkbox
@@ -471,7 +426,7 @@
 			<Table.Body>
 				{#if state.isAddingSet}
 					<Table.Row class="bg-blue-50 dark:bg-gray-800">
-						<Table.Cell>{state.newSetData.id}</Table.Cell>
+						<Table.Cell class="text-muted-foreground">New</Table.Cell>
 						<Table.Cell>
 							<EditableInput
 								value={state.newSetData.name || ''}
@@ -483,12 +438,12 @@
 						<Table.Cell>0 questions</Table.Cell>
 						<Table.Cell class="text-right">
 							<div class="flex justify-end gap-2">
-								<Button variant="outline" size="sm" on:click={handleSaveSet}>Save</Button>
+								<Button variant="outline" size="sm" onclick={handleSaveSet}>Save</Button>
 								<Button
 									variant="outline"
 									size="sm"
 									class="text-red-600 hover:bg-red-50 hover:dark:bg-red-800"
-									on:click={handleCancelAdd}
+									onclick={handleCancelAdd}
 								>
 									Cancel
 								</Button>
@@ -497,15 +452,14 @@
 					</Table.Row>
 				{/if}
 
-				{#each paginatedData() as set (set.id)}
+				{#each paginatedData as set (set.id)}
 					{@const questionDetails = getQuestionDetails(set.question_ids)}
 					<Table.Row>
 						<Table.Cell>{set.id}</Table.Cell>
 						<Table.Cell>
 							<EditableInput
-								value={getEditingValue(set.id, 'name', set.name)}
-								onChange={(value) => handleSetFieldChange(set.id, 'name', value)}
-								onCommit={(value) => commitChanges(set.id, 'name')}
+								value={set.name}
+								onCommit={(name) => adminStore.modifyEntity('sets', set.id, { name })}
 							/>
 						</Table.Cell>
 						<Table.Cell>
@@ -516,7 +470,7 @@
 									>
 										{set.question_ids.length} questions
 									</span>
-									<Button variant="outline" size="sm" on:click={() => handleManageQuestions(set)}>
+									<Button variant="outline" size="sm" onclick={() => handleManageQuestions(set)}>
 										Manage
 									</Button>
 								</div>
@@ -525,13 +479,11 @@
 										<details>
 											<summary class="cursor-pointer">Show questions</summary>
 											<div class="mt-2 space-y-1">
-												{#each questionDetails as detail}
-													{#if detail}
-														<div class="flex items-center gap-2">
-															<span class="font-medium">{detail.media?.title}:</span>
-															{detail.question.question_text || 'No question text'}
-														</div>
-													{/if}
+												{#each questionDetails as detail (detail.question.id)}
+													<div class="flex items-center gap-2">
+														<span class="font-medium">{detail.media?.title}:</span>
+														{detail.question.question_text || 'No question text'}
+													</div>
 												{/each}
 											</div>
 										</details>
@@ -545,7 +497,7 @@
 									variant="outline"
 									size="sm"
 									class="text-red-600 hover:bg-red-50 hover:dark:bg-red-800"
-									on:click={() => handleDeleteSet(set.id)}
+									onclick={() => handleDeleteSet(set.id)}
 								>
 									Delete
 								</Button>
@@ -561,7 +513,7 @@
 		<Pagination
 			currentPage={state.currentPage}
 			{totalPages}
-			totalItems={filteredData().length}
+			totalItems={filteredData.length}
 			itemsPerPage={state.itemsPerPage}
 			onPageChange={(page) => (state.currentPage = page)}
 		/>

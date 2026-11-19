@@ -24,10 +24,11 @@ The quiz at https://melodiquiz.se features a mix of Anglosphere and Swedish musi
 git clone https://github.com/kottz/spektrum
 cd server
 cp env.example .env
+set -a && . ./.env && set +a   # the server reads its settings from the environment
 cargo run --release
 ```
 
-See `env.example` for configuration options.
+See `env.example` for configuration options. With [just](https://github.com/casey/just) installed, `just dev-server` does the same in debug mode, and `just check` runs every check CI runs.
 
 ### Frontend Setup
 
@@ -35,7 +36,7 @@ See `env.example` for configuration options.
 cd frontend
 cp env.example .env.development
 cp env.example .env.production
-npm run dev --host    # Development
+npm run dev -- --host # Development
 npm run build         # Production
 ```
 
@@ -49,12 +50,12 @@ There is also a separate admin panel you can use as a convenient way to add and 
 cd admin_panel
 cp env.example .env.development
 cp env.example .env.production
-npm run dev --host    # Development
+npm run dev -- --host # Development
 npm run build         # Production
 ```
 
 See `env.example` for configuration options.
-Questions are stored in `server/data` as a JSON file. The game supports two types of questions:
+Questions are stored in `server/data` as a JSON file. The game supports four types of questions:
 
 **Color** questions require:
 - Media (Song with a YouTube-link)
@@ -64,3 +65,11 @@ Questions are stored in `server/data` as a JSON file. The game supports two type
 - Media (Song with a YouTube-link)
 - Six different character options per question
 - 300x300 AVIF image for each character
+
+**Text** questions require:
+- Media (Song with a YouTube-link)
+- Question text and text answer options, at least one marked correct
+
+**Year** questions require:
+- Media (Song with a YouTube-link)
+- One correct option holding the year; players pick from that year ±2

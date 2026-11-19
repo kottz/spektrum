@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { streamStore } from '$lib/stores/stream.store.svelte';
-	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
-	import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
+	import { streamStore } from '#lib/stores/stream.store.svelte.ts';
+	import { Card, CardContent, CardHeader, CardTitle } from '#lib/components/ui/card/index.ts';
+	import { ScrollArea } from '#lib/components/ui/scroll-area/index.ts';
 
 	const gameState = $derived(streamStore.state.gameState);
 	const players = $derived(gameState?.realtimeScoreboard || []);

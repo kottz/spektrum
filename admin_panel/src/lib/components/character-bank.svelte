@@ -1,17 +1,14 @@
 <script lang="ts">
-	import { Input } from '$lib/components/ui/input';
-	import { PUBLIC_SPEKTRUM_CDN_URL } from '$env/static/public';
-	import { ScrollArea } from '$lib/components/ui/scroll-area';
-	import { adminStore } from '$lib/stores/data-manager.svelte';
-	import UploadDialog from '$lib/components/character-upload-dialog.svelte';
-	import { Button } from '$lib/components/ui/button';
-
-	let { className = '' } = $props();
+	import { Input } from '#lib/components/ui/input/index.ts';
+	import { ScrollArea } from '#lib/components/ui/scroll-area/index.ts';
+	import { adminStore } from '#lib/stores/data-manager.svelte.ts';
+	import UploadDialog from '#lib/components/character-upload-dialog.svelte';
+	import { Button } from '#lib/components/ui/button/index.ts';
+	import { characterImageSrc } from '#lib/media.ts';
 
 	const state = $state({
 		searchTerm: '',
 		hoveredCharacter: null as number | null,
-		cachedUsage: new Set<number>(),
 		sortKey: 'id' as 'id' | 'name',
 		sortDirection: 'asc' as 'asc' | 'desc'
 	});
@@ -27,21 +24,8 @@
 		}
 	}
 
-	function isCharacterUsed(characterId: number): boolean {
-		if (state.cachedUsage.has(characterId)) {
-			return true;
-		}
-
-		const character = store.characters.find((c) => c.id === characterId);
-		if (!character || state.hoveredCharacter !== characterId) return false;
-
-		const isUsed = store.options.some((opt) => opt.option_text === character.name);
-
-		if (isUsed) {
-			state.cachedUsage.add(characterId);
-		}
-		return isUsed;
-	}
+	/** Names referenced by any option; a used character cannot be deleted. */
+	const usedNames = $derived(new Set(store.options.map((opt) => opt.option_text)));
 
 	function handleDragStart(e: DragEvent, char: string) {
 		if (e.dataTransfer) {
@@ -58,18 +42,13 @@
 
 	function deleteCharacter(id: number) {
 		adminStore.deleteEntity('characters', id);
-		state.cachedUsage.delete(id);
 	}
 
-	const filteredCharacters = $derived(() => {
+	const filteredCharacters = $derived.by(() => {
 		const searchLower = state.searchTerm.toLowerCase();
 		return store.characters
 			.filter((c) => c.name.toLowerCase().includes(searchLower))
-			.map((c) => ({
-				...c,
-				image_url: c._pendingImage?.dataUrl || c.image_url,
-				isPending: !!c._pendingImage
-			}))
+			.map((c) => ({ ...c, isPending: !!c._pendingImage }))
 			.sort((a, b) => {
 				if (state.sortKey === 'id') {
 					return state.sortDirection === 'asc' ? a.id - b.id : b.id - a.id;
@@ -84,7 +63,7 @@
 	});
 </script>
 
-<div class={`rounded-md border ${className} flex h-full flex-col`}>
+<div class="flex h-full flex-col rounded-md border">
 	<!-- Header -->
 	<div class="flex-none border-b p-4">
 		<div class="flex items-center justify-between">
@@ -93,7 +72,7 @@
 				<div class="flex items-center gap-2">
 					<div class="flex items-center gap-1">
 						ID
-						<Button variant="ghost" size="sm" on:click={() => handleSort('id')}>
+						<Button variant="ghost" size="sm" onclick={() => handleSort('id')}>
 							{#if state.sortKey === 'id'}
 								{state.sortDirection === 'asc' ? '↑' : '↓'}
 							{:else}
@@ -103,7 +82,7 @@
 					</div>
 					<div class="flex w-16 items-center gap-1">
 						A-Z
-						<Button variant="ghost" size="sm" on:click={() => handleSort('name')}>
+						<Button variant="ghost" size="sm" onclick={() => handleSort('name')}>
 							{#if state.sortKey === 'name'}
 								{state.sortDirection === 'asc' ? '↑' : '↓'}
 							{:else}
@@ -117,7 +96,7 @@
 				type="text"
 				placeholder="Search characters..."
 				bind:value={state.searchTerm}
-				class="ml-4 mr-4 w-full"
+				class="mr-4 ml-4 w-full"
 			/>
 			<UploadDialog />
 		</div>
@@ -126,7 +105,7 @@
 	<!-- Content -->
 	<ScrollArea class="flex-1">
 		<div class="grid grid-cols-12 gap-4 p-4" role="listbox" aria-label="Available characters">
-			{#each filteredCharacters() as char (char.id)}
+			{#each filteredCharacters as char (char.id)}
 				<div
 					class="group relative cursor-grab transition-transform hover:scale-105"
 					draggable="true"
@@ -140,20 +119,11 @@
 					onmouseleave={() => (state.hoveredCharacter = null)}
 				>
 					{#if char.image_url?.endsWith('.webm')}
-						<video
-							src={PUBLIC_SPEKTRUM_CDN_URL
-								? `${PUBLIC_SPEKTRUM_CDN_URL}/${char.image_url}`
-								: char.image_url}
-							class="w-full rounded-lg"
-							autoplay
-							loop
-							muted
+						<video src={characterImageSrc(char)} class="w-full rounded-lg" autoplay loop muted
 						></video>
 					{:else}
 						<img
-							src={PUBLIC_SPEKTRUM_CDN_URL
-								? `${PUBLIC_SPEKTRUM_CDN_URL}/${char.image_url}`
-								: char.image_url}
+							src={characterImageSrc(char)}
 							alt={char.name}
 							class="w-full rounded-lg"
 							loading="lazy"
@@ -168,9 +138,9 @@
 					</div>
 
 					{#if state.hoveredCharacter === char.id}
-						{#if !isCharacterUsed(char.id)}
+						{#if !usedNames.has(char.name)}
 							<button
-								class="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white"
+								class="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white"
 								onclick={(e) => {
 									e.stopPropagation();
 									deleteCharacter(char.id);
@@ -180,7 +150,7 @@
 							</button>
 						{:else}
 							<div
-								class="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-gray-500 text-xs text-white"
+								class="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-gray-500 text-xs text-white"
 							>
 								<span class="mt-px">×</span>
 							</div>
@@ -188,7 +158,7 @@
 					{/if}
 				</div>
 			{/each}
-			{#if filteredCharacters().length === 0}
+			{#if filteredCharacters.length === 0}
 				<div class="col-span-12 mt-4 text-center text-gray-500">No characters found</div>
 			{/if}
 		</div>

@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { PUBLIC_SPEKTRUM_SERVER_URL } from '$env/static/public';
-	import { env } from '$env/dynamic/public';
-	import { adminStore } from '$lib/stores/data-manager.svelte';
-	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
+	import { PUBLIC_DEV_ADMIN_PASSWORD } from '$app/env/public';
+	import { adminStore } from '#lib/stores/data-manager.svelte.ts';
+	import { Card, CardContent, CardHeader, CardTitle } from '#lib/components/ui/card/index.ts';
+	import { Button } from '#lib/components/ui/button/index.ts';
+	import { Input } from '#lib/components/ui/input/index.ts';
+	import { api, ApiError } from '#lib/api.ts';
 
 	const isDev = import.meta.env.DEV;
 	const state = $state({
@@ -18,17 +18,13 @@
 			state.isSubmitting = true;
 			state.error = null;
 
-			const response = await fetch(`${PUBLIC_SPEKTRUM_SERVER_URL}/api/questions`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ password: authPassword })
-			});
-
-			if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-			const data = await response.json();
-			adminStore.setData(data);
+			adminStore.setData(await api.getStoredData({ password: authPassword }));
 		} catch (error) {
-			state.error = error instanceof Error ? error.message : 'Failed to load data';
+			if (error instanceof ApiError && error.status === 401) {
+				state.error = 'Wrong password';
+			} else {
+				state.error = error instanceof Error ? error.message : 'Failed to load data';
+			}
 		} finally {
 			state.isSubmitting = false;
 		}
@@ -39,26 +35,24 @@
 		fetchData(state.password);
 	}
 
-	if (isDev && env.PUBLIC_DEV_ADMIN_PASSWORD) {
-		fetchData(env.PUBLIC_DEV_ADMIN_PASSWORD);
+	if (isDev && PUBLIC_DEV_ADMIN_PASSWORD) {
+		fetchData(PUBLIC_DEV_ADMIN_PASSWORD);
 	}
 </script>
 
-{#if !isDev && adminStore.getState().media.length === 0}
-	<Card>
-		<CardHeader>
-			<CardTitle>Authentication Required</CardTitle>
-		</CardHeader>
-		<CardContent>
-			<form onsubmit={handleSubmit} class="space-y-4">
-				<Input type="password" bind:value={state.password} placeholder="Enter admin password" />
-				{#if state.error}
-					<div class="text-sm text-red-500">{state.error}</div>
-				{/if}
-				<Button type="submit" class="w-full" disabled={state.isSubmitting}>
-					{state.isSubmitting ? 'Loading...' : 'Submit'}
-				</Button>
-			</form>
-		</CardContent>
-	</Card>
-{/if}
+<Card>
+	<CardHeader>
+		<CardTitle>Authentication Required</CardTitle>
+	</CardHeader>
+	<CardContent>
+		<form onsubmit={handleSubmit} class="space-y-4">
+			<Input type="password" bind:value={state.password} placeholder="Enter admin password" />
+			{#if state.error}
+				<div class="text-sm text-red-500">{state.error}</div>
+			{/if}
+			<Button type="submit" class="w-full" disabled={state.isSubmitting}>
+				{state.isSubmitting ? 'Loading...' : 'Submit'}
+			</Button>
+		</form>
+	</CardContent>
+</Card>

@@ -1,14 +1,11 @@
-interface ApiErrorBody {
-	error?: unknown;
-	details?: unknown;
-}
+import type { ErrorResponse } from '#lib/generated/ErrorResponse.ts';
 
 export async function getResponseError(response: Response, fallback: string): Promise<string> {
 	const contentType = response.headers.get('content-type') ?? '';
 
 	try {
 		if (contentType.includes('application/json')) {
-			const body = (await response.json()) as ApiErrorBody;
+			const body = (await response.json()) as Partial<ErrorResponse>;
 			if (typeof body.details === 'string' && body.details) return body.details;
 			if (typeof body.error === 'string' && body.error) return body.error;
 		} else if (contentType.startsWith('text/plain')) {

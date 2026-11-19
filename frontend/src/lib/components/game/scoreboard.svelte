@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { gameStore } from '$lib/stores/game.svelte';
-	import { Button } from '$lib/components/ui/button';
-	import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
-	import { gameActions } from '$lib/stores/game-actions';
+	import { gameStore } from '#lib/stores/game.svelte.ts';
+	import { Button } from '#lib/components/ui/button/index.ts';
+	import { ScrollArea } from '#lib/components/ui/scroll-area/index.ts';
+	import { gameActions } from '#lib/stores/game-actions.ts';
 
 	const PAGE_SIZE = 25;
 

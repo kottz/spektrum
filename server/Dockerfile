@@ -30,5 +30,5 @@ COPY --from=builder /app/target/release/spektrum /usr/local/bin/
 USER spektrum
 WORKDIR /data
 
-EXPOSE 8080
+EXPOSE 8765
 ENTRYPOINT ["/usr/local/bin/spektrum"]

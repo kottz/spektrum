@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { gameStore } from '$lib/stores/game.svelte';
+	import { gameStore } from '#lib/stores/game.svelte.ts';
 	import { gameActions } from '../../stores/game-actions';
-	import { Card, CardContent } from '$lib/components/ui/card';
+	import { Card, CardContent } from '#lib/components/ui/card/index.ts';
 	import AnswerProgress from './answer-progress.svelte';
 	import RoundTimer from './round-timer.svelte';
-	import { PUBLIC_SPEKTRUM_CDN_URL } from '$env/static/public';
-	import { timerStore } from '$lib/stores/timer.svelte';
+	import { PUBLIC_SPEKTRUM_CDN_URL } from '$app/env/public';
+	import { timerStore } from '#lib/stores/timer.svelte.ts';
 
 	const imageBaseUrl = $derived(`${PUBLIC_SPEKTRUM_CDN_URL}/img`);
 
@@ -51,10 +51,11 @@
 	};
 
 	function handleAnswer(answer: string) {
-		if (!hasAnswered) {
+		// Lock the choice only once it actually reached the server; an answer
+		// dropped while reconnecting must leave the buttons usable
+		if (!hasAnswered && gameActions.submitAnswer(answer)) {
 			clickedAnswer = { key: currentQuestionKey, answer };
 			timerStore.stopTimer();
-			gameActions.submitAnswer(answer);
 		}
 	}
 
@@ -177,7 +178,7 @@
 			{/if}
 
 			<div class="grid gap-2 {questionType === 'text' ? 'grid-cols-2' : 'grid-cols-3'}">
-				{#each alternatives as alternative}
+				{#each alternatives as alternative (alternative)}
 					<button
 						class={getButtonStyles(alternative)}
 						disabled={hasAnswered || activeClickedAnswer !== null}

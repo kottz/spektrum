@@ -1,10 +1,10 @@
 <script lang="ts">
-	import * as Table from '$lib/components/ui/table';
-	import { Button } from '$lib/components/ui/button';
-	import { Textarea } from '$lib/components/ui/textarea';
-	import { adminStore } from '$lib/stores/data-manager.svelte';
-	import type { Media } from '$lib/types';
-	import { cn } from '$lib/utils';
+	import * as Table from '#lib/components/ui/table/index.ts';
+	import { Button } from '#lib/components/ui/button/index.ts';
+	import { Textarea } from '#lib/components/ui/textarea/index.ts';
+	import { adminStore } from '#lib/stores/data-manager.svelte.ts';
+	import type { Media } from '#lib/generated/Media.ts';
+	import { cn } from '#lib/utils.ts';
 	import TableContainer from './table/table-container.svelte';
 	import SearchInput from './table/search-input.svelte';
 	import Pagination from './table/pagination.svelte';
@@ -17,7 +17,6 @@
 		searchTerm: '',
 		isAddingMedia: false,
 		isAddingBulkMedia: false,
-		editingValues: new Map<string, string | number>(),
 		newMediaData: {
 			title: '',
 			artist: '',
@@ -31,7 +30,7 @@
 	});
 
 	// ----- Derived State -----
-	const filteredData = $derived(() => {
+	const filteredData = $derived.by(() => {
 		const data = adminStore.getState().media;
 		const filtered = data.filter((media) => {
 			const searchLower = state.searchTerm.toLowerCase();
@@ -64,10 +63,10 @@
 		});
 	});
 
-	const totalPages = $derived(Math.ceil(filteredData().length / state.itemsPerPage));
+	const totalPages = $derived(Math.ceil(filteredData.length / state.itemsPerPage));
 
-	const paginatedData = $derived(() => {
-		return filteredData().slice(
+	const paginatedData = $derived.by(() => {
+		return filteredData.slice(
 			state.currentPage * state.itemsPerPage,
 			(state.currentPage + 1) * state.itemsPerPage
 		);
@@ -99,15 +98,15 @@
 
 	function parseYoutubeLink(link: string): string {
 		if (!link) return '';
-		let match = link.match(/(?:https?:\/\/)?(?:www\.)?(?:m\.)?youtu\.be\/([^?&\/\s]+)/);
+		let match = link.match(/(?:https?:\/\/)?(?:www\.)?(?:m\.)?youtu\.be\/([^?&/\s]+)/);
 		if (match && match[1]) {
 			return match[1];
 		}
-		match = link.match(/(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([^&\/\s]+)/);
+		match = link.match(/(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([^&/\s]+)/);
 		if (match && match[1]) {
 			return match[1];
 		}
-		match = link.match(/(?:https?:\/\/)?(?:www\.)?youtube\.com\/embed\/([^?&\/\s]+)/);
+		match = link.match(/(?:https?:\/\/)?(?:www\.)?youtube\.com\/embed\/([^?&/\s]+)/);
 		if (match && match[1]) {
 			return match[1];
 		}
@@ -117,72 +116,32 @@
 		return '';
 	}
 
-	function getEditKey(id: number, field: string): string {
-		return `${id}-${field}`;
-	}
-
-	function getEditingValue(
-		id: number,
-		field: keyof Media,
-		currentValue: string | number | null | undefined
-	): string | number {
-		const editKey = getEditKey(id, field);
-		const storedValue = state.editingValues.get(editKey);
-		return storedValue !== undefined ? storedValue : (currentValue ?? '');
-	}
-
 	// ----- Edit Handlers -----
-	function handleMediaFieldChange(id: number, field: keyof Media, value: string | number) {
-		const editKey = getEditKey(id, field);
-		state.editingValues.set(editKey, value);
-	}
+	// The input holds the draft; a field is written to the store only on commit
+	type EditableMediaField = 'title' | 'artist' | 'release_year' | 'spotify_uri' | 'youtube_id';
 
-	function commitChanges(id: number, field: keyof Media) {
-		const editKey = getEditKey(id, field);
-		let newValue = state.editingValues.get(editKey);
-
-		if (newValue !== undefined) {
-			let processedValue = newValue;
-			if (field === 'spotify_uri' && typeof newValue === 'string') {
-				processedValue = parseSpotifyLink(newValue);
-			}
-			if (field === 'youtube_id' && typeof newValue === 'string') {
-				processedValue = parseYoutubeLink(newValue);
-			}
-			if (field === 'release_year' && typeof newValue === 'string') {
-				processedValue = parseInt(newValue) || new Date().getFullYear();
-			}
-			if (field === 'release_year' && typeof newValue === 'number' && isNaN(newValue)) {
-				processedValue = new Date().getFullYear();
-			}
-
-			adminStore.modifyEntity('media', id, { [field]: processedValue });
-			state.editingValues.delete(editKey);
+	function parseMediaField(field: EditableMediaField, raw: string) {
+		switch (field) {
+			case 'spotify_uri':
+				return parseSpotifyLink(raw);
+			case 'youtube_id':
+				return parseYoutubeLink(raw);
+			case 'release_year':
+				return parseInt(raw) || new Date().getFullYear();
+			default:
+				return raw;
 		}
 	}
 
-	function handleKeyDown(
-		event: KeyboardEvent & { currentTarget: HTMLInputElement },
-		id: number,
-		field: keyof Media
-	) {
-		if (event.key === 'Enter') {
-			commitChanges(id, field);
-			event.currentTarget.blur();
-		} else if (event.key === 'Escape') {
-			const editKey = getEditKey(id, field);
-			state.editingValues.delete(editKey);
-			event.currentTarget.blur();
-		}
+	function commitMediaField(id: number, field: EditableMediaField, raw: string) {
+		adminStore.modifyEntity('media', id, { [field]: parseMediaField(field, raw) });
 	}
 
 	// ----- Single Add Handlers -----
 	function handleAddMedia() {
 		state.isAddingBulkMedia = false;
 		state.bulkMediaInput = '';
-		const maxId = Math.max(0, ...adminStore.getState().media.map((m) => m.id));
 		state.newMediaData = {
-			id: maxId + 1,
 			title: '',
 			artist: '',
 			release_year: new Date().getFullYear(),
@@ -194,15 +153,14 @@
 
 	function handleSaveMedia() {
 		if (state.newMediaData.title?.trim() && state.newMediaData.artist?.trim()) {
-			const finalData: Media = {
+			const finalData: Omit<Media, 'id'> = {
 				...state.newMediaData,
-				id: state.newMediaData.id!,
 				title: state.newMediaData.title.trim(),
 				artist: state.newMediaData.artist.trim(),
 				release_year: state.newMediaData.release_year || new Date().getFullYear(),
 				spotify_uri: parseSpotifyLink(state.newMediaData.spotify_uri || ''),
 				youtube_id: parseYoutubeLink(state.newMediaData.youtube_id || '')
-			} as Media;
+			} as Omit<Media, 'id'>;
 
 			adminStore.addEntity('media', finalData);
 			state.isAddingMedia = false;
@@ -247,64 +205,47 @@
 			return;
 		}
 
-		const newMediaItems: Media[] = [];
-		let currentMaxId = Math.max(0, ...adminStore.getState().media.map((m) => m.id));
-		let validationFailed = false;
-		let errorLine = -1;
-		let errorMessage = '';
+		const newMediaItems: Omit<Media, 'id'>[] = [];
 
-		for (let i = 0; i < lines.length; i++) {
-			const line = lines[i];
+		for (const [i, line] of lines.entries()) {
+			const rejectLine = (message: string) => alert(`Line ${i + 1}: ${message}`);
 			const fields = line.split(',').map((f) => f.trim());
 
 			if (fields.length !== 5) {
-				validationFailed = true;
-				errorLine = i + 1;
-				errorMessage = `Expected 5 fields (Title, Artist, Year, Spotify, YouTube), but got ${fields.length}.`;
-				break;
+				rejectLine(
+					`Expected 5 fields (Title, Artist, Year, Spotify, YouTube), but got ${fields.length}.`
+				);
+				return;
 			}
 
 			const [title, artist, yearStr, spotifyInput, youtubeInput] = fields;
 
 			if (!title || !artist) {
-				validationFailed = true;
-				errorLine = i + 1;
-				errorMessage = `Title and Artist cannot be empty.`;
-				break;
+				rejectLine('Title and Artist cannot be empty.');
+				return;
 			}
 
 			const release_year = parseInt(yearStr);
 			if (isNaN(release_year) || release_year < 1000 || release_year > 3000) {
-				validationFailed = true;
-				errorLine = i + 1;
-				errorMessage = `Invalid Release Year: ${yearStr}. Must be a valid number.`;
-				break;
+				rejectLine(`Invalid Release Year: ${yearStr}. Must be a valid number.`);
+				return;
 			}
 
-			const spotify_uri = parseSpotifyLink(spotifyInput);
-			const youtube_id = parseYoutubeLink(youtubeInput);
-
-			currentMaxId++;
 			newMediaItems.push({
-				id: currentMaxId,
-				title: title,
-				artist: artist,
-				release_year: release_year,
-				spotify_uri: spotify_uri,
-				youtube_id: youtube_id,
-				created_at: new Date().toISOString(),
-				updated_at: new Date().toISOString()
+				title,
+				artist,
+				release_year,
+				spotify_uri: parseSpotifyLink(spotifyInput),
+				youtube_id: parseYoutubeLink(youtubeInput)
 			});
 		}
 
-		if (!validationFailed) {
-			newMediaItems.forEach((item) => {
-				adminStore.addEntity('media', item);
-			});
-
-			state.isAddingBulkMedia = false;
-			state.bulkMediaInput = '';
-		}
+		// One import is one undoable step
+		adminStore.startBatch();
+		newMediaItems.forEach((item) => adminStore.addEntity('media', item));
+		adminStore.commitBatch();
+		state.isAddingBulkMedia = false;
+		state.bulkMediaInput = '';
 	}
 
 	function handleCancelBulkAdd() {
@@ -321,18 +262,6 @@
 		adminStore.deleteEntity('media', mediaId);
 	}
 
-	function nextPage() {
-		if (state.currentPage < totalPages - 1) {
-			state.currentPage++;
-		}
-	}
-
-	function previousPage() {
-		if (state.currentPage > 0) {
-			state.currentPage--;
-		}
-	}
-
 	function handleSort(key: 'id' | 'title' | 'artist' | 'release_year') {
 		if (state.sortKey === key) {
 			state.sortDirection = state.sortDirection === 'asc' ? 'desc' : 'asc';
@@ -345,7 +274,7 @@
 </script>
 
 <TableContainer>
-	<svelte:fragment slot="header-left">
+	{#snippet headerLeft()}
 		<SearchInput
 			value={state.searchTerm}
 			placeholder="Search media by Title, Artist, or ID..."
@@ -354,20 +283,20 @@
 				state.currentPage = 0;
 			}}
 		/>
-	</svelte:fragment>
+	{/snippet}
 
-	<svelte:fragment slot="header-right">
+	{#snippet headerRight()}
 		<div class="flex gap-2">
-			<Button on:click={handleAddMedia} disabled={state.isAddingMedia || state.isAddingBulkMedia}
+			<Button onclick={handleAddMedia} disabled={state.isAddingMedia || state.isAddingBulkMedia}
 				>Add Media</Button
 			>
 			<Button
 				variant="secondary"
-				on:click={handleAddBulkMedia}
+				onclick={handleAddBulkMedia}
 				disabled={state.isAddingMedia || state.isAddingBulkMedia}>Add Bulk</Button
 			>
 		</div>
-	</svelte:fragment>
+	{/snippet}
 
 	<Table.Root>
 		<Table.Header>
@@ -375,7 +304,7 @@
 				<Table.Head>
 					<div class="flex items-center gap-1 whitespace-nowrap">
 						ID
-						<Button variant="ghost" size="icon" class="h-6 w-6" on:click={() => handleSort('id')}>
+						<Button variant="ghost" size="icon" class="h-6 w-6" onclick={() => handleSort('id')}>
 							{#if state.sortKey === 'id'}
 								{state.sortDirection === 'asc' ? '↑' : '↓'}
 							{:else}
@@ -387,12 +316,7 @@
 				<Table.Head>
 					<div class="flex items-center gap-1">
 						Title
-						<Button
-							variant="ghost"
-							size="icon"
-							class="h-6 w-6"
-							on:click={() => handleSort('title')}
-						>
+						<Button variant="ghost" size="icon" class="h-6 w-6" onclick={() => handleSort('title')}>
 							{#if state.sortKey === 'title'}
 								{state.sortDirection === 'asc' ? '↑' : '↓'}
 							{:else}
@@ -408,7 +332,7 @@
 							variant="ghost"
 							size="icon"
 							class="h-6 w-6"
-							on:click={() => handleSort('artist')}
+							onclick={() => handleSort('artist')}
 						>
 							{#if state.sortKey === 'artist'}
 								{state.sortDirection === 'asc' ? '↑' : '↓'}
@@ -425,7 +349,7 @@
 							variant="ghost"
 							size="icon"
 							class="h-6 w-6"
-							on:click={() => handleSort('release_year')}
+							onclick={() => handleSort('release_year')}
 						>
 							{#if state.sortKey === 'release_year'}
 								{state.sortDirection === 'asc' ? '↑' : '↓'}
@@ -445,7 +369,7 @@
 			{#if state.isAddingBulkMedia}
 				<Table.Row class="bg-green-50 dark:bg-gray-800">
 					<Table.Cell></Table.Cell>
-					<Table.Cell colspan="6">
+					<Table.Cell colspan={6}>
 						<Textarea
 							bind:value={state.bulkMediaInput}
 							placeholder="Paste CSV data here, one entry per line:
@@ -453,7 +377,7 @@ Title,Artist,Release Year,Spotify ID or Link,YouTube ID or Link"
 							rows={6}
 							class="w-full font-mono text-sm"
 						/>
-						<p class="mt-1 text-xs text-muted-foreground">
+						<p class="text-muted-foreground mt-1 text-xs">
 							Format: Title, Artist, Year, Spotify ID/Link, YouTube ID/Link
 						</p>
 					</Table.Cell>
@@ -462,7 +386,7 @@ Title,Artist,Release Year,Spotify ID or Link,YouTube ID or Link"
 							<Button
 								variant="outline"
 								size="sm"
-								on:click={handleSaveBulkMedia}
+								onclick={handleSaveBulkMedia}
 								class="bg-green-100 hover:bg-green-200 dark:bg-green-700 dark:hover:bg-green-600"
 								>Save Bulk</Button
 							>
@@ -470,7 +394,7 @@ Title,Artist,Release Year,Spotify ID or Link,YouTube ID or Link"
 								variant="outline"
 								size="sm"
 								class="text-red-600 hover:bg-red-50 hover:dark:bg-red-800"
-								on:click={handleCancelBulkAdd}
+								onclick={handleCancelBulkAdd}
 							>
 								Cancel
 							</Button>
@@ -481,14 +405,13 @@ Title,Artist,Release Year,Spotify ID or Link,YouTube ID or Link"
 
 			{#if state.isAddingMedia}
 				<Table.Row class="bg-blue-50 dark:bg-gray-800">
-					<Table.Cell>{state.newMediaData.id}</Table.Cell>
+					<Table.Cell class="text-muted-foreground">New</Table.Cell>
 					<Table.Cell>
 						<EditableInput
 							value={state.newMediaData.title || ''}
 							placeholder="Title"
 							onChange={(value) => (state.newMediaData.title = value)}
 							onCommit={(value) => (state.newMediaData.title = value)}
-							focusOnInit={true}
 						/>
 					</Table.Cell>
 					<Table.Cell>
@@ -529,12 +452,12 @@ Title,Artist,Release Year,Spotify ID or Link,YouTube ID or Link"
 					</Table.Cell>
 					<Table.Cell class="text-right">
 						<div class="flex justify-end gap-2">
-							<Button variant="outline" size="sm" on:click={handleSaveMedia}>Save</Button>
+							<Button variant="outline" size="sm" onclick={handleSaveMedia}>Save</Button>
 							<Button
 								variant="outline"
 								size="sm"
 								class="text-red-600 hover:bg-red-50 hover:dark:bg-red-800"
-								on:click={handleCancelAdd}
+								onclick={handleCancelAdd}
 							>
 								Cancel
 							</Button>
@@ -543,23 +466,19 @@ Title,Artist,Release Year,Spotify ID or Link,YouTube ID or Link"
 				</Table.Row>
 			{/if}
 
-			{#each paginatedData() as media (media.id)}
+			{#each paginatedData as media (media.id)}
 				<Table.Row class={cn('transition-colors hover:bg-gray-50 dark:hover:bg-gray-800')}>
 					<Table.Cell class="font-medium">{media.id}</Table.Cell>
 					<Table.Cell>
 						<EditableInput
-							value={getEditingValue(media.id, 'title', media.title).toString()}
-							onChange={(value) => handleMediaFieldChange(media.id, 'title', value)}
-							onCommit={() => commitChanges(media.id, 'title')}
-							onKeyDown={(e) => handleKeyDown(e, media.id, 'title')}
+							value={String(media.title ?? '')}
+							onCommit={(value) => commitMediaField(media.id, 'title', value)}
 						/>
 					</Table.Cell>
 					<Table.Cell>
 						<EditableInput
-							value={getEditingValue(media.id, 'artist', media.artist).toString()}
-							onChange={(value) => handleMediaFieldChange(media.id, 'artist', value)}
-							onCommit={() => commitChanges(media.id, 'artist')}
-							onKeyDown={(e) => handleKeyDown(e, media.id, 'artist')}
+							value={String(media.artist ?? '')}
+							onCommit={(value) => commitMediaField(media.id, 'artist', value)}
 						/>
 					</Table.Cell>
 					<Table.Cell>
@@ -567,11 +486,9 @@ Title,Artist,Release Year,Spotify ID or Link,YouTube ID or Link"
 							type="number"
 							min="1000"
 							max="3000"
-							value={getEditingValue(media.id, 'release_year', media.release_year).toString()}
+							value={String(media.release_year ?? '')}
 							placeholder="Year"
-							onChange={(value) => handleMediaFieldChange(media.id, 'release_year', value)}
-							onCommit={() => commitChanges(media.id, 'release_year')}
-							onKeyDown={(e) => handleKeyDown(e, media.id, 'release_year')}
+							onCommit={(value) => commitMediaField(media.id, 'release_year', value)}
 						/>
 					</Table.Cell>
 					<Table.Cell class="text-center">
@@ -582,16 +499,14 @@ Title,Artist,Release Year,Spotify ID or Link,YouTube ID or Link"
 								{getQuestionCount(media.id)}
 							</span>
 						{:else}
-							<span class="text-xs text-muted-foreground">0</span>
+							<span class="text-muted-foreground text-xs">0</span>
 						{/if}
 					</Table.Cell>
 					<Table.Cell>
 						<EditableInput
-							value={getEditingValue(media.id, 'spotify_uri', media.spotify_uri).toString()}
+							value={String(media.spotify_uri ?? '')}
 							placeholder="Spotify ID or Link"
-							onChange={(value) => handleMediaFieldChange(media.id, 'spotify_uri', value)}
-							onCommit={() => commitChanges(media.id, 'spotify_uri')}
-							onKeyDown={(e) => handleKeyDown(e, media.id, 'spotify_uri')}
+							onCommit={(value) => commitMediaField(media.id, 'spotify_uri', value)}
 						/>
 						{#if media.spotify_uri}
 							{@const spotifyId = parseSpotifyLink(media.spotify_uri)}
@@ -612,11 +527,9 @@ Title,Artist,Release Year,Spotify ID or Link,YouTube ID or Link"
 						<div class="flex items-start gap-2">
 							<div class="flex-1">
 								<EditableInput
-									value={getEditingValue(media.id, 'youtube_id', media.youtube_id).toString()}
+									value={String(media.youtube_id ?? '')}
 									placeholder="YouTube ID or Link"
-									onChange={(value) => handleMediaFieldChange(media.id, 'youtube_id', value)}
-									onCommit={() => commitChanges(media.id, 'youtube_id')}
-									onKeyDown={(e) => handleKeyDown(e, media.id, 'youtube_id')}
+									onCommit={(value) => commitMediaField(media.id, 'youtube_id', value)}
 								/>
 								{#if media.youtube_id}
 									{@const youtubeId = parseYoutubeLink(media.youtube_id)}
@@ -651,8 +564,8 @@ Title,Artist,Release Year,Spotify ID or Link,YouTube ID or Link"
 							<Button
 								variant="outline"
 								size="sm"
-								class="text-red-600 hover:bg-red-100 disabled:text-muted-foreground disabled:hover:bg-transparent dark:hover:bg-red-800/50 disabled:dark:hover:bg-transparent"
-								on:click={() => handleDeleteMedia(media.id)}
+								class="disabled:text-muted-foreground text-red-600 hover:bg-red-100 disabled:hover:bg-transparent dark:hover:bg-red-800/50 disabled:dark:hover:bg-transparent"
+								onclick={() => handleDeleteMedia(media.id)}
 								disabled={isMediaUsed(media.id)}
 								title={isMediaUsed(media.id)
 									? `Cannot delete: Used in ${getQuestionCount(media.id)} question(s)`
@@ -664,9 +577,9 @@ Title,Artist,Release Year,Spotify ID or Link,YouTube ID or Link"
 					</Table.Cell>
 				</Table.Row>
 			{/each}
-			{#if paginatedData().length === 0 && !state.isAddingMedia && !state.isAddingBulkMedia}
+			{#if paginatedData.length === 0 && !state.isAddingMedia && !state.isAddingBulkMedia}
 				<Table.Row>
-					<Table.Cell colspan={8} class="h-24 text-center text-muted-foreground">
+					<Table.Cell colspan={8} class="text-muted-foreground h-24 text-center">
 						No media found matching your criteria.
 					</Table.Cell>
 				</Table.Row>
@@ -677,7 +590,7 @@ Title,Artist,Release Year,Spotify ID or Link,YouTube ID or Link"
 	<Pagination
 		currentPage={state.currentPage}
 		{totalPages}
-		totalItems={filteredData().length}
+		totalItems={filteredData.length}
 		itemsPerPage={state.itemsPerPage}
 		onPageChange={(page) => (state.currentPage = page)}
 	/>

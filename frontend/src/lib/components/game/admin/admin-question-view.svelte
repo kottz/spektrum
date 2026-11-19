@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { gameStore } from '$lib/stores/game.svelte';
-	import { Card, CardContent } from '$lib/components/ui/card';
-	import { PUBLIC_SPEKTRUM_CDN_URL } from '$env/static/public';
+	import { gameStore } from '#lib/stores/game.svelte.ts';
+	import { Card, CardContent } from '#lib/components/ui/card/index.ts';
+	import { PUBLIC_SPEKTRUM_CDN_URL } from '$app/env/public';
 
 	const imageBaseUrl = $derived(`${PUBLIC_SPEKTRUM_CDN_URL}/img`);
 	const alternatives = $derived(gameStore.state.currentQuestion?.alternatives || []);
@@ -111,7 +111,7 @@
 		{#if alternatives.length > 0}
 			{#if questionType === 'text'}
 				<div class="flex flex-wrap justify-center gap-2">
-					{#each alternatives as alternative}
+					{#each alternatives as alternative (alternative)}
 						<button class={getButtonStyles(alternative)} disabled={true}>
 							<span class="text-center text-sm font-medium">{alternative}</span>
 						</button>
@@ -119,7 +119,7 @@
 				</div>
 			{:else}
 				<div class="grid grid-cols-6 gap-2">
-					{#each alternatives as alternative}
+					{#each alternatives as alternative (alternative)}
 						<button
 							class={getButtonStyles(alternative)}
 							disabled={true}
@@ -161,7 +161,7 @@
 		{:else if questionType !== 'text'}
 			<!-- Show placeholders only for non-text grid layouts when empty -->
 			<div class="grid grid-cols-6 gap-2">
-				{#each Array(placeholderCount) as _}
+				{#each { length: placeholderCount }, i (i)}
 					<div class={getPlaceholderStyles()}></div>
 				{/each}
 			</div>

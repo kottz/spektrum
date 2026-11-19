@@ -1,17 +1,14 @@
 <script lang="ts">
-	import { websocketStore, ConnectionState } from '$lib/stores/websocket.svelte';
-	import { gameStore } from '$lib/stores/game.svelte';
-	import { gameActions } from '$lib/stores/game-actions';
-	import { Button } from '$lib/components/ui/button';
+	import { websocketStore, ConnectionState } from '#lib/stores/websocket.svelte.ts';
+	import { Button } from '#lib/components/ui/button/index.ts';
 	import { fade } from 'svelte/transition';
 
 	// Get state values using runes
 	let connectionState = $derived(websocketStore.state.connectionState);
 	let reconnectAttempts = $derived(websocketStore.state.reconnectAttempts);
-	let timeUntilReconnect = $derived(websocketStore.timeUntilReconnect);
+	let nextAttemptTime = $derived(websocketStore.state.nextAttemptTime);
 	let error = $derived(websocketStore.state.error);
 	let isReconnecting = $derived(websocketStore.isReconnecting);
-	let canReconnect = $derived(websocketStore.canReconnect);
 	let maxReconnectAttempts = $derived(websocketStore.maxReconnectAttempts);
 
 	// Derived values for UI
@@ -34,9 +31,18 @@
 		}
 	});
 
+	// Date.now() is not reactive; tick while a countdown is on screen
+	let now = $state(Date.now());
+	$effect(() => {
+		if (nextAttemptTime === null) return;
+		now = Date.now();
+		const interval = window.setInterval(() => (now = Date.now()), 250);
+		return () => window.clearInterval(interval);
+	});
+
 	let message = $derived.by(() => {
-		if (connectionState === ConnectionState.RECONNECTING && timeUntilReconnect !== null) {
-			const secondsUntilReconnect = Math.ceil((timeUntilReconnect as number) / 1000);
+		if (connectionState === ConnectionState.RECONNECTING && nextAttemptTime !== null) {
+			const secondsUntilReconnect = Math.max(0, Math.ceil((nextAttemptTime - now) / 1000));
 			return `Next attempt in ${secondsUntilReconnect} seconds...`;
 		}
 		if (connectionState === ConnectionState.OFFLINE) {
@@ -45,14 +51,7 @@
 		return '';
 	});
 
-	let showManualReconnect = $derived(connectionState === ConnectionState.ERROR && !canReconnect);
-
-	async function handleManualReconnect() {
-		const sessionToken = gameStore.state.sessionToken;
-		if (sessionToken) {
-			await gameActions.joinGame(sessionToken);
-		}
-	}
+	let showManualReconnect = $derived(connectionState === ConnectionState.ERROR);
 </script>
 
 {#if shouldShow}
@@ -72,10 +71,8 @@
 			{/if}
 			{#if showManualReconnect}
 				<div class="flex flex-col items-center gap-2 pt-2">
-					<p class="text-muted-foreground text-sm">
-						Automatic reconnection failed. Try to reconnect manually.
-					</p>
-					<Button variant="default" onclick={handleManualReconnect}>Reconnect</Button>
+					<p class="text-muted-foreground text-sm">Reconnect to continue in this window.</p>
+					<Button variant="default" onclick={websocketStore.manualReconnect}>Reconnect</Button>
 				</div>
 			{/if}
 		</div>

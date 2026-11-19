@@ -1,13 +1,12 @@
 <script lang="ts">
-	import { gameStore } from '$lib/stores/game.svelte';
+	import { gameStore } from '#lib/stores/game.svelte.ts';
 	import { gameActions } from '../../stores/game-actions';
 	import QuestionView from './question-view.svelte';
 	import ScoreView from './score-view.svelte';
 	import LobbyView from './lobby-view.svelte';
 	import GameOver from './game-over.svelte';
-	import { GamePhase } from '../../types/game';
-	import { Button } from '$lib/components/ui/button';
-	import LightSwitch from '$lib/components/ui/light-switch.svelte';
+	import { Button } from '#lib/components/ui/button/index.ts';
+	import LightSwitch from '#lib/components/ui/light-switch.svelte';
 	const phase = $derived(gameStore.state.phase);
 </script>
 
@@ -20,13 +19,13 @@
 
 	<!-- Game content based on phase - now flex-1 with min-h-0 -->
 	<div class="min-h-0 flex-1">
-		{#if phase === GamePhase.Lobby}
+		{#if phase === 'lobby'}
 			<LobbyView />
-		{:else if phase === GamePhase.Question}
+		{:else if phase === 'question'}
 			<QuestionView />
-		{:else if phase === GamePhase.Score}
+		{:else if phase === 'score'}
 			<ScoreView />
-		{:else if phase === GamePhase.GameOver}
+		{:else if phase === 'gameover'}
 			<GameOver />
 		{/if}
 	</div>

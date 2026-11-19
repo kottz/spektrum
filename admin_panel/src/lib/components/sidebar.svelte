@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { Button } from '$lib/components/ui/button';
-	import LightSwitch from '$lib/components/light-switch.svelte';
+	import { Button } from '#lib/components/ui/button/index.ts';
+	import LightSwitch from '#lib/components/light-switch.svelte';
 
 	type TabType = 'media' | 'characters' | 'questions' | 'sets';
 
@@ -16,7 +16,7 @@
 		{ id: 'sets' as const, label: 'Sets', symbol: '📁' }
 	];
 
-	let { activeTab, onTabChange } = $props<Props>();
+	let { activeTab, onTabChange }: Props = $props();
 </script>
 
 <aside class="w-48 border-r">
@@ -26,11 +26,11 @@
 			<LightSwitch />
 		</div>
 		<div class="space-y-2">
-			{#each tabs as tab}
+			{#each tabs as tab (tab.id)}
 				<Button
 					variant={activeTab === tab.id ? 'default' : 'ghost'}
 					class="w-full justify-start"
-					on:click={() => onTabChange(tab.id)}
+					onclick={() => onTabChange(tab.id)}
 				>
 					<span class="mr-2">{tab.symbol}</span>
 					{tab.label}

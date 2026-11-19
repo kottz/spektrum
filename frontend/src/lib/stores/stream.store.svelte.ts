@@ -1,11 +1,13 @@
-import { browser } from '$app/environment';
-import { broadcastService } from '$lib/services/broadcast.service';
-import type { BroadcastMessage } from '$lib/services/broadcast.service';
-import type { StreamEvent, DisplayConfig } from '$lib/types/stream.types';
-import type { GameUpdate, PlayerAnswer } from '$lib/types/game';
-import { GamePhase } from '$lib/types/game';
-import { DEFAULT_DISPLAY_CONFIG } from '$lib/types/stream.types';
-import { info, warn } from '$lib/utils/logger';
+import { browser } from '$app/env';
+import { broadcastService } from '#lib/services/broadcast.service.ts';
+import type { BroadcastMessage } from '#lib/services/broadcast.service.ts';
+import type { StreamEvent, DisplayConfig } from '#lib/types/stream.types.ts';
+import type { PlayerAnswer } from '#lib/types/game.ts';
+import type { GameUpdate } from '#lib/generated/GameUpdate.ts';
+import type { GamePhase } from '#lib/generated/GamePhase.ts';
+import type { QuestionType } from '#lib/generated/QuestionType.ts';
+import { DEFAULT_DISPLAY_CONFIG } from '#lib/types/stream.types.ts';
+import { info, warn } from '#lib/utils/logger.ts';
 import { streamTimerStore } from './timer.svelte';
 
 interface StreamGameState {
@@ -15,7 +17,7 @@ interface StreamGameState {
 	currentAnswers: PlayerAnswer[];
 	roundDuration: number;
 	currentQuestion?: {
-		type: string;
+		type: QuestionType;
 		text?: string;
 		alternatives: string[];
 	};
@@ -30,7 +32,7 @@ interface StreamStoreState {
 }
 
 const initialStreamGameState: StreamGameState = {
-	phase: GamePhase.Lobby,
+	phase: 'lobby',
 	players: new Map(),
 	currentAnswers: [],
 	roundDuration: 60,
@@ -200,7 +202,7 @@ function createStreamStore() {
 					phaseChanged = message.phase !== state.gameState.phase;
 					state.gameState.phase = message.phase;
 
-					if (message.phase === GamePhase.Question) {
+					if (message.phase === 'question') {
 						state.gameState.currentAnswers = [];
 						state.gameState.realtimeScoreboard = state.gameState.realtimeScoreboard.map(
 							(player) => ({
@@ -217,11 +219,11 @@ function createStreamStore() {
 					}
 				}
 
-				if (message.question_type !== undefined || message.alternatives !== undefined) {
+				if (message.question_type !== undefined) {
 					state.gameState.currentQuestion = {
-						type: message.question_type || 'default',
+						type: message.question_type,
 						text: message.question_text,
-						alternatives: message.alternatives || []
+						alternatives: message.alternatives ?? []
 					};
 				}
 
@@ -256,7 +258,7 @@ function createStreamStore() {
 
 				if (
 					!phaseChanged &&
-					state.gameState.phase === GamePhase.Question &&
+					state.gameState.phase === 'question' &&
 					message.question_time_remaining_ms !== undefined
 				) {
 					// Same phase but got a time snapshot — resync the timer.
@@ -323,7 +325,7 @@ function createStreamStore() {
 			}
 
 			case 'GameOver': {
-				state.gameState.phase = GamePhase.GameOver;
+				state.gameState.phase = 'gameover';
 
 				if (message.final_scores) {
 					state.gameState.players.clear();

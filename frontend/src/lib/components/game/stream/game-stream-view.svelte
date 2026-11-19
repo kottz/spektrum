@@ -1,6 +1,5 @@
 <script lang="ts">
-	import { GamePhase } from '$lib/types/game';
-	import { streamStore } from '$lib/stores/stream.store.svelte';
+	import { streamStore } from '#lib/stores/stream.store.svelte.ts';
 	import StreamQuestionView from './stream-question-view.svelte';
 	import StreamScoreboard from './stream-scoreboard.svelte';
 	import StreamAnswerProgress from './stream-answer-progress.svelte';
@@ -87,12 +86,12 @@
 		</header>
 
 		<!-- Main Content Area -->
-		{#if phase === GamePhase.Lobby}
+		{#if phase === 'lobby'}
 			<!-- Full-screen lobby view -->
 			<div class="flex min-h-0 flex-1">
 				<StreamLobbyView />
 			</div>
-		{:else if phase === GamePhase.GameOver}
+		{:else if phase === 'gameover'}
 			<!-- Full-screen game over view -->
 			<div class="flex min-h-0 flex-1">
 				<StreamGameOver />
@@ -125,7 +124,7 @@
 						>
 							<!-- Question Options (top) -->
 							<div class="flex-none">
-								{#if phase === GamePhase.Question}
+								{#if phase === 'question'}
 									<StreamQuestionView />
 								{:else}
 									<div

@@ -1,18 +1,25 @@
 <script lang="ts">
-	let { showHeader = true } = $props<{
+	import type { Snippet } from 'svelte';
+
+	interface Props {
 		showHeader?: boolean;
-	}>();
+		headerLeft?: Snippet;
+		headerRight?: Snippet;
+		children: Snippet;
+	}
+
+	let { showHeader = true, headerLeft, headerRight, children }: Props = $props();
 </script>
 
 <div class="h-full rounded-md border">
 	{#if showHeader}
 		<div class="m-4 flex items-center justify-between">
-			<slot name="header-left" />
-			<slot name="header-right" />
+			{@render headerLeft?.()}
+			{@render headerRight?.()}
 		</div>
 	{/if}
 
 	<div class="h-[calc(100%-5rem)] rounded-md border">
-		<slot />
+		{@render children()}
 	</div>
 </div>

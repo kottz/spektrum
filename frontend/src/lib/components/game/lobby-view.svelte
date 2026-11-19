@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { gameStore } from '$lib/stores/game.svelte';
+	import { gameStore } from '#lib/stores/game.svelte.ts';
 	import { gameActions } from '../../stores/game-actions';
-	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
-	import { Button } from '$lib/components/ui/button';
-	import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
+	import { Card, CardContent, CardHeader, CardTitle } from '#lib/components/ui/card/index.ts';
+	import { Button } from '#lib/components/ui/button/index.ts';
+	import { ScrollArea } from '#lib/components/ui/scroll-area/index.ts';
 
 	const players = $derived(Array.from(gameStore.state.players.values()));
 	function handleLeaveGame() {
@@ -22,7 +22,7 @@
 				<h3 class="text-muted-foreground text-sm">Connected Players ({players.length})</h3>
 				<ScrollArea class="h-72 h-[50vh] rounded-md border p-4">
 					<div class="flex flex-wrap gap-2">
-						{#each players as player}
+						{#each players as player (player.name)}
 							<div class="bg-muted flex items-center rounded p-2">
 								<span class="font-medium">
 									{player.name}

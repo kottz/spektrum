@@ -1,10 +1,10 @@
 // src/lib/stores/websocket.svelte.ts
-import { browser } from '$app/environment';
-import type { GameUpdate, ClientMessage } from '../types/game';
-import { ErrorCode } from '../types/game';
-import { PUBLIC_SPEKTRUM_WS_SERVER_URL } from '$env/static/public';
-import { gameStore } from '$lib/stores/game.svelte';
-import { info, warn } from '$lib/utils/logger';
+import { browser } from '$app/env';
+import type { GameUpdate } from '#lib/generated/GameUpdate.ts';
+import type { ClientMessage } from '#lib/generated/ClientMessage.ts';
+import { PUBLIC_SPEKTRUM_WS_SERVER_URL } from '$app/env/public';
+import { gameStore } from '#lib/stores/game.svelte.ts';
+import { info, warn } from '#lib/utils/logger.ts';
 
 export enum ConnectionState {
 	INITIAL = 'INITIAL',
@@ -20,13 +20,10 @@ export enum ConnectionState {
 interface WebSocketState {
 	connectionState: ConnectionState;
 	error: string | null;
-	lastConnectedAt: number | null;
 	lastDisconnectedAt: number | null;
 	reconnectAttempts: number;
 	nextAttemptTime: number | null;
 }
-
-type SessionStatus = 'valid' | 'invalid' | 'unknown';
 
 type SupervisorEvent =
 	| { type: 'CONNECT_REQUEST'; token: string }
@@ -34,8 +31,9 @@ type SupervisorEvent =
 	| { type: 'USER_LEAVE' }
 	| { type: 'GAME_CLOSED'; reason?: string }
 	| { type: 'SESSION_INVALID'; reason?: string }
-	| { type: 'GAME_ENDED' }
+	| { type: 'SESSION_SUPERSEDED'; reason: string }
 	| { type: 'OPEN'; gen: number }
+	| { type: 'ACCEPTED'; gen: number }
 	| { type: 'CLOSE'; gen: number; code: number; reason: string }
 	| { type: 'ERROR'; gen: number; reason: string }
 	| { type: 'HEARTBEAT_TIMEOUT'; gen: number }
@@ -48,19 +46,11 @@ type SupervisorEvent =
 	| { type: 'ONLINE' }
 	| { type: 'NETWORK_CHANGE' };
 
-const SESSION_INVALID_MESSAGES = new Set<string>([
-	ErrorCode.GameClosed,
-	ErrorCode.LobbyNotFound,
-	ErrorCode.PlayerNotFound,
-	ErrorCode.NotAuthorized
-]);
-
 export function createWebSocketStore() {
 	// Core state with runes
 	const state = $state<WebSocketState>({
 		connectionState: ConnectionState.INITIAL,
 		error: null,
-		lastConnectedAt: null,
 		lastDisconnectedAt: null,
 		reconnectAttempts: 0,
 		nextAttemptTime: null
@@ -91,7 +81,6 @@ export function createWebSocketStore() {
 	let generationId = 0;
 	let desiredConnection = false;
 	let sessionToken: string | null = null;
-	let sessionStatus: SessionStatus = 'unknown';
 	let wasIntentionalClose = false;
 	let isVisible = browser ? document.visibilityState === 'visible' : true;
 	let isOnline = browser ? navigator.onLine : true;
@@ -103,19 +92,7 @@ export function createWebSocketStore() {
 		gen: number | null;
 	} | null = null;
 
-	// Computed properties using runes
-	const timeUntilReconnect = $derived.by(() =>
-		state.nextAttemptTime ? Math.max(0, state.nextAttemptTime - Date.now()) : null
-	);
-
 	const isReconnecting = $derived(state.connectionState === ConnectionState.RECONNECTING);
-
-	const canReconnect = $derived.by(
-		() =>
-			desiredConnection &&
-			state.connectionState !== ConnectionState.ERROR &&
-			state.reconnectAttempts < CONFIG.MAX_RECONNECT_ATTEMPTS
-	);
 
 	function calculateBackoffDelay(attempts: number): number {
 		const baseDelay = Math.min(
@@ -174,12 +151,14 @@ export function createWebSocketStore() {
 				dispatch({ type: 'ERROR', gen: generationId, reason: 'Heartbeat send failed' });
 				return;
 			}
-			if (heartbeatTimeout !== undefined) {
-				window.clearTimeout(heartbeatTimeout);
+			// Arm only when no echo is outstanding: re-arming on every beat would push
+			// the deadline forward forever and the timeout could never fire
+			if (heartbeatTimeout === undefined) {
+				heartbeatTimeout = window.setTimeout(() => {
+					heartbeatTimeout = undefined;
+					dispatch({ type: 'HEARTBEAT_TIMEOUT', gen: generationId });
+				}, CONFIG.HEARTBEAT_TIMEOUT);
 			}
-			heartbeatTimeout = window.setTimeout(() => {
-				dispatch({ type: 'HEARTBEAT_TIMEOUT', gen: generationId });
-			}, CONFIG.HEARTBEAT_TIMEOUT);
 		}, CONFIG.HEARTBEAT_INTERVAL);
 	}
 
@@ -210,12 +189,10 @@ export function createWebSocketStore() {
 
 	function markConnected() {
 		state.connectionState = ConnectionState.CONNECTED;
-		state.lastConnectedAt = Date.now();
 		state.error = null;
 		isOnline = true;
 		lastActivityAt = Date.now();
 		resetAttempts();
-		sessionStatus = 'valid';
 		clearOfflineProbe();
 	}
 
@@ -251,7 +228,6 @@ export function createWebSocketStore() {
 		state.connectionState = ConnectionState.ERROR;
 		state.error = message;
 		desiredConnection = false;
-		sessionStatus = 'invalid';
 		clearRetryTimer();
 		clearConnectionTimeout();
 		clearOfflineProbe();
@@ -281,7 +257,7 @@ export function createWebSocketStore() {
 	}
 
 	function shouldReconnect(): boolean {
-		return desiredConnection && sessionStatus !== 'invalid' && isVisible && isOnline;
+		return desiredConnection && isVisible && isOnline;
 	}
 
 	function scheduleOfflineProbe() {
@@ -380,14 +356,6 @@ export function createWebSocketStore() {
 		pendingConnect = null;
 	}
 
-	function isSessionInvalidMessage(message: string): boolean {
-		if (!message) return false;
-		for (const code of SESSION_INVALID_MESSAGES) {
-			if (message.includes(code)) return true;
-		}
-		return false;
-	}
-
 	function handleMessage(event: MessageEvent, gen: number) {
 		if (gen !== generationId) return;
 		lastActivityAt = Date.now();
@@ -402,26 +370,28 @@ export function createWebSocketStore() {
 			window.clearTimeout(heartbeatTimeout);
 			heartbeatTimeout = undefined;
 		}
+		let message: GameUpdate;
 		try {
-			const message = JSON.parse(event.data) as GameUpdate;
-
-			if (message.type === 'GameClosed') {
-				dispatch({ type: 'GAME_CLOSED', reason: message.reason });
-			} else if (message.type === 'PlayerKicked') {
-				dispatch({ type: 'SESSION_INVALID', reason: message.reason });
-			} else if (message.type === 'Error' && isSessionInvalidMessage(message.message)) {
-				dispatch({ type: 'SESSION_INVALID', reason: message.message });
-			} else if (message.type === 'GameOver') {
-				dispatch({ type: 'GAME_ENDED' });
-			}
-
-			gameStore.processServerMessage(message);
-			state.error = null;
+			message = JSON.parse(event.data) as GameUpdate;
 		} catch (error) {
-			warn('Failed to parse message:', error);
-			state.error = 'Invalid message received';
-			state.connectionState = ConnectionState.ERROR;
+			// One unreadable message is not a connection failure; drop it
+			warn('Ignoring unparseable server message:', error);
+			return;
 		}
+
+		if (message.type === 'Connected') {
+			dispatch({ type: 'ACCEPTED', gen });
+		} else if (message.type === 'GameClosed') {
+			dispatch({ type: 'GAME_CLOSED', reason: message.reason });
+		} else if (message.type === 'PlayerKicked') {
+			dispatch({ type: 'SESSION_INVALID', reason: message.reason });
+		} else if (message.type === 'Error' && message.code === 'session_invalid') {
+			dispatch({ type: 'SESSION_INVALID', reason: message.message });
+		} else if (message.type === 'Error' && message.code === 'session_superseded') {
+			dispatch({ type: 'SESSION_SUPERSEDED', reason: message.message });
+		}
+
+		gameStore.processServerMessage(message);
 	}
 
 	function dispatch(event: SupervisorEvent) {
@@ -434,7 +404,6 @@ export function createWebSocketStore() {
 				const previousToken = sessionToken;
 				sessionToken = event.token;
 				desiredConnection = true;
-				sessionStatus = 'unknown';
 				state.error = null;
 				if (!isVisible) {
 					markSuspended();
@@ -479,7 +448,6 @@ export function createWebSocketStore() {
 			case 'USER_LEAVE': {
 				desiredConnection = false;
 				sessionToken = null;
-				sessionStatus = 'unknown';
 				closeSocket(true);
 				resetAttempts();
 				markDisconnected();
@@ -488,24 +456,29 @@ export function createWebSocketStore() {
 			case 'GAME_CLOSED': {
 				desiredConnection = false;
 				sessionToken = null;
-				sessionStatus = 'invalid';
 				closeSocket(true);
 				resetAttempts();
 				markDisconnected();
 				return;
 			}
 			case 'SESSION_INVALID': {
-				sessionStatus = 'invalid';
 				desiredConnection = false;
 				sessionToken = null;
 				state.error = null;
 				resetAttempts();
+				if (pendingConnect) {
+					pendingConnect.reject(new Error(event.reason ?? 'Session is no longer valid'));
+					pendingConnect = null;
+				}
 				closeSocket(true);
 				markDisconnected();
 				return;
 			}
-			case 'GAME_ENDED': {
-				// Keep connection alive for possible restarts.
+			case 'SESSION_SUPERSEDED': {
+				// Another window owns this session now. Reconnecting automatically would
+				// knock it off in turn, so stop and leave the choice to the user.
+				closeSocket(true);
+				markFailed(event.reason);
 				return;
 			}
 			case 'OPEN': {
@@ -519,6 +492,11 @@ export function createWebSocketStore() {
 					startHeartbeat();
 					startLivenessMonitor();
 				}
+				return;
+			}
+			case 'ACCEPTED': {
+				// The connect promise means "the server accepted the session",
+				// not merely "the transport opened"
 				resolvePendingConnect(event.gen);
 				return;
 			}
@@ -595,7 +573,8 @@ export function createWebSocketStore() {
 				hiddenAt = null;
 
 				if (!desiredConnection) {
-					markDisconnected();
+					// A failure stays visible (with its Reconnect action) until the user acts
+					if (state.connectionState !== ConnectionState.ERROR) markDisconnected();
 					return;
 				}
 
@@ -631,11 +610,11 @@ export function createWebSocketStore() {
 			}
 			case 'ONLINE': {
 				isOnline = true;
-				state.error = null;
 				if (!desiredConnection) {
-					markDisconnected();
+					if (state.connectionState !== ConnectionState.ERROR) markDisconnected();
 					return;
 				}
+				state.error = null;
 				if (!isVisible) {
 					markSuspended();
 					return;
@@ -684,24 +663,21 @@ export function createWebSocketStore() {
 		dispatch({ type: 'USER_LEAVE' });
 	}
 
-	function send(message: ClientMessage) {
+	/** Sends `message`; returns false when it could not be sent (e.g. while reconnecting). */
+	function send(message: ClientMessage): boolean {
 		if (socket?.readyState !== WebSocket.OPEN) {
 			warn('Cannot send message: connection not open');
-			state.error = 'Connection not available';
-			return;
+			return false;
 		}
 
 		try {
 			socket.send(JSON.stringify(message));
 			info('Message sent:', message);
+			return true;
 		} catch (error) {
 			warn('Failed to send message:', error);
-			state.error = 'Failed to send message';
+			return false;
 		}
-	}
-
-	function clearError() {
-		state.error = null;
 	}
 
 	function setupEnvironmentListeners() {
@@ -729,15 +705,8 @@ export function createWebSocketStore() {
 		connect,
 		disconnect,
 		send,
-		clearError,
-		get timeUntilReconnect() {
-			return timeUntilReconnect;
-		},
 		get isReconnecting() {
 			return isReconnecting;
-		},
-		get canReconnect() {
-			return canReconnect;
 		},
 		get maxReconnectAttempts() {
 			return CONFIG.MAX_RECONNECT_ATTEMPTS;

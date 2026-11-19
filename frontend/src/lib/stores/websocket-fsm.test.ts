@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$app/environment', () => ({ browser: true }));
-vi.mock('$env/static/public', () => ({ PUBLIC_SPEKTRUM_WS_SERVER_URL: 'ws://test' }));
-vi.mock('$lib/utils/logger', () => ({ info: () => {}, warn: () => {} }));
+vi.mock('$app/env', () => ({ browser: true }));
+vi.mock('$app/env/public', () => ({ PUBLIC_SPEKTRUM_WS_SERVER_URL: 'ws://test' }));
+vi.mock('#lib/utils/logger.ts', () => ({ info: () => {}, warn: () => {} }));
 
 class MockWebSocket {
 	static CONNECTING = 0;
@@ -148,27 +148,117 @@ describe('websocket FSM transitions', () => {
 		MockWebSocket.last().triggerOpen();
 	});
 
+	/** Opens the transport and has the server accept the session. */
+	function openAndAccept(socket: MockWebSocket) {
+		socket.triggerOpen();
+		socket.triggerMessage(
+			JSON.stringify({ type: 'Connected', player_id: 'p1', name: 'P', round_duration: 60 })
+		);
+	}
+
 	it('stops reconnecting on GameClosed', async () => {
 		const connectPromise = store.connect('token-3').catch(() => {});
 		const socket = MockWebSocket.last();
-		socket.triggerOpen();
+		openAndAccept(socket);
 		await connectPromise;
 
 		socket.triggerMessage(JSON.stringify({ type: 'GameClosed', reason: 'closed' }));
 
 		expect(store.state.connectionState).toBe(ConnectionStateEnum.DISCONNECTED);
-		expect(store.canReconnect).toBe(false);
+		vi.advanceTimersByTime(20000);
+		expect(MockWebSocket.instances.length).toBe(1);
 	});
 
-	it('stops reconnecting after session invalid', async () => {
+	it('stops reconnecting when the server reports the session invalid', async () => {
 		const connectPromise = store.connect('token-4').catch(() => {});
 		const socket = MockWebSocket.last();
-		socket.triggerOpen();
+		openAndAccept(socket);
 		await connectPromise;
 
-		socket.triggerMessage(JSON.stringify({ type: 'Error', message: 'LobbyNotFound' }));
+		socket.triggerMessage(
+			JSON.stringify({ type: 'Error', code: 'session_invalid', message: 'Lobby not found' })
+		);
 
 		expect(store.state.connectionState).toBe(ConnectionStateEnum.DISCONNECTED);
-		expect(store.canReconnect).toBe(false);
+		vi.advanceTimersByTime(20000);
+		expect(MockWebSocket.instances.length).toBe(1);
+	});
+
+	it('connect resolves only once the server accepts the session', async () => {
+		let settled: 'resolved' | 'rejected' | null = null;
+		const connectPromise = store.connect('token-5').then(
+			() => (settled = 'resolved'),
+			() => (settled = 'rejected')
+		);
+		const socket = MockWebSocket.last();
+		socket.triggerOpen();
+		await Promise.resolve();
+		expect(settled).toBeNull();
+
+		socket.triggerMessage(
+			JSON.stringify({ type: 'Error', code: 'session_invalid', message: 'Player not found' })
+		);
+		await connectPromise;
+		expect(settled).toBe('rejected');
+	});
+
+	it('heartbeat timeout fires when echoes stop arriving', async () => {
+		const connectPromise = store.connect('token-6').catch(() => {});
+		const socket = MockWebSocket.last();
+		openAndAccept(socket);
+		await connectPromise;
+
+		// Beats keep being sent every 3s but the server never echoes them
+		vi.advanceTimersByTime(3000 + 4000 + 100);
+		expect(store.state.connectionState).toBe(ConnectionStateEnum.RECONNECTING);
+	});
+
+	it('superseded session stops without auto-reconnect and offers a manual reconnect', async () => {
+		const connectPromise = store.connect('token-7').catch(() => {});
+		const socket = MockWebSocket.last();
+		openAndAccept(socket);
+		await connectPromise;
+
+		socket.triggerMessage(
+			JSON.stringify({ type: 'Error', code: 'session_superseded', message: 'Opened elsewhere' })
+		);
+		expect(store.state.connectionState).toBe(ConnectionStateEnum.ERROR);
+		vi.advanceTimersByTime(30000);
+		expect(MockWebSocket.instances.length).toBe(1);
+
+		store.manualReconnect();
+		expect(MockWebSocket.instances.length).toBe(2);
+	});
+
+	it('an error state survives the tab becoming visible again', async () => {
+		const connectPromise = store.connect('token-8').catch(() => {});
+		const socket = MockWebSocket.last();
+		openAndAccept(socket);
+		await connectPromise;
+		socket.triggerMessage(
+			JSON.stringify({ type: 'Error', code: 'session_superseded', message: 'Opened elsewhere' })
+		);
+
+		setVisibility('hidden');
+		setVisibility('visible');
+		setOnline(true);
+		expect(store.state.connectionState).toBe(ConnectionStateEnum.ERROR);
+	});
+
+	it('an unparseable message is ignored rather than breaking the connection', async () => {
+		const connectPromise = store.connect('token-9').catch(() => {});
+		const socket = MockWebSocket.last();
+		openAndAccept(socket);
+		await connectPromise;
+
+		socket.triggerMessage('{not json');
+		expect(store.state.connectionState).toBe(ConnectionStateEnum.CONNECTED);
+	});
+
+	it('send reports failure while the socket is not open', async () => {
+		store.connect('token-10').catch(() => {});
+		expect(store.send({ type: 'Answer', answer: 'Red' })).toBe(false);
+		openAndAccept(MockWebSocket.last());
+		expect(store.send({ type: 'Answer', answer: 'Red' })).toBe(true);
 	});
 });

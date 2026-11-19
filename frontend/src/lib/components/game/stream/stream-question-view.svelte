@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { streamStore } from '$lib/stores/stream.store.svelte';
-	import { Card, CardContent } from '$lib/components/ui/card';
-	import { PUBLIC_SPEKTRUM_CDN_URL } from '$env/static/public';
+	import { streamStore } from '#lib/stores/stream.store.svelte.ts';
+	import { Card, CardContent } from '#lib/components/ui/card/index.ts';
+	import { PUBLIC_SPEKTRUM_CDN_URL } from '$app/env/public';
 
 	const imageBaseUrl = PUBLIC_SPEKTRUM_CDN_URL + '/img';
 
@@ -78,7 +78,7 @@
 			{/if}
 
 			<div class="grid gap-2 {questionType === 'text' ? 'grid-cols-2' : 'grid-cols-3'}">
-				{#each alternatives as alt}
+				{#each alternatives as alt (alt)}
 					<div
 						class={getAlternativeStyles(alt)}
 						style={questionType === 'color' &&

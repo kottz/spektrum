@@ -1,8 +1,9 @@
-use crate::db::{DbError, StoredData};
+use crate::db::{DataVersion, DbError, StoredData};
 use crate::game::{
-    EventContext, GameAction, GameEngine, GameEvent, GameUpdate, NameValidationError,
+    ClientConnection, ErrorCode, EventContext, GameAction, GameEngine, GameEvent, GameUpdate,
+    NameValidationError,
 };
-use crate::question::{QuestionError, QuestionStore};
+use crate::question::QuestionStore;
 use crate::uuid::Uuid;
 use axum::extract::Path;
 use axum::extract::ws::Utf8Bytes;
@@ -24,9 +25,11 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 use thiserror::Error;
+use tokio::sync::Notify;
 use tokio::sync::mpsc::{Receiver, Sender, channel};
 use tokio::task::JoinHandle;
 use tracing::{Instrument, Span, debug, error, info, info_span, trace, warn};
+use ts_rs::TS;
 
 const HEARTBEAT_BYTE: u8 = 0x42;
 pub(crate) const NO_STORE_CACHE_CONTROL: &str = "no-store, no-cache, must-revalidate, max-age=0";
@@ -56,10 +59,12 @@ pub enum ApiError {
     UnsupportedMediaType,
     #[error("Bad request: {0}")]
     BadRequest(String),
+    #[error("Conflict: {0}")]
+    Conflict(String),
 }
 
-#[derive(Serialize)]
-struct ErrorResponse {
+#[derive(Serialize, TS)]
+pub struct ErrorResponse {
     error: String,
     details: Option<String>,
 }
@@ -93,6 +98,7 @@ impl IntoResponse for ApiError {
             ApiError::BadRequest(message) => {
                 (StatusCode::BAD_REQUEST, "Bad request", Some(message))
             }
+            ApiError::Conflict(message) => (StatusCode::CONFLICT, "Conflict", Some(message)),
         };
 
         let body = Json(ErrorResponse {
@@ -113,7 +119,19 @@ fn no_store_json<T: Serialize>(value: T) -> axum::response::Response {
 
 impl From<DbError> for ApiError {
     fn from(err: DbError) -> Self {
-        ApiError::Database(err.to_string())
+        match err {
+            // The caller's data was rejected: say why, so it can be fixed
+            DbError::Validation(message) => ApiError::Validation(message),
+            DbError::NoQuestions => {
+                ApiError::Validation("At least one active question with media is required".into())
+            }
+            DbError::StaleVersion => ApiError::Conflict(
+                "The data was changed elsewhere since you loaded it. Reload to get the latest \
+                 version, then make your changes again."
+                    .into(),
+            ),
+            other => ApiError::Database(other.to_string()),
+        }
     }
 }
 
@@ -123,13 +141,7 @@ impl From<NameValidationError> for ApiError {
     }
 }
 
-impl From<QuestionError> for ApiError {
-    fn from(err: QuestionError) -> Self {
-        ApiError::Database(err.to_string())
-    }
-}
-
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, TS)]
 #[serde(tag = "type")]
 pub enum ClientMessage {
     Connect { session_token: String },
@@ -150,7 +162,7 @@ impl ClientMessage {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, TS)]
 #[serde(tag = "type")]
 pub enum AdminAction {
     StartGame,
@@ -247,14 +259,14 @@ impl AppState {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, TS)]
 pub struct SetInfo {
     pub id: i64,
     pub name: Arc<str>,
     pub question_count: usize,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, TS)]
 pub struct ListSetsResponse {
     pub num_questions: usize,
     pub sets: Vec<SetInfo>,
@@ -280,28 +292,33 @@ pub async fn list_sets(state: &AppState) -> Result<ListSetsResponse, ApiError> {
     })
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, TS)]
 pub struct CreateLobbyRequest {
     pub round_duration: Option<u64>,
     pub set_id: Option<i64>,
 }
 
-#[derive(Debug, serde::Serialize, PartialEq)]
+#[derive(Debug, Serialize, PartialEq, TS)]
 pub struct CreateLobbyResponse {
     pub player_id: Uuid,
     pub join_code: String,
     pub session_token: String,
 }
 
+/// Accepted round lengths; the upper bound keeps millisecond arithmetic far from overflow.
+const ROUND_DURATION_SECS: std::ops::RangeInclusive<u64> = 10..=600;
+
 pub async fn create_lobby(
     state: &AppState,
     req: CreateLobbyRequest,
 ) -> Result<CreateLobbyResponse, ApiError> {
     let round_duration = req.round_duration.unwrap_or(60);
-    if round_duration < 10 {
-        return Err(ApiError::Validation(
-            "Round duration must be at least 10 seconds".into(),
-        ));
+    if !ROUND_DURATION_SECS.contains(&round_duration) {
+        return Err(ApiError::Validation(format!(
+            "Round duration must be between {} and {} seconds",
+            ROUND_DURATION_SECS.start(),
+            ROUND_DURATION_SECS.end()
+        )));
     }
 
     let snap = state.store.snapshot();
@@ -356,13 +373,13 @@ pub async fn create_lobby(
     })
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, TS)]
 pub struct JoinLobbyRequest {
     pub join_code: String,
     pub name: String,
 }
 
-#[derive(Debug, Serialize, PartialEq)]
+#[derive(Debug, Serialize, PartialEq, TS)]
 pub struct JoinLobbyResponse {
     pub player_id: Uuid,
     pub join_code: String,
@@ -395,6 +412,10 @@ pub async fn join_lobby(
         }
     };
 
+    if engine.is_closed() {
+        return Err(ApiError::Lobby("This game has ended.".into()));
+    }
+
     if engine.is_full() {
         return Err(ApiError::Lobby("Lobby is full.".into()));
     }
@@ -412,63 +433,79 @@ pub async fn join_lobby(
     })
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, TS)]
 pub struct GetStoredDataRequest {
     password: String,
+}
+
+/// The stored data together with the version an edit of it must be based on.
+#[derive(Debug, Serialize, TS)]
+pub struct StoredDataResponse {
+    stored_data: StoredData,
+    version: DataVersion,
 }
 
 pub async fn get_stored_data(
     state: &AppState,
     req: GetStoredDataRequest,
-) -> Result<StoredData, ApiError> {
+) -> Result<StoredDataResponse, ApiError> {
     if !state.verify_admin_password(&req.password) {
         return Err(ApiError::Unauthorized);
     }
-    let stored_data = state.store.get_stored_data().await?;
-    Ok(stored_data)
+    let (stored_data, version) = state.store.get_stored_data().await?;
+    Ok(StoredDataResponse {
+        stored_data,
+        version,
+    })
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, TS)]
 pub struct SetStoredDataRequest {
     password: String,
     stored_data: StoredData,
+    /// The version the edit started from; the save is refused if it has moved on.
+    base_version: DataVersion,
 }
 
 pub async fn set_stored_data(
     state: &AppState,
     req: SetStoredDataRequest,
-) -> Result<StoredData, ApiError> {
+) -> Result<StoredDataResponse, ApiError> {
     if !state.verify_admin_password(&req.password) {
         return Err(ApiError::Unauthorized);
     }
-    state.store.backup_stored_data().await?;
-    state.store.set_stored_data(req.stored_data.clone()).await?;
-    state.store.reload().await?;
-    Ok(req.stored_data)
+    let version = state
+        .store
+        .replace(&req.stored_data, &req.base_version)
+        .await?;
+    Ok(StoredDataResponse {
+        stored_data: req.stored_data,
+        version,
+    })
 }
 
-#[derive(Debug, Serialize, PartialEq)]
+#[derive(Debug, Serialize, PartialEq, TS)]
 pub struct UploadCharacterImageResponse {
     image_url: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct SessionInfo {
     pub player_id: Uuid,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, TS)]
 pub struct CheckSessionsRequest {
     pub sessions: Vec<SessionInfo>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, TS)]
 pub struct ValidSessionInfo {
     pub player_id: Uuid,
     pub last_update: String,
 }
 
-#[derive(Debug, Serialize, PartialEq)]
+#[derive(Debug, Serialize, PartialEq, TS)]
 pub struct CheckSessionsResponse {
     pub valid_sessions: Vec<ValidSessionInfo>,
 }
@@ -654,27 +691,44 @@ pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> 
         "WebSocket upgrade requested"
     );
 
-    ws.on_upgrade(move |socket| handle_socket(socket, state, Some(upgrade_request_id)))
+    // Client messages are small JSON commands; refuse anything near the 64 MiB default
+    ws.max_message_size(MAX_CLIENT_MESSAGE_BYTES)
+        .on_upgrade(move |socket| handle_socket(socket, state, Some(upgrade_request_id)))
 }
+
+const MAX_CLIENT_MESSAGE_BYTES: usize = 16 * 1024;
+
+/// How long a closing connection may spend flushing queued messages to the client.
+const SHUTDOWN_FLUSH_TIMEOUT: Duration = Duration::from_secs(2);
 
 async fn handle_socket(socket: WebSocket, state: AppState, upgrade_request_id: Option<u64>) {
     let (ws_tx, mut ws_rx) = socket.split();
 
     let (text_tx, text_rx) = channel::<Utf8Bytes>(128);
     let (bin_tx, bin_rx) = channel::<Bytes>(128);
+    // Signalled by the engine when this connection must end (undeliverable update,
+    // or superseded by a newer connection for the same session)
+    let close = Arc::new(Notify::new());
 
     let mut conn = WsConnection::new(upgrade_request_id);
     // Clone the span for use in .instrument() - conn retains ownership for field recording
     let conn_span = conn.conn_span.clone();
 
     // Ensure the sender task inherits the connection span as its parent
-    let send_task = {
+    let mut send_task = {
         let _guard = conn_span.enter();
         spawn_sender_task(ws_tx, text_rx, bin_rx, conn.connection_id)
     };
 
     async {
-        while let Some(Ok(msg)) = ws_rx.next().await {
+        loop {
+            let msg = tokio::select! {
+                msg = ws_rx.next() => match msg {
+                    Some(Ok(msg)) => msg,
+                    _ => break,
+                },
+                () = close.notified() => break,
+            };
             let (msg_kind, size_bytes) = get_message_info(&msg);
             let msg_span = info_span!(
                 target: "ws",
@@ -683,9 +737,10 @@ async fn handle_socket(socket: WebSocket, state: AppState, upgrade_request_id: O
                 size_bytes = size_bytes,
             );
 
-            let result = async { handle_message(msg, &mut conn, &state, &text_tx, &bin_tx).await }
-                .instrument(msg_span)
-                .await;
+            let result =
+                async { handle_message(msg, &mut conn, &state, &text_tx, &bin_tx, &close).await }
+                    .instrument(msg_span)
+                    .await;
 
             if result.is_err() {
                 break;
@@ -693,7 +748,16 @@ async fn handle_socket(socket: WebSocket, state: AppState, upgrade_request_id: O
         }
 
         handle_disconnect(&conn, &state).await;
-        send_task.abort();
+        // With the engine's handle released and ours dropped, the sender task drains
+        // what is queued (e.g. a final error), closes the socket, and exits
+        drop(text_tx);
+        drop(bin_tx);
+        if tokio::time::timeout(SHUTDOWN_FLUSH_TIMEOUT, &mut send_task)
+            .await
+            .is_err()
+        {
+            send_task.abort();
+        }
     }
     .instrument(conn_span)
     .await;
@@ -737,15 +801,17 @@ fn spawn_sender_task(
                     _ = ping_interval.tick() => {
                         if ws_tx.send(Message::Ping(vec![].into())).await.is_err() { break; }
                     }
-                    Some(msg) = text_rx.recv() => {
-                        if ws_tx.send(Message::Text(msg)).await.is_err() { break; }
+                    msg = text_rx.recv() => {
+                        let Some(msg) = msg else { break };
+                        if ws_tx.send(Message::Text(msg)).await.is_err() { return; }
                     }
                     Some(msg) = bin_rx.recv() => {
-                        if ws_tx.send(Message::Binary(msg)).await.is_err() { break; }
+                        if ws_tx.send(Message::Binary(msg)).await.is_err() { return; }
                     }
-                    else => break,
                 }
             }
+            // The connection owner hung up: tell the client the socket is done
+            let _ = ws_tx.send(Message::Close(None)).await;
         }
         .instrument(sender_span),
     )
@@ -757,6 +823,7 @@ async fn handle_message(
     state: &AppState,
     text_tx: &Sender<Utf8Bytes>,
     bin_tx: &Sender<Bytes>,
+    close: &Arc<Notify>,
 ) -> Result<(), ()> {
     // Rate limit check
     let now = Instant::now();
@@ -776,8 +843,8 @@ async fn handle_message(
         );
         send_error_to_client(
             text_tx,
-            "Rate limit exceeded. Closing connection".to_string(),
-            "rate_limit",
+            ErrorCode::RateLimited,
+            "Rate limit exceeded. Closing connection",
         );
         return Err(());
     }
@@ -798,8 +865,8 @@ async fn handle_message(
                     );
                     send_error_to_client(
                         text_tx,
+                        ErrorCode::InvalidMessage,
                         format!("Invalid message format: {}", e),
-                        "json_parse",
                     );
                     return Ok(());
                 }
@@ -813,11 +880,19 @@ async fn handle_message(
             );
 
             if let ClientMessage::Connect { session_token } = client_msg {
-                handle_connect(session_token, conn, state, text_tx).await;
+                if conn.player_id.is_some() {
+                    send_error_to_client(
+                        text_tx,
+                        ErrorCode::InvalidMessage,
+                        "Already connected; open a new connection to switch sessions.",
+                    );
+                } else {
+                    handle_connect(session_token, conn, state, text_tx, close).await;
+                }
             } else if conn.player_id.is_some() {
                 dispatch_game_action(client_msg, conn, state).await;
             } else {
-                send_error_to_client(text_tx, "Must connect first.".to_string(), "not_connected");
+                send_error_to_client(text_tx, ErrorCode::InvalidMessage, "Must connect first.");
             }
         }
         Message::Binary(payload)
@@ -844,14 +919,15 @@ async fn handle_connect(
     conn: &mut WsConnection,
     state: &AppState,
     tx: &Sender<Utf8Bytes>,
+    close: &Arc<Notify>,
 ) {
     let (code, pid_str) = match session_token.split_once(':') {
         Some(parts) => parts,
         None => {
             send_error_to_client(
                 tx,
-                "Invalid session token format.".to_string(),
-                "connect_token_parse",
+                ErrorCode::SessionInvalid,
+                "Invalid session token format.",
             );
             return;
         }
@@ -862,8 +938,8 @@ async fn handle_connect(
         Err(_) => {
             send_error_to_client(
                 tx,
-                "Invalid player id in session token.".to_string(),
-                "connect_token_invalid",
+                ErrorCode::SessionInvalid,
+                "Invalid player id in session token.",
             );
             return;
         }
@@ -887,8 +963,8 @@ async fn handle_connect(
             debug!(target: "lock", lobby_key = %code, "lobby_not_found");
             send_error_to_client(
                 tx,
-                "Lobby not found for session token.".to_string(),
-                "connect_lobby_not_found",
+                ErrorCode::SessionInvalid,
+                "Lobby not found for session token.",
             );
             return;
         }
@@ -897,13 +973,16 @@ async fn handle_connect(
     if !engine.has_player(&player_id) {
         send_error_to_client(
             tx,
-            "Player not found in lobby. Please join again.".to_string(),
-            "connect_player_not_found",
+            ErrorCode::SessionInvalid,
+            "Player not found in lobby. Please join again.",
         );
         return;
     }
 
-    engine.update_player_connection(player_id, tx.clone(), conn.connection_id);
+    engine.update_player_connection(
+        player_id,
+        ClientConnection::new(conn.connection_id, tx.clone(), close.clone()),
+    );
     conn.player_id = Some(player_id);
     conn.lobby_key = Some(code.to_string());
 
@@ -992,7 +1071,30 @@ async fn dispatch_game_action(msg: ClientMessage, conn: &WsConnection, state: &A
         },
         action,
     };
+    let deadline_before = engine.round_deadline();
     engine.process_event(event);
+    if let Some(deadline) = engine.round_deadline()
+        && Some(deadline) != deadline_before
+    {
+        spawn_round_timer(state.lobbies.clone(), lobby_key.clone(), deadline);
+    }
+}
+
+/// Ends the round at its deadline, whether or not the admin is still around.
+fn spawn_round_timer(
+    lobbies: Arc<DashMap<String, GameEngine>>,
+    lobby_key: String,
+    deadline: Instant,
+) {
+    tokio::spawn(
+        async move {
+            tokio::time::sleep_until(deadline.into()).await;
+            if let Some(mut engine) = lobbies.get_mut(&lobby_key) {
+                engine.end_round_if_expired(Instant::now());
+            }
+        }
+        .instrument(info_span!(target: "maintenance", "round_timer")),
+    );
 }
 
 async fn handle_disconnect(conn: &WsConnection, state: &AppState) {
@@ -1020,14 +1122,15 @@ async fn handle_disconnect(conn: &WsConnection, state: &AppState) {
     }
 }
 
-fn send_error_to_client(tx: &Sender<Utf8Bytes>, message: String, context: &str) {
+fn send_error_to_client(tx: &Sender<Utf8Bytes>, code: ErrorCode, message: impl Into<Arc<str>>) {
     let error_update = GameUpdate::Error {
-        message: Arc::from(message),
+        code,
+        message: message.into(),
     };
     if let Ok(json) = serde_json::to_string(&error_update)
         && tx.try_send(Utf8Bytes::from(json)).is_err()
     {
-        error!("Failed to send '{}' error to client channel", context);
+        error!(?code, "Failed to send error to client channel");
     }
 }
 
@@ -1215,5 +1318,258 @@ mod tests {
         };
         let res_invalid = check_sessions(&state, check_req_invalid).await.unwrap();
         assert_eq!(res_invalid.valid_sessions.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_create_lobby_rejects_excessive_duration() {
+        let (state, _dir) = setup_test_state().await;
+        let req = CreateLobbyRequest {
+            round_duration: Some(u64::MAX / 100),
+            set_id: None,
+        };
+        let res = create_lobby(&state, req).await;
+        assert!(matches!(res, Err(ApiError::Validation(_))));
+    }
+
+    #[tokio::test]
+    async fn test_join_closed_lobby_is_rejected() {
+        let (state, _dir) = setup_test_state().await;
+        let lobby = create_lobby(
+            &state,
+            CreateLobbyRequest {
+                round_duration: None,
+                set_id: None,
+            },
+        )
+        .await
+        .unwrap();
+        state
+            .lobbies
+            .get_mut(&lobby.join_code)
+            .unwrap()
+            .process_event(GameEvent {
+                context: EventContext {
+                    sender_id: lobby.player_id,
+                    timestamp: Instant::now(),
+                },
+                action: GameAction::CloseGame {
+                    reason: "done".into(),
+                },
+            });
+
+        let res = join_lobby(
+            &state,
+            JoinLobbyRequest {
+                join_code: lobby.join_code.clone(),
+                name: "Latecomer".into(),
+            },
+        )
+        .await;
+        assert!(matches!(res, Err(ApiError::Lobby(_))));
+    }
+
+    fn stored_data(json: &str) -> StoredData {
+        serde_json::from_str(json).unwrap()
+    }
+
+    async fn current_version(state: &AppState) -> DataVersion {
+        state.store.get_stored_data().await.unwrap().1
+    }
+
+    const TWO_QUESTIONS: &str = r#"{"media": [{"id": 1, "title": "T", "artist": "A", "release_year": null, "spotify_uri": null, "youtube_id": "y"}],
+        "characters": [],
+        "questions": [
+            {"id": 1, "media_id": 1, "question_type": "color", "question_text": null, "image_url": null, "is_active": true},
+            {"id": 2, "media_id": 1, "question_type": "color", "question_text": null, "image_url": null, "is_active": true}],
+        "options": [
+            {"id": 1, "question_id": 1, "option_text": "Red", "is_correct": true},
+            {"id": 2, "question_id": 2, "option_text": "Blue", "is_correct": true}],
+        "sets": []}"#;
+
+    #[tokio::test]
+    async fn save_based_on_an_older_version_is_refused_and_not_written() {
+        let (state, dir) = setup_test_state().await;
+        let path = dir.path().join("questions.json");
+        let loaded_by_both = current_version(&state).await;
+
+        let first = set_stored_data(
+            &state,
+            SetStoredDataRequest {
+                password: "password".into(),
+                stored_data: stored_data(TWO_QUESTIONS),
+                base_version: loaded_by_both.clone(),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(first.version, current_version(&state).await);
+        let after_first = std::fs::read_to_string(&path).unwrap();
+
+        let other = stored_data(&TWO_QUESTIONS.replace(
+            r#""sets": []"#,
+            r#""sets": [{"id": 1, "name": "Mine", "question_ids": [1]}]"#,
+        ));
+        let second = set_stored_data(
+            &state,
+            SetStoredDataRequest {
+                password: "password".into(),
+                stored_data: other,
+                base_version: loaded_by_both,
+            },
+        )
+        .await;
+
+        assert!(
+            matches!(second, Err(ApiError::Conflict(_))),
+            "got {second:?}"
+        );
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), after_first);
+        assert!(state.store.snapshot().sets.is_empty());
+    }
+
+    #[tokio::test]
+    async fn saves_can_chain_on_the_returned_version() {
+        let (state, _dir) = setup_test_state().await;
+        let mut version = current_version(&state).await;
+        for _ in 0..2 {
+            version = set_stored_data(
+                &state,
+                SetStoredDataRequest {
+                    password: "password".into(),
+                    stored_data: stored_data(TWO_QUESTIONS),
+                    base_version: version,
+                },
+            )
+            .await
+            .unwrap()
+            .version;
+        }
+    }
+
+    #[tokio::test]
+    async fn test_update_that_would_not_load_is_rejected_and_not_written() {
+        let (state, dir) = setup_test_state().await;
+        let path = dir.path().join("questions.json");
+        let before = std::fs::read_to_string(&path).unwrap();
+
+        // Valid references, but nothing playable: the server could not boot from this
+        let no_active = stored_data(
+            r#"{"media": [{"id": 1, "title": "T", "artist": "A", "release_year": null, "spotify_uri": null, "youtube_id": "y"}],
+                "characters": [],
+                "questions": [{"id": 1, "media_id": 1, "question_type": "color", "question_text": null, "image_url": null, "is_active": false}],
+                "options": [{"id": 1, "question_id": 1, "option_text": "Red", "is_correct": true}],
+                "sets": []}"#,
+        );
+        let res = set_stored_data(
+            &state,
+            SetStoredDataRequest {
+                password: "password".into(),
+                stored_data: no_active,
+                base_version: current_version(&state).await,
+            },
+        )
+        .await;
+
+        assert!(matches!(res, Err(ApiError::Validation(_))), "got {res:?}");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
+        assert_eq!(state.store.snapshot().questions.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_invalid_update_reports_the_reason() {
+        let (state, _dir) = setup_test_state().await;
+        let dangling = stored_data(
+            r#"{"media": [], "characters": [],
+                "questions": [{"id": 1, "media_id": 99, "question_type": "color", "question_text": null, "image_url": null, "is_active": true}],
+                "options": [], "sets": []}"#,
+        );
+        let res = set_stored_data(
+            &state,
+            SetStoredDataRequest {
+                password: "password".into(),
+                stored_data: dangling,
+                base_version: current_version(&state).await,
+            },
+        )
+        .await;
+        match res {
+            Err(ApiError::Validation(message)) => assert!(message.contains("99"), "{message}"),
+            other => panic!("expected a validation error, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_valid_update_is_written_atomically_and_swapped_in() {
+        let (state, dir) = setup_test_state().await;
+        let two_questions = stored_data(
+            r#"{"media": [{"id": 1, "title": "T", "artist": "A", "release_year": null, "spotify_uri": null, "youtube_id": "y"}],
+                "characters": [],
+                "questions": [
+                    {"id": 1, "media_id": 1, "question_type": "color", "question_text": null, "image_url": null, "is_active": true},
+                    {"id": 2, "media_id": 1, "question_type": "color", "question_text": null, "image_url": null, "is_active": true}],
+                "options": [
+                    {"id": 1, "question_id": 1, "option_text": "Red", "is_correct": true},
+                    {"id": 2, "question_id": 2, "option_text": "Blue", "is_correct": true}],
+                "sets": []}"#,
+        );
+        set_stored_data(
+            &state,
+            SetStoredDataRequest {
+                password: "password".into(),
+                stored_data: two_questions,
+                base_version: current_version(&state).await,
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(state.store.snapshot().questions.len(), 2);
+        assert!(!dir.path().join("questions.json.tmp").exists());
+        let on_disk: StoredData = serde_json::from_str(
+            &std::fs::read_to_string(dir.path().join("questions.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(on_disk.game_questions().unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn round_ends_at_its_deadline_without_the_admin() {
+        let (state, _dir) = setup_test_state().await;
+        let snap = state.store.snapshot();
+        let admin_id = Uuid::new_v4();
+        let join_code = "123456".to_string();
+        // A zero-length round is due as soon as it starts
+        let engine = GameEngine::new(
+            admin_id,
+            Arc::from(join_code.as_str()),
+            snap.questions.clone(),
+            snap.color_weights,
+            None,
+            0,
+        );
+        state.lobbies.insert(join_code.clone(), engine);
+
+        let mut conn = WsConnection::new(None);
+        conn.player_id = Some(admin_id);
+        conn.lobby_key = Some(join_code.clone());
+        for action in [AdminAction::StartGame, AdminAction::StartRound] {
+            dispatch_game_action(ClientMessage::AdminAction { action }, &conn, &state).await;
+        }
+
+        for _ in 0..100 {
+            if state
+                .lobbies
+                .get(&join_code)
+                .unwrap()
+                .round_deadline()
+                .is_none()
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        let engine = state.lobbies.get(&join_code).unwrap();
+        assert!(engine.round_deadline().is_none(), "the round never ended");
+        assert_eq!(engine.get_lobby_stats().1, 1);
     }
 }

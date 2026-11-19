@@ -1,19 +1,20 @@
 <script lang="ts">
-	import { PUBLIC_TITLE } from '$env/static/public';
+	import { PUBLIC_SUPPORT_EMAIL, PUBLIC_TITLE } from '$app/env/public';
 	import { resolve } from '$app/paths';
-	import { env } from '$env/dynamic/public';
-	import { Button } from '$lib/components/ui/button';
-	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
-	import { Separator } from '$lib/components/ui/separator';
-	import SetSelector from '$lib/components/set-selector.svelte';
-	import LightSwitch from '$lib/components/ui/light-switch.svelte';
-	import JoinLobbyCard from '$lib/components/join-lobby-card.svelte';
-	import ReconnectCard from '$lib/components/reconnect-card.svelte';
-	import { gameStore, type ValidatedSession } from '$lib/stores/game.svelte';
-	import { checkAndLoadSession, reconnectToSession as reconnectSession } from '$lib/utils/session';
+	import { Button } from '#lib/components/ui/button/index.ts';
+	import { Card, CardContent, CardHeader, CardTitle } from '#lib/components/ui/card/index.ts';
+	import { Separator } from '#lib/components/ui/separator/index.ts';
+	import SetSelector from '#lib/components/set-selector.svelte';
+	import LightSwitch from '#lib/components/ui/light-switch.svelte';
+	import JoinLobbyCard from '#lib/components/join-lobby-card.svelte';
+	import ReconnectCard from '#lib/components/reconnect-card.svelte';
+	import { gameStore, type ValidatedSession } from '#lib/stores/game.svelte.ts';
+	import {
+		checkAndLoadSession,
+		reconnectToSession as reconnectSession
+	} from '#lib/utils/session.ts';
 	import { onMount } from 'svelte';
 
-	const supportEmail = env.PUBLIC_SUPPORT_EMAIL?.trim();
 	let showSetSelector = $state(false);
 	let showJoinCard = $state(false);
 	let currentSession = $state<ValidatedSession | null>(null);
@@ -106,9 +107,11 @@
 					<span class="sr-only">Github repository</span>
 				</Button>
 			</div>
-			{#if supportEmail}
+			{#if PUBLIC_SUPPORT_EMAIL}
 				<div class="text-muted-foreground mt-2 text-xs">
-					Questions? <a class="ml-1" href={`mailto:${supportEmail}`}>{supportEmail}</a>
+					Questions? <a class="ml-1" href={`mailto:${PUBLIC_SUPPORT_EMAIL}`}
+						>{PUBLIC_SUPPORT_EMAIL}</a
+					>
 				</div>
 			{/if}
 		</footer>

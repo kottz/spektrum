@@ -1,5 +1,5 @@
-import { browser } from '$app/environment';
-import { info } from '$lib/utils/logger';
+import { browser } from '$app/env';
+import { info } from '#lib/utils/logger.ts';
 
 interface TimerOptions {
 	trackAnswerSnapshot?: boolean;

@@ -1,8 +1,7 @@
 <script lang="ts">
-	import { GamePhase } from '$lib/types/game';
-	import { streamStore } from '$lib/stores/stream.store.svelte';
-	import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
-	import { Progress } from '$lib/components/ui/progress';
+	import { streamStore } from '#lib/stores/stream.store.svelte.ts';
+	import { ScrollArea } from '#lib/components/ui/scroll-area/index.ts';
+	import { Progress } from '#lib/components/ui/progress/index.ts';
 	import { flip } from 'svelte/animate';
 	import { fly } from 'svelte/transition';
 
@@ -24,8 +23,8 @@
 
 	const maxScore = $derived(allSortedPlayers[0]?.score || 0);
 
-	const gameOver = $derived(gameState?.phase === GamePhase.GameOver);
-	const playingQuestion = $derived(gameState?.phase === GamePhase.Question);
+	const gameOver = $derived(gameState?.phase === 'gameover');
+	const playingQuestion = $derived(gameState?.phase === 'question');
 
 	// Answer progress calculations
 	const answerProgress = $derived(denominator > 0 ? (answeredCount / denominator) * 100 : 0);

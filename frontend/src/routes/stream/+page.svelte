@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { browser } from '$app/environment';
+	import { browser } from '$app/env';
 	import { onMount, onDestroy } from 'svelte';
-	import { streamStore } from '$lib/stores/stream.store.svelte';
-	import { info } from '$lib/utils/logger';
-	import GameStreamView from '$lib/components/game/stream/game-stream-view.svelte';
+	import { streamStore } from '#lib/stores/stream.store.svelte.ts';
+	import { info } from '#lib/utils/logger.ts';
+	import GameStreamView from '#lib/components/game/stream/game-stream-view.svelte';
 
 	const state = $derived(streamStore.state);
 

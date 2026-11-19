@@ -1,14 +1,14 @@
 <script lang="ts">
-	import { Button } from '$lib/components/ui/button';
-	import { Card, CardContent } from '$lib/components/ui/card';
-	import { uiStore } from '$lib/stores/ui.store.svelte';
-	import { gameStore } from '$lib/stores/game.svelte';
-	import { broadcastService } from '$lib/services/broadcast.service';
-	import type { BroadcastMessage } from '$lib/services/broadcast.service';
+	import { Button } from '#lib/components/ui/button/index.ts';
+	import { Card, CardContent } from '#lib/components/ui/card/index.ts';
+	import { uiStore } from '#lib/stores/ui.store.svelte.ts';
+	import { gameStore } from '#lib/stores/game.svelte.ts';
+	import { broadcastService } from '#lib/services/broadcast.service.ts';
+	import type { BroadcastMessage } from '#lib/services/broadcast.service.ts';
 	import { MonitorPlay, Eye, EyeOff, ExternalLink } from '@lucide/svelte';
 	import { onDestroy } from 'svelte';
-	import { info } from '$lib/utils/logger';
-	import { createStreamStateSnapshot } from '$lib/utils/stream-state';
+	import { info } from '#lib/utils/logger.ts';
+	import { createStreamStateSnapshot } from '#lib/utils/stream-state.ts';
 
 	const streamWindowState = $derived(uiStore.streamWindow);
 	const gameState = $derived(gameStore.state);

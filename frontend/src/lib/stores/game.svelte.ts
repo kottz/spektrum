@@ -1,15 +1,17 @@
 // src/lib/stores/game.ts
 
-import { browser } from '$app/environment';
-import { youtubeStore } from '$lib/stores/youtube-store.svelte';
-import { timerStore } from '$lib/stores/timer.svelte';
-import { info, warn } from '$lib/utils/logger';
-import { notifications } from '$lib/stores/notification-store.svelte';
-import { broadcastService } from '$lib/services/broadcast.service';
+import { browser } from '$app/env';
+import { youtubeStore } from '#lib/stores/youtube-store.svelte.ts';
+import { timerStore } from '#lib/stores/timer.svelte.ts';
+import { info, warn } from '#lib/utils/logger.ts';
+import { notifications } from '#lib/stores/notification-store.svelte.ts';
+import { broadcastService } from '#lib/services/broadcast.service.ts';
 
-import type { GameState, GameUpdate } from '../types/game';
-import { GamePhase } from '../types/game';
-import { PUBLIC_SPEKTRUM_SERVER_URL } from '$env/static/public';
+import type { GameState } from '#lib/types/game.ts';
+import type { GameUpdate } from '#lib/generated/GameUpdate.ts';
+import type { GameQuestion } from '#lib/generated/GameQuestion.ts';
+import { api } from '#lib/api.ts';
+import { applyPlayerDelta } from '#lib/stores/player-delta.ts';
 
 /* ------------------------------------------------------------------
    Multi-session storage for localStorage
@@ -49,7 +51,7 @@ export function removeSession() {
    Game store for the currently active session
 ------------------------------------------------------------------ */
 const initialState: GameState = {
-	phase: GamePhase.Lobby,
+	phase: 'lobby',
 	isAdmin: false,
 	joinCode: undefined,
 	sessionToken: undefined,
@@ -74,6 +76,7 @@ function createGameStore() {
 		}
 
 		removeSession();
+		timerStore.resetTimer();
 		Object.assign(state, {
 			...initialState,
 			players: new Map(),
@@ -81,11 +84,8 @@ function createGameStore() {
 			playerId: undefined,
 			playerName: undefined,
 			currentQuestion: undefined,
-			currentSong: undefined,
 			upcomingQuestions: undefined,
-			error: undefined,
-			questionTimeRemainingMs: undefined,
-			answeredPlayerNames: undefined
+			questionTimeRemainingMs: undefined
 		});
 	}
 
@@ -98,34 +98,13 @@ function createGameStore() {
 		if (!session || !session.sessionToken) return null;
 
 		try {
-			const res = await fetch(`${PUBLIC_SPEKTRUM_SERVER_URL}/api/check-sessions`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					sessions: [
-						{
-							player_id: session.playerId
-						}
-					]
-				}),
-				cache: 'no-store'
-			});
-
-			if (!res.ok) {
-				warn('Failed to check session:', res.status, res.statusText);
-				return null; // Return null instead of session on error
-			}
-
-			const data = (await res.json()) as {
-				valid_sessions: Array<{ player_id: string; last_update: string }>;
-			};
+			const data = await api.checkSessions({ sessions: [{ player_id: session.playerId }] });
 
 			info('Session check response:', data.valid_sessions);
 
 			const validSession = data.valid_sessions.find((v) => v.player_id === session.playerId);
 
 			if (validSession) {
-				// Explicitly return the combined type
 				return {
 					...session,
 					last_update: validSession.last_update
@@ -136,7 +115,7 @@ function createGameStore() {
 			return null;
 		} catch (err) {
 			warn('Error checking session:', err);
-			return null; // Return null instead of session on error
+			return null;
 		}
 	}
 
@@ -192,63 +171,17 @@ function createGameStore() {
 					state.phase = message.phase;
 				}
 
-				// Update players using provided scoreboard and round scores.
-				if (message.scoreboard) {
-					const newPlayers = new Map(state.players);
-					message.scoreboard.forEach(([name, score]) => {
-						newPlayers.set(name, {
-							name,
-							score,
-							roundScore: 0,
-							hasAnswered: false,
-							consecutiveMisses: 0,
-							answer: null
-						});
-					});
-					if (message.round_scores) {
-						message.round_scores.forEach(([name, roundScore]) => {
-							const player = newPlayers.get(name);
-							if (player) {
-								player.roundScore = roundScore;
-							}
-						});
-					}
-					if (message.consecutive_misses) {
-						message.consecutive_misses.forEach(([name, misses]) => {
-							const player = newPlayers.get(name);
-							if (player) {
-								player.consecutiveMisses = misses;
-							}
-						});
-					}
-					if (message.answered_player_names) {
-						message.answered_player_names.forEach((name) => {
-							const player = newPlayers.get(name);
-							if (player) {
-								player.hasAnswered = true;
-							}
-						});
-					}
-					state.players = newPlayers;
-				}
+				// Deltas are partial: an absent field means "unchanged", never "zero".
+				// A scoreboard, when present, is the complete player list.
+				state.players = applyPlayerDelta(state.players, message);
 
-				// Update answered flags on existing players even if no scoreboard was provided.
-				if (message.answered_player_names && !message.scoreboard) {
-					const updated = new Map(state.players);
-					updated.forEach((player, name) => {
-						player.hasAnswered = message.answered_player_names!.includes(name);
-					});
-					state.players = updated;
-				}
-
-				// Update the current question when alternatives are explicitly provided.
-				// When absent, leave currentQuestion alone — absence in a delta means "no change".
-				// Clearing happens below when the phase transitions away from Question.
-				if (message.alternatives !== undefined) {
+				// A question arrives with its type; without one, the delta leaves the
+				// question unchanged. Clearing happens below when the phase leaves Question.
+				if (message.question_type !== undefined) {
 					state.currentQuestion = {
-						type: message.question_type ?? '',
-						text: message.question_text ?? undefined,
-						alternatives: message.alternatives
+						type: message.question_type,
+						text: message.question_text,
+						alternatives: message.alternatives ?? []
 					};
 				}
 
@@ -256,9 +189,12 @@ function createGameStore() {
 					state.questionTimeRemainingMs = message.question_time_remaining_ms;
 				}
 
+				if (message.admin_extra) {
+					setUpcomingQuestions(message.admin_extra.upcoming_questions);
+				}
+
 				// Sync answered players and currentAnswers from snapshot.
 				if (message.answered_player_names) {
-					state.answeredPlayerNames = message.answered_player_names;
 					const roundScoreMap = new Map(message.round_scores ?? []);
 					const existingAnswers = new Map(
 						state.currentAnswers.map((ans) => [ans.name, ans] as const)
@@ -278,18 +214,15 @@ function createGameStore() {
 				// Perform phase-specific actions.
 				const currentPhase = state.phase;
 				if (previousPhase !== currentPhase) {
-					if (currentPhase === GamePhase.Question) {
+					if (currentPhase === 'question') {
 						timerStore.startTimer(state.roundDuration, message.question_time_remaining_ms);
 					}
-					if (currentPhase === GamePhase.Score) {
+					if (currentPhase === 'score') {
 						timerStore.stopTimer(true);
 						state.currentAnswers = [];
 						state.currentQuestion = undefined;
 					}
-				} else if (
-					state.phase === GamePhase.Question &&
-					message.question_time_remaining_ms !== undefined
-				) {
+				} else if (state.phase === 'question' && message.question_time_remaining_ms !== undefined) {
 					// Same phase but got a time snapshot — resync the timer.
 					timerStore.startTimer(state.roundDuration, message.question_time_remaining_ms);
 				}
@@ -320,9 +253,7 @@ function createGameStore() {
 
 			case 'PlayerLeft': {
 				info(`Player left: ${message.name}`);
-				const updated = new Map(state.players);
-				updated.delete(message.name);
-				state.players = updated;
+				state.players = new Map([...state.players].filter(([name]) => name !== message.name));
 				break;
 			}
 
@@ -334,8 +265,20 @@ function createGameStore() {
 			}
 
 			case 'GameOver': {
-				state.phase = GamePhase.GameOver;
+				// Final scores are authoritative: a game ended mid-round has points
+				// that no scoreboard delta reported yet
+				const finalScores = new Map(message.final_scores);
+				state.players = new Map(
+					[...state.players].map(([name, player]) => [
+						name,
+						{ ...player, score: finalScores.get(name) ?? player.score }
+					])
+				);
+				state.phase = 'gameover';
 				state.upcomingQuestions = undefined;
+				state.currentQuestion = undefined;
+				state.currentAnswers = [];
+				timerStore.stopTimer(true);
 				break;
 			}
 
@@ -347,35 +290,35 @@ function createGameStore() {
 						youtubeStore.loadVideo(youtube_id);
 					}
 				}
-				state.currentSong = message.current_question
-					? {
-							songName: message.current_question.title,
-							artist: message.current_question.artist,
-							youtubeId: message.current_question.youtube_id
-						}
-					: undefined;
 				break;
 			}
 
 			case 'AdminNextQuestions': {
-				const nextQuestion = message.upcoming_questions[0];
-				if (nextQuestion?.youtube_id) {
-					info('Loading next video:', nextQuestion.youtube_id);
-					youtubeStore.loadVideo(nextQuestion.youtube_id);
-				}
-				state.upcomingQuestions = message.upcoming_questions;
+				setUpcomingQuestions(message.upcoming_questions);
 				break;
 			}
 
 			case 'Error': {
-				state.error = message.message;
 				notifications.add(message.message, 'destructive');
+				if (message.code === 'session_invalid') {
+					// The game is gone for us: leave the dead game screen
+					cleanup();
+				}
 				break;
 			}
 
 			default:
 				warn('Unhandled message type:', message);
 		}
+	}
+
+	function setUpcomingQuestions(upcoming: GameQuestion[]) {
+		const nextQuestion = upcoming[0];
+		if (state.phase !== 'question' && nextQuestion?.youtube_id) {
+			info('Loading next video:', nextQuestion.youtube_id);
+			youtubeStore.loadVideo(nextQuestion.youtube_id);
+		}
+		state.upcomingQuestions = upcoming;
 	}
 
 	function setAdminTo(value: boolean) {
@@ -398,10 +341,6 @@ function createGameStore() {
 		state.playerName = playerName;
 	}
 
-	function clearError() {
-		state.error = undefined;
-	}
-
 	return {
 		state,
 		checkSessions,
@@ -411,8 +350,7 @@ function createGameStore() {
 		setSessionToken,
 		setPlayerId,
 		setPlayerName,
-		cleanup,
-		clearError
+		cleanup
 	};
 }
 

@@ -23,6 +23,8 @@ use tower_http::trace::TraceLayer;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+#[cfg(test)]
+mod bindings;
 mod db;
 mod game;
 mod question;
@@ -191,7 +193,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cors = CorsLayer::new()
         .allow_methods(vec![http::Method::GET, http::Method::POST])
         .allow_origin(cors_origins)
-        .allow_credentials(true)
         .allow_headers(vec![
             http::header::CONTENT_TYPE,
             http::header::AUTHORIZATION,
@@ -207,12 +208,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Starting server on {}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .with_graceful_shutdown(shutdown_signal())
-    .await?;
+    axum::serve(listener, app.into_make_service())
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
 
     info!("Server shutdown complete");
     Ok(())

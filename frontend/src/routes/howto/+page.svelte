@@ -1,16 +1,16 @@
 <script lang="ts">
-	import { Button } from '$lib/components/ui/button';
-	import LightSwitch from '$lib/components/ui/light-switch.svelte';
-	import { Separator } from '$lib/components/ui/separator';
-	import QuestionExample from '$lib/components/question-example.svelte';
+	import { Button } from '#lib/components/ui/button/index.ts';
+	import LightSwitch from '#lib/components/ui/light-switch.svelte';
+	import { Separator } from '#lib/components/ui/separator/index.ts';
+	import QuestionExample from '#lib/components/question-example.svelte';
 	import { House } from '@lucide/svelte';
-	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 </script>
 
 <div class="flex min-h-screen flex-col items-center justify-center gap-8 px-3 py-8">
 	<div class="grid w-full max-w-lg gap-6">
 		<div class="flex items-center justify-center gap-3">
-			<Button class="ml-2" variant="outline" size="icon" onclick={() => goto('/')}>
+			<Button class="ml-2" variant="outline" size="icon" href={resolve('/')}>
 				<House class="h-[1.2rem] w-[1.2rem]" />
 				<span class="sr-only">Go home</span>
 			</Button>

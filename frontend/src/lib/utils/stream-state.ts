@@ -1,4 +1,5 @@
-import type { GameState, GameUpdate } from '$lib/types/game';
+import type { GameState } from '#lib/types/game.ts';
+import type { GameUpdate } from '#lib/generated/GameUpdate.ts';
 
 export type StreamStateSnapshot = Extract<GameUpdate, { type: 'StateDelta' }>;
 

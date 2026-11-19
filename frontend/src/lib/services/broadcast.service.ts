@@ -1,4 +1,4 @@
-import { info, warn } from '$lib/utils/logger';
+import { info, warn } from '#lib/utils/logger.ts';
 
 const BROADCAST_CHANNEL_NAME = 'spektrum-stream';
 
@@ -228,10 +228,6 @@ class BroadcastService {
 
 	getIsStreamWindow(): boolean {
 		return this.isStreamWindow;
-	}
-
-	getHasActiveStreams(): boolean {
-		return this.hasActiveStreams;
 	}
 
 	setHasActiveStreams(hasStreams: boolean): void {
