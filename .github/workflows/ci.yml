@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: Server and stress test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            server
+            stress_test
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
+      # Also fails when the TypeScript types generated for the web apps are stale
+      - run: just check-server
+      - run: just check-stress-test
+
+  web:
+    name: ${{ matrix.app }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [frontend, admin_panel]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ${{ matrix.app }}/package-lock.json
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
+      - run: npm ci
+        working-directory: ${{ matrix.app }}
+      - run: just check-web ${{ matrix.app }}
+      - run: npx playwright install --with-deps chromium
+        working-directory: ${{ matrix.app }}
+      - run: just web ${{ matrix.app }} "npm run test:e2e"
